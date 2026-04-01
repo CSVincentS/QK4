@@ -319,9 +319,11 @@ constexpr int PopupValueSize = 12;  // Value displays (e.g., "6 dB", "184 Hz")
 // =============================================================================
 constexpr int SliderGrooveHeight = 6;     // Horizontal slider groove height
 constexpr int SliderHandleWidth = 16;     // Slider handle width
+constexpr int SliderHandleHeight = 16;    // Explicit handle height (robust on fractional DPI)
 constexpr int SliderHandleMargin = -5;    // Vertical margin for handle positioning
 constexpr int SliderBorderRadius = 3;     // Groove border radius
 constexpr int SliderHandleRadius = 8;     // Handle border radius (half of width)
+constexpr int SliderMinHeight = 20;       // Minimum widget height to prevent handle clipping
 constexpr int SliderValueLabelWidth = 40; // Width for percentage value labels
 
 // =============================================================================

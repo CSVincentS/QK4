@@ -202,6 +202,7 @@ void SideControlPanel::setupUi() {
     m_volumeSlider = new QSlider(Qt::Horizontal, this);
     m_volumeSlider->setRange(0, 100);
     m_volumeSlider->setValue(RadioSettings::instance()->volume()); // Restore from settings (default 45%)
+    m_volumeSlider->setMinimumHeight(K4Styles::Dimensions::SliderMinHeight);
     m_volumeSlider->setStyleSheet(
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::VfoACyan));
     layout->addWidget(m_volumeSlider);
@@ -221,6 +222,7 @@ void SideControlPanel::setupUi() {
     m_subVolumeSlider = new QSlider(Qt::Horizontal, this);
     m_subVolumeSlider->setRange(0, 100);
     m_subVolumeSlider->setValue(RadioSettings::instance()->subVolume()); // Restore from settings (default 45%)
+    m_subVolumeSlider->setMinimumHeight(K4Styles::Dimensions::SliderMinHeight);
     m_subVolumeSlider->setStyleSheet(
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::VfoBGreen));
     layout->addWidget(m_subVolumeSlider);
