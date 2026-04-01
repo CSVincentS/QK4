@@ -163,6 +163,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, m_iambicKeyer, &IambicKeyer::setDahPaddle,
             Qt::DirectConnection);
 
+    // HaliKey footswitch PTT → MainWindow (via pttRequested signal)
+    connect(m_halikeyDevice, &HalikeyDevice::pttStateChanged, this, &HardwareController::pttRequested);
+
     // Enable keyer when radio connects, disable on disconnect
     connect(m_connectionController, &ConnectionController::radioReady, this, [this]() {
         QMetaObject::invokeMethod(m_iambicKeyer, "setEnabled", Qt::QueuedConnection, Q_ARG(bool, true));

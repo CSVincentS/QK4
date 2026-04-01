@@ -1681,6 +1681,14 @@ MainWindow::MainWindow(QWidget *parent)
     // KPOD button presses → macro execution
     connect(m_hardwareController, &HardwareController::macroRequested, this, &MainWindow::executeMacro);
 
+    // HaliKey footswitch PTT → TX audio + UI indicator
+    connect(m_hardwareController, &HardwareController::pttRequested, this, [this](bool active) {
+        if (m_connectionController->isConnected()) {
+            m_audioController->setPttActive(active);
+            m_bottomMenuBar->setPttActive(active);
+        }
+    });
+
     // KPA1500 amplifier client
     m_kpa1500Client = new KPA1500Client(this);
 

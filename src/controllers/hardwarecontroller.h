@@ -28,6 +28,9 @@ signals:
     // KPOD button press → MainWindow dispatches macro
     void macroRequested(const QString &functionId);
 
+    // HaliKey footswitch PTT → MainWindow triggers TX
+    void pttRequested(bool active);
+
 private slots:
     void onKpodEncoderRotated(int ticks);
     void onKpodRockerChanged(int position);
