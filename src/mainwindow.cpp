@@ -2946,7 +2946,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     vfoAPassband.setAlpha(64);
     m_vfoA->setMiniPanPassbandColor(vfoAPassband);
 
-    layout->addWidget(m_vfoA, 1, Qt::AlignTop);
+    m_vfoA->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    layout->addWidget(m_vfoA, 1);
 
     // ===== Center Section =====
     auto *centerWidget = new QWidget(parent);
@@ -3268,7 +3269,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         }
     });
 
-    layout->addWidget(m_vfoB, 1, Qt::AlignTop);
+    m_vfoB->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    layout->addWidget(m_vfoB, 1);
 
     // Add the VFO row to main layout
     mainVLayout->addWidget(vfoRowWidget);
