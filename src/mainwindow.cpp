@@ -2258,9 +2258,6 @@ void MainWindow::setupUi() {
 
     // Connect side control panel icon buttons
     connect(m_sideControlPanel, &SideControlPanel::connectClicked, this, &MainWindow::showRadioManager);
-    connect(m_sideControlPanel, &SideControlPanel::helpClicked, this, []() {
-        // TODO: Show help dialog
-    });
 
     // Connect volume slider to AudioController (Main RX / VFO A)
     connect(m_sideControlPanel, &SideControlPanel::volumeChanged, this, [this](int value) {
