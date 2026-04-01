@@ -93,7 +93,7 @@ public:
     // Meters
     double sMeter() const { return m_sMeter; }
     double sMeterB() const { return m_sMeterB; }
-    int powerMeter() const { return m_powerMeter; }
+
     double swrMeter() const { return m_swrMeter; }
 
     // TX Meter data (TM command)
@@ -570,7 +570,7 @@ signals:
     void tuningStepBChanged(int step); // VFO B tuning rate (0-5)
     void sMeterChanged(double value);
     void sMeterBChanged(double value);
-    void powerMeterChanged(int watts);
+
     void transmitStateChanged(bool transmitting);
     void rfPowerChanged(double watts, bool isQrp);
     void supplyVoltageChanged(double volts);
@@ -649,12 +649,10 @@ signals:
     void balanceChanged(int mode, int offset);     // BL: Balance (mode 0=NOR/1=BAL, offset -50 to +50)
 
     // RX Graphic Equalizer
-    void rxEqChanged();                      // Any EQ band value changed
-    void rxEqBandChanged(int index, int dB); // Specific band changed
+    void rxEqChanged(); // Any EQ band value changed
 
     // TX Graphic Equalizer
-    void txEqChanged();                      // Any EQ band value changed
-    void txEqBandChanged(int index, int dB); // Specific band changed
+    void txEqChanged(); // Any EQ band value changed
 
     // Antenna Configuration Masks
     void mainRxAntCfgChanged(); // ACM command received/changed
@@ -717,7 +715,7 @@ private:
     // Meters
     double m_sMeter = 0.0;
     double m_sMeterB = 0.0;
-    int m_powerMeter = 0;
+
     double m_swrMeter = 1.0;
     int m_alcMeter = 0;
     int m_compressionDb = 0;

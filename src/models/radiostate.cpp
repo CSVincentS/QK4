@@ -44,7 +44,7 @@ void RadioState::reset() {
     // Meters
     m_sMeter = 0.0;
     m_sMeterB = 0.0;
-    m_powerMeter = 0;
+
     m_swrMeter = 1.0;
     m_alcMeter = 0;
     m_compressionDb = 0;
@@ -630,7 +630,6 @@ void RadioState::setRxEqBand(int index, int dB) {
     dB = qBound(-16, dB, 16);
     if (m_rxEqBands[index] != dB) {
         m_rxEqBands[index] = dB;
-        emit rxEqBandChanged(index, dB);
         emit rxEqChanged();
     }
 }
@@ -655,7 +654,6 @@ void RadioState::setTxEqBand(int index, int dB) {
     dB = qBound(-16, dB, 16);
     if (m_txEqBands[index] != dB) {
         m_txEqBands[index] = dB;
-        emit txEqBandChanged(index, dB);
         emit txEqChanged();
     }
 }
@@ -1588,14 +1586,9 @@ void RadioState::handleSMSub(const QString &cmd) {
 }
 
 void RadioState::handlePO(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int po = cmd.mid(2).toInt(&ok);
-    if (ok && m_powerMeter != po) {
-        m_powerMeter = po;
-        emit powerMeterChanged(m_powerMeter);
-    }
+    Q_UNUSED(cmd)
+    // PO (raw power meter) is received but unused — forward power
+    // is already available through the TM handler's txMeterChanged signal.
 }
 
 void RadioState::handleTM(const QString &cmd) {
@@ -2552,7 +2545,6 @@ void RadioState::handleRE(const QString &cmd) {
         if (ok && val >= -16 && val <= 16 && val != m_rxEqBands[i]) {
             m_rxEqBands[i] = val;
             changed = true;
-            emit rxEqBandChanged(i, val);
         }
     }
     if (changed)
@@ -2569,7 +2561,6 @@ void RadioState::handleTE(const QString &cmd) {
         if (ok && val >= -16 && val <= 16 && val != m_txEqBands[i]) {
             m_txEqBands[i] = val;
             changed = true;
-            emit txEqBandChanged(i, val);
         }
     }
     if (changed)
