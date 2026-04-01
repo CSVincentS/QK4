@@ -28,9 +28,6 @@ public:
     Q_INVOKABLE void setMicEnabled(bool enabled);
     bool isMicEnabled() const { return m_micEnabled.load(std::memory_order_relaxed); }
 
-    void setVolume(float volume); // 0.0 to 1.0
-    float volume() const { return m_volume.load(std::memory_order_relaxed); }
-
     // Channel volume controls (applied at playback time for instant response)
     void setMainVolume(float volume);
     void setSubVolume(float volume);
@@ -65,7 +62,6 @@ public:
     static QList<QPair<QString, QString>> availableOutputDevices(); // (id, description)
 
 signals:
-    void microphoneData(const QByteArray &pcmData);    // Raw Float32 mic data (variable size)
     void microphoneFrame(const QByteArray &s16leData); // Complete frame (240 samples, S16LE @ 12kHz)
     void micLevelChanged(float level);                 // RMS level 0.0-1.0 for meter display
     void bufferStatus(int queueBytes, int maxBytes, bool prebuffering);

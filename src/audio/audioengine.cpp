@@ -409,9 +409,6 @@ void AudioEngine::onMicDataReady() {
     // Resample from 48kHz to 12kHz
     QByteArray data12k = resample48kTo12k(data48k);
 
-    // Emit raw resampled data for any listeners that want it
-    emit microphoneData(data12k);
-
     // Convert Float32 to S16LE, apply gain, and buffer for frame-based emission
     const float *floatData = reinterpret_cast<const float *>(data12k.constData());
     int floatSamples = data12k.size() / sizeof(float);
@@ -448,13 +445,6 @@ void AudioEngine::onMicDataReady() {
     if (offset > 0) {
         m_micBuffer.remove(0, offset); // Single shift for all consumed frames
     }
-}
-
-void AudioEngine::setVolume(float volume) {
-    m_volume.store(qBound(0.0f, volume, 1.0f), std::memory_order_relaxed);
-    // Note: QAudioSink::setVolume() must be called on the audio thread.
-    // Since setVolume() is rarely used (system volume), we skip the cross-thread
-    // call here — the stored value will be applied on next start().
 }
 
 void AudioEngine::setMainVolume(float volume) {
