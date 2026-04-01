@@ -74,23 +74,28 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
 
     // Set initial sidetone frequency from radio state if available
     if (m_radioState->cwPitch() > 0) {
-        m_sidetoneGenerator->setFrequency(m_radioState->cwPitch());
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "setFrequency", Qt::QueuedConnection,
+                                  Q_ARG(int, m_radioState->cwPitch()));
     }
 
     // Update sidetone frequency when CW pitch changes
-    connect(m_radioState, &RadioState::cwPitchChanged, this,
-            [this](int pitchHz) { m_sidetoneGenerator->setFrequency(pitchHz); });
+    connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitchHz) {
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "setFrequency", Qt::QueuedConnection, Q_ARG(int, pitchHz));
+    });
 
     // Set initial sidetone volume from RadioSettings (independent of K4's MON level)
-    m_sidetoneGenerator->setVolume(RadioSettings::instance()->sidetoneVolume() / 100.0f);
+    QMetaObject::invokeMethod(m_sidetoneGenerator, "setVolume", Qt::QueuedConnection,
+                              Q_ARG(float, RadioSettings::instance()->sidetoneVolume() / 100.0f));
 
     // Update sidetone volume when changed in Options
-    connect(RadioSettings::instance(), &RadioSettings::sidetoneVolumeChanged, this,
-            [this](int value) { m_sidetoneGenerator->setVolume(value / 100.0f); });
+    connect(RadioSettings::instance(), &RadioSettings::sidetoneVolumeChanged, this, [this](int value) {
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "setVolume", Qt::QueuedConnection, Q_ARG(float, value / 100.0f));
+    });
 
     // Set initial keyer speed from radio state if available
     if (m_radioState->keyerSpeed() > 0) {
-        m_sidetoneGenerator->setKeyerSpeed(m_radioState->keyerSpeed());
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "setKeyerSpeed", Qt::QueuedConnection,
+                                  Q_ARG(int, m_radioState->keyerSpeed()));
     }
 
     // =========================================================================
