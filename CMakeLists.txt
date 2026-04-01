@@ -171,6 +171,7 @@ set(HEADERS
     src/settings/radiosettings.h
     src/models/radiostate.h
     src/models/menumodel.h
+    src/models/macroids.h
     src/ui/radiomanagerdialog.h
     src/ui/dualcontrolbutton.h
     src/ui/sidecontrolpanel.h
