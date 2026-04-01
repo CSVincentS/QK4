@@ -260,22 +260,9 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
 }
 
 void HardwareController::onKpodRockerChanged(int position) {
-    QString posName;
-    switch (static_cast<KpodDevice::RockerPosition>(position)) {
-    case KpodDevice::RockerLeft:
-        posName = "VFO A";
-        break;
-    case KpodDevice::RockerCenter:
-        posName = "VFO B";
-        break;
-    case KpodDevice::RockerRight:
-        posName = "XIT/RIT";
-        break;
-    default:
-        posName = "Unknown";
-        break;
-    }
-    Q_UNUSED(posName)
+    Q_UNUSED(position)
+    // TODO: Map rocker positions (Left=VFO A, Center=VFO B, Right=XIT/RIT)
+    //       to tuning target selection when KPOD tuning is implemented
 }
 
 void HardwareController::onKpodPollError(const QString &error) {

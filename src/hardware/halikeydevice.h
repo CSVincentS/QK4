@@ -13,7 +13,6 @@ class HaliKeyWorkerBase;
 
 struct HaliKeyPortInfo {
     QString portName;
-    bool isMidiDetected = false;
 };
 
 class HalikeyDevice : public QObject {
