@@ -1762,6 +1762,10 @@ MainWindow::MainWindow(QWidget *parent)
         m_radioState->parseCATCommand(command);
     });
 
+    // Surface CAT server bind failures to the user
+    connect(m_catServer, &CatServer::errorOccurred, this,
+            [this](const QString &error) { qWarning() << "CAT server:" << error; });
+
     // TX;/RX; from external apps controls audio input gate
     // Audio stream itself triggers K4 TX - timing-critical for FT8/FT4
     connect(m_catServer, &CatServer::pttRequested, this, [this](bool on) {
