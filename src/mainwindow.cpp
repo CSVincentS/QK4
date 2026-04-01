@@ -4691,7 +4691,6 @@ void MainWindow::onMainRxButtonClicked(int index) {
             m_textDecodeWindowMain->show();
             if (!m_textDecodeWindowMain->isDecodeEnabled()) {
                 m_textDecodeWindowMain->setDecodeEnabled(true);
-                emit m_textDecodeWindowMain->enabledChanged(true);
             }
         }
         break;
@@ -4803,7 +4802,6 @@ void MainWindow::onSubRxButtonClicked(int index) {
             m_textDecodeWindowSub->show();
             if (!m_textDecodeWindowSub->isDecodeEnabled()) {
                 m_textDecodeWindowSub->setDecodeEnabled(true);
-                emit m_textDecodeWindowSub->enabledChanged(true);
             }
         }
         break;
