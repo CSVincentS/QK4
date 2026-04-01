@@ -159,15 +159,29 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // =========================================================================
     // HaliKey paddle → keyer (ZERO-LATENCY DirectConnection)
     // =========================================================================
-    // setDitPaddle/setDahPaddle write atomic bools immediately on the calling thread,
-    // so onTimerFired() always sees real-time paddle state with zero queue delay.
-    connect(m_halikeyDevice, &HalikeyDevice::ditStateChanged, m_iambicKeyer, &IambicKeyer::setDitPaddle,
-            Qt::DirectConnection);
+    // HaliKey MIDI sends note 20 (dit) + note 31 (PTT) together on every Tip-to-Sleeve closure.
+    // In CW mode: forward dit to keyer, ignore PTT (TX handled by KZ commands).
+    // In voice mode: forward PTT to MainWindow, suppress dit (no keying in SSB/AM/FM).
+    connect(
+        m_halikeyDevice, &HalikeyDevice::ditStateChanged, this,
+        [this](bool pressed) {
+            auto mode = m_radioState->mode();
+            if (mode == RadioState::CW || mode == RadioState::CW_R) {
+                m_iambicKeyer->setDitPaddle(pressed);
+            }
+            // In voice/data modes, dit is suppressed — PTT signal handles TX
+        },
+        Qt::DirectConnection);
     connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, m_iambicKeyer, &IambicKeyer::setDahPaddle,
             Qt::DirectConnection);
 
-    // HaliKey footswitch PTT → MainWindow (via pttRequested signal)
-    connect(m_halikeyDevice, &HalikeyDevice::pttStateChanged, this, &HardwareController::pttRequested);
+    // HaliKey PTT → MainWindow (voice/data modes only)
+    connect(m_halikeyDevice, &HalikeyDevice::pttStateChanged, this, [this](bool active) {
+        auto mode = m_radioState->mode();
+        if (mode != RadioState::CW && mode != RadioState::CW_R) {
+            emit pttRequested(active);
+        }
+    });
 
     // Enable keyer when radio connects, disable on disconnect
     connect(m_connectionController, &ConnectionController::radioReady, this, [this]() {
