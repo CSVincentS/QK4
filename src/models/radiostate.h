@@ -1116,9 +1116,9 @@ private:
     void handleOM(const QString &cmd);   // Option Modules
     void handleRV(const QString &cmd);   // Firmware Version (RV.)
     void handleSIFP(const QString &cmd); // Power Supply Info
-    void handleSIRC(const QString &cmd); // SIRC status
-    void handleMN(const QString &cmd);   // Message Bank
-    void handleER(const QString &cmd);   // Error notifications
+
+    void handleMN(const QString &cmd); // Message Bank
+    void handleER(const QString &cmd); // Error notifications
 
     // Display commands (# prefix)
     // #REF/#REF$ — handled inline via handleIntPair

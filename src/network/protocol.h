@@ -24,7 +24,7 @@ constexpr quint16 DEFAULT_PORT = 9205; // Unencrypted (SHA-384 auth)
 constexpr quint16 TLS_PORT = 9204;     // TLS/PSK encrypted
 
 // Timing constants
-constexpr int PING_INTERVAL_MS = 1000;       // 1 second (matches SIRC update interval)
+constexpr int PING_INTERVAL_MS = 1000;       // 1 second
 constexpr int CONNECTION_TIMEOUT_MS = 10000; // 10 seconds
 constexpr int AUTH_TIMEOUT_MS = 5000;        // 5 seconds for auth response
 

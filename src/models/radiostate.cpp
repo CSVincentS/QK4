@@ -991,7 +991,7 @@ void RadioState::registerCommandHandlers() {
 
     // Multi-char commands with $ suffix (must come before their base commands)
     m_commandHandlers.append({"SIFP", [this](const QString &c) { handleSIFP(c); }});
-    m_commandHandlers.append({"SIRC", [this](const QString &c) { handleSIRC(c); }});
+
     m_commandHandlers.append({"TD$", [this](const QString &c) { handleTDSub(c); }});
     m_commandHandlers.append({"TB$", [this](const QString &c) { handleTBSub(c); }});
     m_commandHandlers.append({"DR$", [this](const QString &c) { handleDRSub(c); }});
@@ -2647,10 +2647,6 @@ void RadioState::handleSIFP(const QString &cmd) {
             emit supplyCurrentChanged(m_supplyCurrent);
         }
     }
-}
-
-void RadioState::handleSIRC(const QString &cmd) {
-    Q_UNUSED(cmd)
 }
 
 void RadioState::handleMN(const QString &cmd) {

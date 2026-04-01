@@ -224,6 +224,13 @@ private slots:
         QCOMPARE(rs.keyerSpeed(), 20);
     }
 
+    // SIRC command removed — must not crash when received
+    void testSircCommandIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("SIRC1;");
+        // No handler registered — command is silently ignored, no crash
+    }
+
     // Reset clears all state
     void testReset() {
         RadioState rs;

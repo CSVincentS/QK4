@@ -3414,9 +3414,8 @@ void MainWindow::onRadioReady() {
     m_connectionController->sendCAT("#FRZ;");  // Freeze - not in RDY
     m_connectionController->sendCAT(
         "#FPS15;"); // Set display FPS to 15 on connect (12 default is too slow for large monitors)
-    m_connectionController->sendCAT("#FPS;");  // Query back to confirm and update menu
-    m_connectionController->sendCAT("#SCL;");  // Panadapter scale - not in RDY, needed for dB range
-    m_connectionController->sendCAT("SIRC1;"); // Enable 1-second client stats updates
+    m_connectionController->sendCAT("#FPS;"); // Query back to confirm and update menu
+    m_connectionController->sendCAT("#SCL;"); // Panadapter scale - not in RDY, needed for dB range
     // Note: ML and KP commands come in RDY; dump - no need to query
 
     // Sync element length with K4 server (sent in RDY dump as KZLnn)
