@@ -9,6 +9,10 @@ NetHealthWidget::NetHealthWidget(NetworkMetrics *metrics, QWidget *parent) : QWi
     connect(m_metrics, &NetworkMetrics::healthTierChanged, this, &NetHealthWidget::onHealthTierChanged);
 }
 
+NetHealthWidget::~NetHealthWidget() {
+    hideMetricsPopup();
+}
+
 void NetHealthWidget::onHealthTierChanged(NetworkMetrics::HealthTier tier) {
     m_tier = tier;
     // NetworkMetrics only emits Green/Yellow/Orange when connected; Red on disconnect
