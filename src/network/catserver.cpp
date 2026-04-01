@@ -316,7 +316,7 @@ QString CatServer::handleCommand(const QString &cmd) {
             // Format: PCnnnM; where nnn=power (3 digits), M=mode (H=high, L=low/QRP)
             int power = static_cast<int>(m_radioState->rfPower());
             QString mode = m_radioState->isQrpMode() ? "L" : "H";
-            return QString("PC%1%2;").arg(power, 3, 10, QChar('0')).arg(mode);
+            return QString("PCX%1%2;").arg(power, 3, 10, QChar('0')).arg(mode);
         }
         // AG - AF gain (audio volume)
         if (prefix == "AG") {
