@@ -1148,9 +1148,13 @@ MainWindow::MainWindow(QWidget *parent)
 
         // TX indicator and triangles turn red when transmitting
         QString color = transmitting ? "#FF0000" : K4Styles::Colors::AccentAmber;
-        m_txIndicator->setStyleSheet(QString("color: %1; font-size: 18px; font-weight: bold;").arg(color));
-        m_txTriangle->setStyleSheet(QString("color: %1; font-size: 18px;").arg(color));
-        m_txTriangleB->setStyleSheet(QString("color: %1; font-size: 18px;").arg(color));
+        m_txIndicator->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                         .arg(color)
+                                         .arg(K4Styles::Dimensions::FontSizeIndicator));
+        m_txTriangle->setStyleSheet(
+            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
+        m_txTriangleB->setStyleSheet(
+            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
 
         // When XIT is active, show the actual TX frequency on the TX VFO display
         // No split: VFO A displays TX freq; Split: VFO B displays TX freq
@@ -1171,43 +1175,47 @@ MainWindow::MainWindow(QWidget *parent)
         if (enabled) {
             m_subLabel->setStyleSheet(QString("background-color: %1;"
                                               "color: black;"
-                                              "font-size: 9px;"
+                                              "font-size: %2px;"
                                               "font-weight: bold;"
                                               "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::StatusGreen));
+                                          .arg(K4Styles::Colors::StatusGreen)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
             // If DIV is also on, light up the DIV indicator (handles timing when SB3 comes after DV1)
             if (m_radioState->diversityEnabled()) {
                 m_divLabel->setStyleSheet(QString("background-color: %1;"
                                                   "color: black;"
-                                                  "font-size: 9px;"
+                                                  "font-size: %2px;"
                                                   "font-weight: bold;"
                                                   "border-radius: 2px;")
-                                              .arg(K4Styles::Colors::StatusGreen));
+                                              .arg(K4Styles::Colors::StatusGreen)
+                                              .arg(K4Styles::Dimensions::FontSizeNormal));
             }
             // Restore VFO B frequency and mode to normal white
             m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::TextWhite));
-            m_modeBLabel->setStyleSheet(
-                QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextWhite));
+            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                            .arg(K4Styles::Colors::TextWhite)
+                                            .arg(K4Styles::Dimensions::FontSizeLarge));
         } else {
-            m_subLabel->setStyleSheet(
-                QString("background-color: %1;"
-                        "color: %2;"
-                        "font-size: 9px;"
-                        "font-weight: bold;"
-                        "border-radius: 2px;")
-                    .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
+            m_subLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: %2;"
+                                              "font-size: %3px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
             // DIV requires SUB - turn off DIV indicator when SUB is off
-            m_divLabel->setStyleSheet(
-                QString("background-color: %1;"
-                        "color: %2;"
-                        "font-size: 9px;"
-                        "font-weight: bold;"
-                        "border-radius: 2px;")
-                    .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
+            m_divLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: %2;"
+                                              "font-size: %3px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
             // Dim VFO B frequency and mode to indicate SUB RX is off
             m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
-            m_modeBLabel->setStyleSheet(
-                QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::InactiveGray));
+            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                            .arg(K4Styles::Colors::InactiveGray)
+                                            .arg(K4Styles::Dimensions::FontSizeLarge));
 
             // Auto-hide mini pan B if VFOs are on different bands (can't have mini pan B without SUB RX)
             m_spectrumController->checkAndHideMiniPanB();
@@ -1222,18 +1230,19 @@ MainWindow::MainWindow(QWidget *parent)
         if (showActive) {
             m_divLabel->setStyleSheet(QString("background-color: %1;"
                                               "color: black;"
-                                              "font-size: 9px;"
+                                              "font-size: %2px;"
                                               "font-weight: bold;"
                                               "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::StatusGreen));
+                                          .arg(K4Styles::Colors::StatusGreen)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
         } else {
-            m_divLabel->setStyleSheet(
-                QString("background-color: %1;"
-                        "color: %2;"
-                        "font-size: 9px;"
-                        "font-weight: bold;"
-                        "border-radius: 2px;")
-                    .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
+            m_divLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: %2;"
+                                              "font-size: %3px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
         }
     });
 
@@ -2857,49 +2866,64 @@ void MainWindow::setupTopStatusBar(QWidget *parent) {
 
     // Elecraft K4 title
     m_titleLabel = new QLabel("Elecraft K4", statusBar);
-    m_titleLabel->setStyleSheet(
-        QString("color: %1; font-weight: bold; font-size: 14px;").arg(K4Styles::Colors::TextWhite));
+    m_titleLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: %2px;")
+                                    .arg(K4Styles::Colors::TextWhite)
+                                    .arg(K4Styles::Dimensions::FontSizePopup));
     layout->addWidget(m_titleLabel);
 
     // Date/Time
     m_dateTimeLabel = new QLabel("--/-- --:--:-- Z", statusBar);
-    m_dateTimeLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::TextGray));
+    m_dateTimeLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                       .arg(K4Styles::Colors::TextGray)
+                                       .arg(K4Styles::Dimensions::FontSizeButton));
     layout->addWidget(m_dateTimeLabel);
 
     layout->addStretch();
 
     // Power
     m_powerLabel = new QLabel("--- W", statusBar);
-    m_powerLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+    m_powerLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                    .arg(K4Styles::Colors::AccentAmber)
+                                    .arg(K4Styles::Dimensions::FontSizeButton));
     layout->addWidget(m_powerLabel);
 
     // SWR
     m_swrLabel = new QLabel("-.-:1", statusBar);
-    m_swrLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+    m_swrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                  .arg(K4Styles::Colors::AccentAmber)
+                                  .arg(K4Styles::Dimensions::FontSizeButton));
     layout->addWidget(m_swrLabel);
 
     // Voltage
     m_voltageLabel = new QLabel("--.- V", statusBar);
-    m_voltageLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+    m_voltageLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                      .arg(K4Styles::Colors::AccentAmber)
+                                      .arg(K4Styles::Dimensions::FontSizeButton));
     layout->addWidget(m_voltageLabel);
 
     // Current
     m_currentLabel = new QLabel("-.- A", statusBar);
-    m_currentLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+    m_currentLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                      .arg(K4Styles::Colors::AccentAmber)
+                                      .arg(K4Styles::Dimensions::FontSizeButton));
     layout->addWidget(m_currentLabel);
 
     layout->addStretch();
 
     // KPA1500 status (to left of K4 status)
     m_kpa1500StatusLabel = new QLabel("", statusBar);
-    m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::InactiveGray));
+    m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                            .arg(K4Styles::Colors::InactiveGray)
+                                            .arg(K4Styles::Dimensions::FontSizeButton));
     m_kpa1500StatusLabel->hide(); // Hidden when not enabled
     layout->addWidget(m_kpa1500StatusLabel);
 
     // Network health bar
     // K4 Connection status
     m_connectionStatusLabel = new QLabel("K4", statusBar);
-    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::InactiveGray));
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                               .arg(K4Styles::Colors::InactiveGray)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
     layout->addWidget(m_connectionStatusLabel);
 
     // Network health signal bars
@@ -3020,13 +3044,17 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     ritXitLabelsRow->setSpacing(8);
 
     m_ritLabel = new QLabel("RIT", m_ritXitBox);
-    m_ritLabel->setStyleSheet(QString("color: %1; font-size: 10px; border: none;").arg(K4Styles::Colors::InactiveGray));
+    m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
+                                  .arg(K4Styles::Colors::InactiveGray)
+                                  .arg(K4Styles::Dimensions::FontSizeMedium));
     m_ritLabel->setCursor(Qt::PointingHandCursor);
     m_ritLabel->installEventFilter(this);
     ritXitLabelsRow->addWidget(m_ritLabel);
 
     m_xitLabel = new QLabel("XIT", m_ritXitBox);
-    m_xitLabel->setStyleSheet(QString("color: %1; font-size: 10px; border: none;").arg(K4Styles::Colors::InactiveGray));
+    m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
+                                  .arg(K4Styles::Colors::InactiveGray)
+                                  .arg(K4Styles::Dimensions::FontSizeMedium));
     m_xitLabel->setCursor(Qt::PointingHandCursor);
     m_xitLabel->installEventFilter(this);
     ritXitLabelsRow->addWidget(m_xitLabel);
@@ -3085,22 +3113,25 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // VOX indicator - orange when on, grey when off
     m_voxLabel = new QLabel("VOX", indicatorContainer);
     m_voxLabel->setAlignment(Qt::AlignCenter);
-    m_voxLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+    m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                  .arg(K4Styles::Colors::TextGray)
+                                  .arg(K4Styles::Dimensions::FontSizeLarge));
     indicatorLayout->addWidget(m_voxLabel);
 
     // ATU indicator (orange when AUTO, grey when off)
     m_atuLabel = new QLabel("ATU", indicatorContainer);
     m_atuLabel->setAlignment(Qt::AlignCenter);
-    m_atuLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+    m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                  .arg(K4Styles::Colors::TextGray)
+                                  .arg(K4Styles::Dimensions::FontSizeLarge));
     indicatorLayout->addWidget(m_atuLabel);
 
     // QSK indicator - white when on, grey when off
     m_qskLabel = new QLabel("QSK", indicatorContainer);
     m_qskLabel->setAlignment(Qt::AlignCenter);
-    m_qskLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+    m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                  .arg(K4Styles::Colors::TextGray)
+                                  .arg(K4Styles::Dimensions::FontSizeLarge));
     indicatorLayout->addWidget(m_qskLabel);
 
     indicatorLayout->addStretch();
@@ -3299,8 +3330,9 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // RX Antenna A (Main) - white color, left-justified
     m_rxAntALabel = new QLabel("1:ANT1", parent);
     m_rxAntALabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_rxAntALabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextWhite));
+    m_rxAntALabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                     .arg(K4Styles::Colors::TextWhite)
+                                     .arg(K4Styles::Dimensions::FontSizeLarge));
     antennaRow->addWidget(m_rxAntALabel);
 
     antennaRow->addStretch(1); // Push TX antenna to center
@@ -3308,8 +3340,9 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // TX Antenna - orange color, centered
     m_txAntennaLabel = new QLabel("1:ANT1", parent);
     m_txAntennaLabel->setAlignment(Qt::AlignCenter);
-    m_txAntennaLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::AccentAmber));
+    m_txAntennaLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                        .arg(K4Styles::Colors::AccentAmber)
+                                        .arg(K4Styles::Dimensions::FontSizeLarge));
     antennaRow->addWidget(m_txAntennaLabel);
 
     antennaRow->addStretch(1); // Push RX Ant B to right
@@ -3317,8 +3350,9 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // RX Antenna B (Sub) - white color, right-justified
     m_rxAntBLabel = new QLabel("1:ANT1", parent);
     m_rxAntBLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_rxAntBLabel->setStyleSheet(
-        QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextWhite));
+    m_rxAntBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                     .arg(K4Styles::Colors::TextWhite)
+                                     .arg(K4Styles::Dimensions::FontSizeLarge));
     antennaRow->addWidget(m_rxAntBLabel);
 
     mainVLayout->addLayout(antennaRow);
@@ -3381,8 +3415,9 @@ void MainWindow::onConnectionStateChanged(TcpClient::ConnectionState state) {
 
 void MainWindow::onConnectionError(const QString &error) {
     m_connectionStatusLabel->setText("Error: " + error);
-    m_connectionStatusLabel->setStyleSheet(
-        QString("color: %1; font-size: 12px; font-weight: bold;").arg(K4Styles::Colors::TxRed));
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                               .arg(K4Styles::Colors::TxRed)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
 }
 
 void MainWindow::onRadioReady() {
@@ -3424,8 +3459,9 @@ void MainWindow::onRadioReady() {
 void MainWindow::onAuthFailed() {
     qCDebug(qk4Main) << "Authentication failed";
     m_connectionStatusLabel->setText("Auth Failed");
-    m_connectionStatusLabel->setStyleSheet(
-        QString("color: %1; font-size: 12px; font-weight: bold;").arg(K4Styles::Colors::TxRed));
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                               .arg(K4Styles::Colors::TxRed)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
 }
 
 void MainWindow::onCatResponse(const QString &response) {
@@ -3574,8 +3610,9 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
     switch (state) {
     case TcpClient::Disconnected:
         m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(
-            QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::InactiveGray));
+        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                                   .arg(K4Styles::Colors::InactiveGray)
+                                                   .arg(K4Styles::Dimensions::FontSizeButton));
         m_titleLabel->setText("Elecraft K4");
         // Stop audio engine to prevent accessing invalid data
         m_audioController->stopAudio();
@@ -3617,7 +3654,9 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
 
         // Split
         m_splitLabel->setText("SPLIT OFF");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+        m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                        .arg(K4Styles::Colors::AccentAmber)
+                                        .arg(K4Styles::Dimensions::FontSizeButton));
 
         // TX indicators (default: left triangle, amber)
         m_txTriangle->setText("◀");
@@ -3628,39 +3667,50 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
 
         // SUB/DIV (disabled state)
         m_subLabel->setStyleSheet(
-            QString("background-color: %1; color: %2; font-size: 9px; font-weight: bold; border-radius: 2px;")
+            QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
+                .arg(K4Styles::Dimensions::FontSizeNormal)
                 .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
         m_divLabel->setStyleSheet(
-            QString("background-color: %1; color: %2; font-size: 9px; font-weight: bold; border-radius: 2px;")
+            QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
+                .arg(K4Styles::Dimensions::FontSizeNormal)
                 .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
 
         // Dim VFO B (SUB off state)
         m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
-        m_modeBLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::InactiveGray));
+        m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                        .arg(K4Styles::Colors::InactiveGray)
+                                        .arg(K4Styles::Dimensions::FontSizeLarge));
 
         // Message bank
         m_msgBankLabel->setText("MSG: I");
-        m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+        m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                          .arg(K4Styles::Colors::AccentAmber)
+                                          .arg(K4Styles::Dimensions::FontSizeButton));
 
         // RIT/XIT (disabled state)
-        m_ritLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::InactiveGray));
-        m_xitLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::InactiveGray));
+        m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::InactiveGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
+        m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::InactiveGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
         m_ritXitValueLabel->setText("+0.00");
-        m_ritXitValueLabel->setStyleSheet(
-            QString("color: %1; font-size: 14px; font-weight: bold;").arg(K4Styles::Colors::InactiveGray));
+        m_ritXitValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                              .arg(K4Styles::Colors::InactiveGray)
+                                              .arg(K4Styles::Dimensions::FontSizePopup));
 
         // ATU (grey/inactive)
-        m_atuLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+        m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::TextGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
 
         // VOX / QSK (grey/inactive)
-        m_voxLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
-        m_qskLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+        m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::TextGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
+        m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::TextGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
 
         // TEST (hidden)
         m_vfoRow->setTestVisible(false);
@@ -3750,20 +3800,23 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
 
     case TcpClient::Connecting:
         m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(
-            QString("color: %1; font-size: 12px; font-weight: bold;").arg(K4Styles::Colors::AccentAmber));
+        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                   .arg(K4Styles::Colors::AccentAmber)
+                                                   .arg(K4Styles::Dimensions::FontSizeButton));
         break;
 
     case TcpClient::Authenticating:
         m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(
-            QString("color: %1; font-size: 12px; font-weight: bold;").arg(K4Styles::Colors::AccentAmber));
+        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                   .arg(K4Styles::Colors::AccentAmber)
+                                                   .arg(K4Styles::Dimensions::FontSizeButton));
         break;
 
     case TcpClient::Connected:
         m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(
-            QString("color: %1; font-size: 12px; font-weight: bold;").arg(K4Styles::Colors::StatusGreen));
+        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                   .arg(K4Styles::Colors::StatusGreen)
+                                                   .arg(K4Styles::Dimensions::FontSizeButton));
         break;
     }
 }
@@ -3798,13 +3851,17 @@ void MainWindow::onDisplayFpsChanged(int fps) {
 void MainWindow::onSplitChanged(bool enabled) {
     if (enabled) {
         m_splitLabel->setText("SPLIT ON");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+        m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                        .arg(K4Styles::Colors::AccentAmber)
+                                        .arg(K4Styles::Dimensions::FontSizeButton));
         // When split is on, TX goes to VFO B - clear left triangle, show right triangle
         m_txTriangle->setText("");
         m_txTriangleB->setText("▶");
     } else {
         m_splitLabel->setText("SPLIT OFF");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+        m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                        .arg(K4Styles::Colors::AccentAmber)
+                                        .arg(K4Styles::Dimensions::FontSizeButton));
         // When split is off, TX stays on VFO A - show left triangle, clear right triangle
         m_txTriangle->setText("◀");
         m_txTriangleB->setText("");
@@ -3911,22 +3968,26 @@ void MainWindow::onVoxChanged(bool enabled) {
     // Use mode-specific VOX state (CW modes use VXC, Voice modes use VXV, Data modes use VXD)
     bool voxOn = m_radioState->voxForCurrentMode();
     if (voxOn) {
-        m_voxLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::AccentAmber));
+        m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::AccentAmber)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
     } else {
-        m_voxLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+        m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::TextGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
     }
 }
 
 void MainWindow::onQskEnabledChanged(bool enabled) {
     // QSK indicator: white when enabled, grey when disabled
     if (enabled) {
-        m_qskLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextWhite));
+        m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::TextWhite)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
     } else {
-        m_qskLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+        m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::TextGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
     }
 }
 
@@ -3938,31 +3999,37 @@ void MainWindow::onTestModeChanged(bool enabled) {
 void MainWindow::onAtuModeChanged(int mode) {
     // ATU indicator: orange when AUTO mode (2), grey otherwise
     if (mode == 2) {
-        m_atuLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::AccentAmber));
+        m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::AccentAmber)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
     } else {
-        m_atuLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
+        m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::TextGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge));
     }
 }
 
 void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
     // Update RIT label
     if (ritEnabled) {
-        m_ritLabel->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; border: none;").arg(K4Styles::Colors::TextWhite));
+        m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold; border: none;")
+                                      .arg(K4Styles::Colors::TextWhite)
+                                      .arg(K4Styles::Dimensions::FontSizeMedium));
     } else {
-        m_ritLabel->setStyleSheet(
-            QString("color: %1; font-size: 10px; border: none;").arg(K4Styles::Colors::InactiveGray));
+        m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
+                                      .arg(K4Styles::Colors::InactiveGray)
+                                      .arg(K4Styles::Dimensions::FontSizeMedium));
     }
 
     // Update XIT label
     if (xitEnabled) {
-        m_xitLabel->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; border: none;").arg(K4Styles::Colors::TextWhite));
+        m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold; border: none;")
+                                      .arg(K4Styles::Colors::TextWhite)
+                                      .arg(K4Styles::Dimensions::FontSizeMedium));
     } else {
-        m_xitLabel->setStyleSheet(
-            QString("color: %1; font-size: 10px; border: none;").arg(K4Styles::Colors::InactiveGray));
+        m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
+                                      .arg(K4Styles::Colors::InactiveGray)
+                                      .arg(K4Styles::Dimensions::FontSizeMedium));
     }
 
     // Update offset value (in kHz)
@@ -3973,7 +4040,9 @@ void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
 
     QString valueColor = (ritEnabled || xitEnabled) ? K4Styles::Colors::TextWhite : K4Styles::Colors::InactiveGray;
     m_ritXitValueLabel->setStyleSheet(
-        QString("color: %1; font-size: 14px; font-weight: bold; border: none; padding: 0 11px;").arg(valueColor));
+        QString("color: %1; font-size: %2px; font-weight: bold; border: none; padding: 0 11px;")
+            .arg(valueColor)
+            .arg(K4Styles::Dimensions::FontSizePopup));
 
     // Refresh frequency displays and panadapter passband — RIT offset affects receive frequency
     onFrequencyChanged(m_radioState->vfoA());
@@ -4532,12 +4601,14 @@ void MainWindow::updateKpa1500Status() {
         m_kpa1500StatusLabel->show();
         if (connected) {
             m_kpa1500StatusLabel->setText("KPA1500");
-            m_kpa1500StatusLabel->setStyleSheet(
-                QString("color: %1; font-size: 12px; font-weight: bold;").arg(K4Styles::Colors::StatusGreen));
+            m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                    .arg(K4Styles::Colors::StatusGreen)
+                                                    .arg(K4Styles::Dimensions::FontSizeButton));
         } else {
             m_kpa1500StatusLabel->setText("KPA1500");
-            m_kpa1500StatusLabel->setStyleSheet(
-                QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::InactiveGray));
+            m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                                    .arg(K4Styles::Colors::InactiveGray)
+                                                    .arg(K4Styles::Dimensions::FontSizeButton));
         }
     }
 }
