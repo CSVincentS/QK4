@@ -381,15 +381,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_rxEqDebounceTimer = new QTimer(this);
     m_rxEqDebounceTimer->setSingleShot(true);
     m_rxEqDebounceTimer->setInterval(100);
-    connect(m_rxEqDebounceTimer, &QTimer::timeout, this, [this]() {
-        // Build RE command with all 8 bands: RE+00+00+00+00+00+00+00+00;
-        QString cmd = "RE";
-        for (int i = 0; i < 8; i++) {
-            int value = m_radioState->rxEqBand(i);
-            cmd += QString("%1%2").arg(value >= 0 ? '+' : '-').arg(qAbs(value), 2, 10, QChar('0'));
-        }
-        m_connectionController->sendCAT(cmd);
-    });
+    connect(m_rxEqDebounceTimer, &QTimer::timeout, this,
+            [this]() { m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", m_radioState->rxEqBands())); });
 
     connect(m_rxEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
         // Update optimistic state immediately (UI stays responsive)
@@ -401,7 +394,7 @@ MainWindow::MainWindow(QWidget *parent)
         // Reset all bands to 0 and send CAT command
         QVector<int> flat(8, 0);
         m_radioState->setRxEqBands(flat);
-        m_connectionController->sendCAT("RE+00+00+00+00+00+00+00+00");
+        m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", flat));
     });
 
     // Preset load: get preset from RadioSettings, apply to sliders, send CAT
@@ -411,13 +404,7 @@ MainWindow::MainWindow(QWidget *parent)
             m_rxEqPopup->setAllBands(preset.bands);
             m_radioState->setRxEqBands(preset.bands);
 
-            // Send CAT command
-            QString cmd = "RE";
-            for (int i = 0; i < 8; i++) {
-                int value = preset.bands[i];
-                cmd += QString("%1%2").arg(value >= 0 ? '+' : '-').arg(qAbs(value), 2, 10, QChar('0'));
-            }
-            m_connectionController->sendCAT(cmd);
+            m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", preset.bands));
         }
     });
 
@@ -472,15 +459,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_txEqDebounceTimer = new QTimer(this);
     m_txEqDebounceTimer->setSingleShot(true);
     m_txEqDebounceTimer->setInterval(100);
-    connect(m_txEqDebounceTimer, &QTimer::timeout, this, [this]() {
-        // Build TE command with all 8 bands: TE+00+00+00+00+00+00+00+00;
-        QString cmd = "TE";
-        for (int i = 0; i < 8; i++) {
-            int value = m_radioState->txEqBand(i);
-            cmd += QString("%1%2").arg(value >= 0 ? '+' : '-').arg(qAbs(value), 2, 10, QChar('0'));
-        }
-        m_connectionController->sendCAT(cmd);
-    });
+    connect(m_txEqDebounceTimer, &QTimer::timeout, this,
+            [this]() { m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", m_radioState->txEqBands())); });
 
     connect(m_txEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
         // Update optimistic state immediately (UI stays responsive)
@@ -492,7 +472,7 @@ MainWindow::MainWindow(QWidget *parent)
         // Reset all bands to 0 and send CAT command
         QVector<int> flat(8, 0);
         m_radioState->setTxEqBands(flat);
-        m_connectionController->sendCAT("TE+00+00+00+00+00+00+00+00");
+        m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", flat));
     });
 
     // TX EQ Preset load: get preset from RadioSettings, apply to sliders, send CAT
@@ -502,13 +482,7 @@ MainWindow::MainWindow(QWidget *parent)
             m_txEqPopup->setAllBands(preset.bands);
             m_radioState->setTxEqBands(preset.bands);
 
-            // Send CAT command
-            QString cmd = "TE";
-            for (int i = 0; i < 8; i++) {
-                int value = preset.bands[i];
-                cmd += QString("%1%2").arg(value >= 0 ? '+' : '-').arg(qAbs(value), 2, 10, QChar('0'));
-            }
-            m_connectionController->sendCAT(cmd);
+            m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", preset.bands));
         }
     });
 

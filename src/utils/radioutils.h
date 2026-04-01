@@ -1,6 +1,8 @@
 #ifndef RADIOUTILS_H
 #define RADIOUTILS_H
 
+#include <QString>
+#include <QVector>
 #include <QtGlobal>
 
 /**
@@ -35,6 +37,10 @@ int getNextSpanUp(int currentSpan);
 /// Get next span step down (zoom in) from current span in Hz.
 /// Clamps at SPAN_MIN.
 int getNextSpanDown(int currentSpan);
+
+/// Build an 8-band EQ CAT command string (e.g., "RE+00-02+04..." or "TE+00...").
+/// prefix is "RE" (RX) or "TE" (TX), bands must have exactly 8 values in [-16, +16].
+QString buildEqCommand(const QString &prefix, const QVector<int> &bands);
 
 } // namespace RadioUtils
 

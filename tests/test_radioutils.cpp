@@ -50,6 +50,22 @@ private slots:
     void testSpanDown_atThreshold() { QCOMPARE(RadioUtils::getNextSpanDown(140000), 139000); }
     void testSpanDown_justAboveThreshold() { QCOMPARE(RadioUtils::getNextSpanDown(141000), 137000); }
 
+    // buildEqCommand
+    void testBuildEqCommand_flat() {
+        QVector<int> flat(8, 0);
+        QCOMPARE(RadioUtils::buildEqCommand("RE", flat), QString("RE+00+00+00+00+00+00+00+00"));
+    }
+
+    void testBuildEqCommand_mixed() {
+        QVector<int> bands = {-16, -5, 0, 3, 8, 12, -1, 16};
+        QCOMPARE(RadioUtils::buildEqCommand("TE", bands), QString("TE-16-05+00+03+08+12-01+16"));
+    }
+
+    void testBuildEqCommand_txPrefix() {
+        QVector<int> bands(8, 5);
+        QCOMPARE(RadioUtils::buildEqCommand("TE", bands), QString("TE+05+05+05+05+05+05+05+05"));
+    }
+
     // Constants
     void testConstants() {
         QCOMPARE(RadioUtils::SPAN_MIN, 5000);

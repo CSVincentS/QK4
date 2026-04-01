@@ -52,4 +52,14 @@ int getNextSpanDown(int currentSpan) {
     return qMax(newSpan, SPAN_MIN);
 }
 
+QString buildEqCommand(const QString &prefix, const QVector<int> &bands) {
+    Q_ASSERT(bands.size() == 8);
+    QString cmd = prefix;
+    for (int i = 0; i < 8; i++) {
+        int value = (i < bands.size()) ? bands[i] : 0;
+        cmd += QString("%1%2").arg(value >= 0 ? '+' : '-').arg(qAbs(value), 2, 10, QChar('0'));
+    }
+    return cmd;
+}
+
 } // namespace RadioUtils
