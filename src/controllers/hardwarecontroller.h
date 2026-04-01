@@ -33,7 +33,6 @@ signals:
 
 private slots:
     void onKpodEncoderRotated(int ticks);
-    void onKpodRockerChanged(int position);
     void onKpodPollError(const QString &error);
     void onKpodEnabledChanged(bool enabled);
 

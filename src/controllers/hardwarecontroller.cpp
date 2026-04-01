@@ -19,8 +19,6 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     m_kpodDevice = new KpodDevice(this);
 
     connect(m_kpodDevice, &KpodDevice::encoderRotated, this, &HardwareController::onKpodEncoderRotated);
-    connect(m_kpodDevice, &KpodDevice::rockerPositionChanged, this,
-            [this](KpodDevice::RockerPosition pos) { onKpodRockerChanged(static_cast<int>(pos)); });
     connect(m_kpodDevice, &KpodDevice::pollError, this, &HardwareController::onKpodPollError);
 
     // KPOD button signals → macro execution via MainWindow
@@ -260,12 +258,6 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
         }
         break;
     }
-}
-
-void HardwareController::onKpodRockerChanged(int position) {
-    Q_UNUSED(position)
-    // TODO: Map rocker positions (Left=VFO A, Center=VFO B, Right=XIT/RIT)
-    //       to tuning target selection when KPOD tuning is implemented
 }
 
 void HardwareController::onKpodPollError(const QString &error) {
