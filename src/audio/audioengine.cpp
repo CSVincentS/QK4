@@ -127,8 +127,8 @@ bool AudioEngine::setupAudioOutput() {
         return false;
     }
 
-    // Apply current volume setting to the newly created sink
-    m_audioSink->setVolume(m_volume.load(std::memory_order_relaxed));
+    // Volume is always 1.0 — actual volume control is in the K4's AG command
+    m_audioSink->setVolume(1.0f);
 
     return true;
 }

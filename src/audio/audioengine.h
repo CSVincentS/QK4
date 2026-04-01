@@ -97,9 +97,6 @@ private:
     QString m_selectedMicDeviceId;    // Empty = use system default
     QString m_selectedOutputDeviceId; // Empty = use system default
 
-    // Volume control (QAudioSink system volume)
-    std::atomic<float> m_volume{1.0f};
-
     // Channel volume controls (0.0 to 1.0)
     std::atomic<float> m_mainVolume{1.0f};
     std::atomic<float> m_subVolume{1.0f};
