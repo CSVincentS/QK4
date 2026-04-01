@@ -327,6 +327,12 @@ constexpr int SliderMinHeight = 20;       // Minimum widget height to prevent ha
 constexpr int SliderValueLabelWidth = 40; // Width for percentage value labels
 
 // =============================================================================
+// VFO Indicator Dimensions
+// =============================================================================
+constexpr int VfoIndicatorWidth = 34;  // VFO A/B label width on panadapter
+constexpr int VfoIndicatorHeight = 30; // VFO A/B label height on panadapter
+
+// =============================================================================
 // Dialog Dimensions
 // =============================================================================
 constexpr int DialogMargin = 20;           // Dialog content margins

@@ -137,12 +137,12 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
 
     m_vfoIndicatorA = new QLabel("A", m_panadapterA);
     m_vfoIndicatorA->setStyleSheet(vfoIndicatorStyle);
-    m_vfoIndicatorA->setFixedSize(34, 30);
+    m_vfoIndicatorA->setFixedSize(K4Styles::Dimensions::VfoIndicatorWidth, K4Styles::Dimensions::VfoIndicatorHeight);
     m_vfoIndicatorA->setAlignment(Qt::AlignCenter);
 
     m_vfoIndicatorB = new QLabel("B", m_panadapterB);
     m_vfoIndicatorB->setStyleSheet(vfoIndicatorStyle);
-    m_vfoIndicatorB->setFixedSize(34, 30);
+    m_vfoIndicatorB->setFixedSize(K4Styles::Dimensions::VfoIndicatorWidth, K4Styles::Dimensions::VfoIndicatorHeight);
     m_vfoIndicatorB->setAlignment(Qt::AlignCenter);
 
     // Position buttons (will be repositioned in resizeEvent of panadapter)

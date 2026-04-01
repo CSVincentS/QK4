@@ -1117,7 +1117,8 @@ MainWindow::MainWindow(QWidget *parent)
         double voltage = m_radioState->supplyVoltage();
         double paCurrent = 0.0;
         if (voltage > 0 && fwdPower > 0) {
-            paCurrent = fwdPower / (voltage * 0.34);
+            constexpr double K4_PA_EFFICIENCY = 0.34; // Measured: 80W @ 17A @ 13.8V
+            paCurrent = fwdPower / (voltage * K4_PA_EFFICIENCY);
         }
 
         // Update TX meters only on the active TX VFO
@@ -1835,10 +1836,6 @@ void MainWindow::setupMenuBar() {
         m_optionsDialog->activateWindow();
     });
     toolsMenu->addAction(optionsAction);
-
-    // View menu
-    QMenu *viewMenu = menuBar()->addMenu("&View");
-    Q_UNUSED(viewMenu)
 
     // Help menu
     QMenu *helpMenu = menuBar()->addMenu("&Help");
@@ -4546,14 +4543,11 @@ void MainWindow::onFnFunctionTriggered(const QString &functionId) {
     } else if (functionId == MacroIds::Macros) {
         openMacroDialog();
     } else if (functionId == MacroIds::SwList) {
-        // TODO: Show software list
-        qCDebug(qk4Main) << "Software list - not yet implemented";
+        QMessageBox::information(this, "Coming Soon", "Software list is not yet implemented.");
     } else if (functionId == MacroIds::Update) {
-        // TODO: Check for updates
-        qCDebug(qk4Main) << "Update check - not yet implemented";
+        QMessageBox::information(this, "Coming Soon", "Update check is not yet implemented.");
     } else if (functionId == MacroIds::DxList) {
-        // TODO: Show DX list
-        qCDebug(qk4Main) << "DX list - not yet implemented";
+        QMessageBox::information(this, "Coming Soon", "DX list is not yet implemented.");
     } else {
         // User-configurable macro - execute CAT command
         executeMacro(functionId);
