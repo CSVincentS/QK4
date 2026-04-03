@@ -126,8 +126,6 @@ void HaliKeyMidiWorker::handleMidiMessage(double deltaTime, const std::vector<un
         return;
     }
 
-    qCDebug(hwMidi) << "MIDI note:" << data1 << (pressed ? "ON" : "OFF");
-
     switch (data1) {
     case NOTE_LEFT_PADDLE:
         emit ditStateChanged(pressed);
