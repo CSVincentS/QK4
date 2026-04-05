@@ -2563,8 +2563,12 @@ void MainWindow::setupUi() {
             [this]() { m_connectionController->sendCAT("SW16;"); });
     connect(m_sideControlPanel, &SideControlPanel::tuneLpClicked, this,
             [this]() { m_connectionController->sendCAT("SW131;"); });
-    connect(m_sideControlPanel, &SideControlPanel::xmitClicked, this,
-            [this]() { m_connectionController->sendCAT("SW30;"); });
+    connect(m_sideControlPanel, &SideControlPanel::xmitClicked, this, [this]() {
+        bool goTx = !m_radioState->isTransmitting();
+        m_connectionController->sendCAT(goTx ? "TX;" : "RX;");
+        m_audioController->setPttActive(goTx);
+        m_bottomMenuBar->setPttActive(goTx);
+    });
     connect(m_sideControlPanel, &SideControlPanel::testClicked, this,
             [this]() { m_connectionController->sendCAT("SW132;"); });
     connect(m_sideControlPanel, &SideControlPanel::atuClicked, this,
