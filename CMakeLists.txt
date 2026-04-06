@@ -76,10 +76,12 @@ set(SOURCES
     src/controllers/hardwarecontroller.cpp
     src/controllers/audiocontroller.cpp
     src/controllers/spectrumcontroller.cpp
+    src/controllers/dxclustercontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
     src/network/kpa1500client.cpp
+    src/network/dxclusterclient.cpp
     src/network/catserver.cpp
     src/network/k4discovery.cpp
     src/audio/audioengine.cpp
@@ -115,6 +117,8 @@ set(SOURCES
     src/ui/cwkeyerpage.cpp
     src/ui/kpodpage.cpp
     src/ui/kpa1500page.cpp
+    src/ui/dxclusterpage.cpp
+    src/ui/dxspotoverlay.cpp
     src/ui/rightsidepanel.cpp
     src/ui/featuremenubar.cpp
     src/ui/modepopupwidget.cpp
@@ -156,10 +160,12 @@ set(HEADERS
     src/controllers/hardwarecontroller.h
     src/controllers/audiocontroller.h
     src/controllers/spectrumcontroller.h
+    src/controllers/dxclustercontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h
     src/network/kpa1500client.h
+    src/network/dxclusterclient.h
     src/network/catserver.h
     src/network/k4discovery.h
     src/audio/audioengine.h
@@ -196,6 +202,8 @@ set(HEADERS
     src/ui/cwkeyerpage.h
     src/ui/kpodpage.h
     src/ui/kpa1500page.h
+    src/ui/dxclusterpage.h
+    src/ui/dxspotoverlay.h
     src/ui/rightsidepanel.h
     src/ui/featuremenubar.h
     src/ui/modepopupwidget.h

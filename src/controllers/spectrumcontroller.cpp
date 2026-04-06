@@ -4,8 +4,10 @@
 #include "models/radiostate.h"
 #include "ui/k4styles.h"
 #include "ui/vfowidget.h"
+#include "dxclustercontroller.h"
 #include "utils/radioutils.h"
 
+#include "ui/dxspotoverlay.h"
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -201,6 +203,12 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
 
     connect(m_centerBtnB, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("FC$;"); });
 
+    // DX Spot overlays (transparent child widgets for callsign labels)
+    m_spotOverlayA = new DxSpotOverlay(m_panadapterA);
+    m_spotOverlayA->show();
+    m_spotOverlayB = new DxSpotOverlay(m_panadapterB);
+    m_spotOverlayB->show();
+
     // Install event filter to reposition span buttons when panadapters resize
     m_panadapterA->installEventFilter(this);
     m_panadapterB->installEventFilter(this);
@@ -226,6 +234,15 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         m_panadapterB->setWaterfallHeight(percent);
         m_vfoA->setMiniPanWaterfallHeight(percent);
         m_vfoB->setMiniPanWaterfallHeight(percent);
+        // Reposition DX spot overlays after spectrum/waterfall ratio changes
+        if (m_spotOverlayA) {
+            int specH = static_cast<int>(m_panadapterA->height() * m_panadapterA->spectrumRatio());
+            m_spotOverlayA->setGeometry(0, 0, m_panadapterA->width(), specH);
+        }
+        if (m_spotOverlayB) {
+            int specH = static_cast<int>(m_panadapterB->height() * m_panadapterB->spectrumRatio());
+            m_spotOverlayB->setGeometry(0, 0, m_panadapterB->width(), specH);
+        }
     });
     connect(m_radioState, &RadioState::averagingChanged, this, [this](int level) {
         m_panadapterA->setAveraging(level);
@@ -564,6 +581,13 @@ bool SpectrumController::eventFilter(QObject *watched, QEvent *event) {
 
         // VFO indicator at bottom-left corner
         m_vfoIndicatorA->move(0, h - 30);
+
+        // DX spot overlay covers the spectrum area (above waterfall)
+        if (m_spotOverlayA) {
+            int specHeight = static_cast<int>(h * m_panadapterA->spectrumRatio());
+            m_spotOverlayA->setGeometry(0, 0, w, specHeight);
+            m_spotOverlayA->raise();
+        }
     }
 
     // Reposition span control buttons and VFO indicator when panadapter B resizes
@@ -580,6 +604,13 @@ bool SpectrumController::eventFilter(QObject *watched, QEvent *event) {
 
         // VFO indicator at bottom-left corner
         m_vfoIndicatorB->move(0, h - 30);
+
+        // DX spot overlay covers the spectrum area (above waterfall)
+        if (m_spotOverlayB) {
+            int specHeight = static_cast<int>(h * m_panadapterB->spectrumRatio());
+            m_spotOverlayB->setGeometry(0, 0, w, specHeight);
+            m_spotOverlayB->raise();
+        }
     }
 
     return QObject::eventFilter(watched, event);
@@ -721,4 +752,67 @@ void SpectrumController::setPanadapterMode(PanadapterMode mode) {
 
 void SpectrumController::setMouseQsyMode(int mode) {
     m_mouseQsyMode = mode;
+}
+
+void SpectrumController::setDxClusterController(DxClusterController *controller) {
+    m_dxClusterController = controller;
+    if (!controller)
+        return;
+
+    // Update overlays when spots change
+    connect(controller, &DxClusterController::spotsUpdated, this, &SpectrumController::updateSpotOverlays);
+
+    // Update overlays when frequency/span changes (panadapter center shifts)
+    connect(m_radioState, &RadioState::frequencyChanged, this, &SpectrumController::updateSpotOverlays);
+    connect(m_radioState, &RadioState::frequencyBChanged, this, &SpectrumController::updateSpotOverlays);
+    connect(m_radioState, &RadioState::spanChanged, this, &SpectrumController::updateSpotOverlays);
+    connect(m_radioState, &RadioState::spanBChanged, this, &SpectrumController::updateSpotOverlays);
+
+    // Click-to-tune from spot overlay
+    if (m_spotOverlayA) {
+        connect(m_spotOverlayA, &DxSpotOverlay::spotClicked, this, [this](qint64 freq) {
+            qint64 adjusted = adjustClickFreqForMode(freq, false);
+            m_connectionController->sendCAT(QString("FA%1;").arg(adjusted, 11, 10, QChar('0')));
+        });
+    }
+    if (m_spotOverlayB) {
+        connect(m_spotOverlayB, &DxSpotOverlay::spotClicked, this, [this](qint64 freq) {
+            qint64 adjusted = adjustClickFreqForMode(freq, true);
+            m_connectionController->sendCAT(QString("FB%1;").arg(adjusted, 11, 10, QChar('0')));
+        });
+    }
+}
+
+void SpectrumController::updateSpotOverlays() {
+    if (!m_dxClusterController)
+        return;
+
+    // Update panadapter A overlay
+    if (m_spotOverlayA && m_panadapterA) {
+        qint64 center = m_panadapterA->centerFreq();
+        int span = m_panadapterA->span();
+        if (center > 0 && span > 0) {
+            qint64 startFreq = center - span / 2;
+            qint64 endFreq = center + span / 2;
+            auto spots = m_dxClusterController->spotsForFrequencyRange(startFreq, endFreq);
+            m_spotOverlayA->setFrequencyRange(center, span);
+            m_spotOverlayA->setSpots(spots);
+            if (!spots.isEmpty())
+                qDebug() << "[DxSpot] Overlay A:" << spots.size() << "spots in range" << startFreq << "-" << endFreq
+                         << "overlay size:" << m_spotOverlayA->size();
+        }
+    }
+
+    // Update panadapter B overlay
+    if (m_spotOverlayB && m_panadapterB && m_panadapterB->isVisible()) {
+        qint64 center = m_panadapterB->centerFreq();
+        int span = m_panadapterB->span();
+        if (center > 0 && span > 0) {
+            qint64 startFreq = center - span / 2;
+            qint64 endFreq = center + span / 2;
+            auto spots = m_dxClusterController->spotsForFrequencyRange(startFreq, endFreq);
+            m_spotOverlayB->setFrequencyRange(center, span);
+            m_spotOverlayB->setSpots(spots);
+        }
+    }
 }
