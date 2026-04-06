@@ -161,8 +161,14 @@ bool BottomMenuBar::eventFilter(QObject *watched, QEvent *event) {
                 }
                 return true;
             }
-            if (me->button() == Qt::LeftButton && m_pttLocked)
+            // Left-click while locked: release the lock
+            if (me->button() == Qt::LeftButton && m_pttLocked) {
+                m_pttLocked = false;
+                m_pttLockTimer->stop();
+                setPttActive(false);
+                emit pttReleased();
                 return true;
+            }
         }
         if (event->type() == QEvent::MouseButtonRelease) {
             auto *me = static_cast<QMouseEvent *>(event);
