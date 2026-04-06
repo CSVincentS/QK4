@@ -14,8 +14,7 @@ RightSidePanel::RightSidePanel(QWidget *parent)
 }
 
 void RightSidePanel::setupUi() {
-    // Match left panel dimensions exactly
-    setFixedWidth(K4Styles::Dimensions::SidePanelWidth);
+    setFixedWidth(K4Styles::Dimensions::RightSidePanelWidth);
 
     m_layout = new QVBoxLayout(this);
     m_layout->setContentsMargins(6, 8, 6, 8);
@@ -75,6 +74,7 @@ void RightSidePanel::setupUi() {
     m_modeBtn->installEventFilter(this);
 
     // KPA1500 mini panel (hidden until amplifier connects)
+    m_layout->addSpacing(20);
     m_kpa1500Mini = new Kpa1500MiniPanel(this);
     m_kpa1500Mini->setVisible(false);
     m_layout->addWidget(m_kpa1500Mini);

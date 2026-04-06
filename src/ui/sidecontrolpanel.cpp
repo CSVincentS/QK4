@@ -18,7 +18,7 @@ SideControlPanel::SideControlPanel(QWidget *parent) : QWidget(parent) {
 }
 
 void SideControlPanel::setupUi() {
-    setFixedWidth(K4Styles::Dimensions::SidePanelWidth);
+    setFixedWidth(K4Styles::Dimensions::LeftSidePanelWidth);
     // Note: No explicit size policy - let Qt handle vertical expansion like RightSidePanel
 
     auto *layout = new QVBoxLayout(this);

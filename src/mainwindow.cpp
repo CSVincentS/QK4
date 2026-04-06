@@ -1718,8 +1718,10 @@ MainWindow::MainWindow(QWidget *parent)
             [kpaMini](double tempC) { kpaMini->setTemperature(static_cast<float>(tempC)); });
     connect(m_kpa1500Client, &KPA1500Client::operatingStateChanged, this,
             [kpaMini](KPA1500Client::OperatingState state) { kpaMini->setMode(state == KPA1500Client::StateOperate); });
+    connect(m_kpa1500Client, &KPA1500Client::atuModeChanged, this,
+            [kpaMini](bool modeInline) { kpaMini->setAtuMode(modeInline); });
     connect(m_kpa1500Client, &KPA1500Client::atuInlineChanged, this,
-            [kpaMini](bool inline_) { kpaMini->setAtuMode(inline_); });
+            [kpaMini](bool relayInline) { kpaMini->setAtuInline(relayInline); });
     connect(m_kpa1500Client, &KPA1500Client::antennaChanged, this,
             [kpaMini](int antenna) { kpaMini->setAntenna(antenna); });
     connect(m_kpa1500Client, &KPA1500Client::faultStatusChanged, this,
@@ -1740,7 +1742,7 @@ MainWindow::MainWindow(QWidget *parent)
             [this](bool operate) { m_kpa1500Client->sendCommand(operate ? "^OS1;" : "^OS0;"); });
     connect(kpaMini, &Kpa1500MiniPanel::atuTuneRequested, this, [this]() { m_kpa1500Client->sendCommand("^FT;"); });
     connect(kpaMini, &Kpa1500MiniPanel::atuModeToggled, this,
-            [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AI1;" : "^AI0;"); });
+            [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AMI;" : "^AMB;"); });
     connect(kpaMini, &Kpa1500MiniPanel::antennaChanged, this,
             [this](int ant) { m_kpa1500Client->sendCommand(QString("^AN%1;").arg(ant)); });
 
