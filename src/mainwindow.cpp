@@ -3685,12 +3685,12 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
         // SUB/DIV (disabled state)
         m_subLabel->setStyleSheet(
             QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
-                .arg(K4Styles::Dimensions::FontSizeNormal)
-                .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
+                .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                .arg(K4Styles::Dimensions::FontSizeNormal));
         m_divLabel->setStyleSheet(
             QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
-                .arg(K4Styles::Dimensions::FontSizeNormal)
-                .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
+                .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                .arg(K4Styles::Dimensions::FontSizeNormal));
 
         // Dim VFO B (SUB off state)
         m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
