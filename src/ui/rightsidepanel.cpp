@@ -20,9 +20,10 @@ void RightSidePanel::setupUi() {
     m_layout->setContentsMargins(6, 8, 6, 8);
     m_layout->setSpacing(4);
 
-    // Create 5×2 button grid
+    // Create 5×2 button grid — constrain width to match left panel button sizing
+    int btnAreaPad = (K4Styles::Dimensions::RightSidePanelWidth - K4Styles::Dimensions::LeftSidePanelWidth) / 2;
     auto *buttonGrid = new QGridLayout();
-    buttonGrid->setContentsMargins(0, 0, 0, 0);
+    buttonGrid->setContentsMargins(btnAreaPad, 0, btnAreaPad, 0);
     buttonGrid->setHorizontalSpacing(4);
     buttonGrid->setVerticalSpacing(8);
 
@@ -84,7 +85,7 @@ void RightSidePanel::setupUi() {
 
     // Create 2×2 PF button grid (B SET, CLR, RIT, XIT)
     auto *pfGrid = new QGridLayout();
-    pfGrid->setContentsMargins(0, 0, 0, 0);
+    pfGrid->setContentsMargins(btnAreaPad, 0, btnAreaPad, 0);
     pfGrid->setHorizontalSpacing(4);
     pfGrid->setVerticalSpacing(8);
 
@@ -115,7 +116,7 @@ void RightSidePanel::setupUi() {
 
     // Create 2×2 bottom button grid (FREQ ENT, RATE, LOCK A, SUB)
     auto *bottomGrid = new QGridLayout();
-    bottomGrid->setContentsMargins(0, 0, 0, 0);
+    bottomGrid->setContentsMargins(btnAreaPad, 0, btnAreaPad, 0);
     bottomGrid->setHorizontalSpacing(4);
     bottomGrid->setVerticalSpacing(8);
 

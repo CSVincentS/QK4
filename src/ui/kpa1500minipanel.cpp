@@ -300,6 +300,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
 
         QColor dimColor(K4Styles::Colors::InactiveGray);
         QColor green(K4Styles::Colors::StatusGreen);
+        QColor amber(K4Styles::Colors::AccentAmber);
         QColor red(K4Styles::Colors::TxRed);
 
         int cardGap = 2;
@@ -341,7 +342,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
             drawLed(c1, 1, "STBY", dimColor, false);
         } else {
             drawLed(c1, 0, "OPER", green, m_operate);
-            drawLed(c1, 1, "STBY", green, !m_operate);
+            drawLed(c1, 1, "STBY", amber, !m_operate);
         }
 
         // Card 2: ANT1 / ANT2
