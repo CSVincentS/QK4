@@ -3397,6 +3397,14 @@ void MainWindow::showRadioManager() {
         m_connectionController->disconnectFromRadio();
     });
 
+    // Send SL live if changed while connected (K4 does not echo SL, so update optimistically)
+    connect(&dialog, &RadioManagerDialog::streamingLatencyChanged, this, [this](int tier) {
+        if (m_connectionController->isConnected()) {
+            m_connectionController->sendCAT(QString("SL%1;").arg(tier));
+            m_radioState->parseCATCommand(QString("SL%1;").arg(tier));
+        }
+    });
+
     // Set the connected host so dialog can show "Disconnect" for active connection
     if (m_connectionController->isConnected()) {
         dialog.setConnectedHost(m_connectionController->currentRadio().host);
@@ -3423,6 +3431,12 @@ void MainWindow::onConnectionError(const QString &error) {
 
 void MainWindow::onRadioReady() {
     qCDebug(qk4Main) << "Successfully authenticated with K4 radio";
+
+    // Set streaming latency AFTER the RDY dump so it overrides the K4's stale state.
+    // The K4 does NOT echo SL commands, so we must also update RadioState optimistically.
+    int sl = m_connectionController->currentRadio().streamingLatency;
+    m_connectionController->sendCAT(QString("SL%1;").arg(sl));
+    m_radioState->parseCATCommand(QString("SL%1;").arg(sl));
 
     // Start audio engine via AudioController
     m_audioController->startAudio(m_sideControlPanel->volume() / 100.0f, m_sideControlPanel->subVolume() / 100.0f,

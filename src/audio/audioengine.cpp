@@ -434,12 +434,13 @@ void AudioEngine::onMicDataReady() {
     float rmsLevel = (floatSamples > 0) ? std::sqrt(sumSquares / floatSamples) : 0.0f;
     emit micLevelChanged(rmsLevel);
 
-    // Emit complete frames (240 samples = 480 bytes S16LE each)
+    // Emit complete frames (size matches SL tier: 240/480/720/1440 samples)
     // Use offset-based reading to avoid O(n) buffer shifts per frame
+    int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(qint16));
     int offset = 0;
-    while (m_micBuffer.size() - offset >= FRAME_BYTES_S16LE) {
-        QByteArray frame = m_micBuffer.mid(offset, FRAME_BYTES_S16LE);
-        offset += FRAME_BYTES_S16LE;
+    while (m_micBuffer.size() - offset >= frameBytes) {
+        QByteArray frame = m_micBuffer.mid(offset, frameBytes);
+        offset += frameBytes;
         emit microphoneFrame(frame);
     }
     if (offset > 0) {
@@ -475,6 +476,10 @@ void AudioEngine::setBalanceOffset(int offset) {
 
 void AudioEngine::setMicGain(float gain) {
     m_micGain.store(qBound(0.0f, gain, 1.0f), std::memory_order_relaxed);
+}
+
+void AudioEngine::setFrameSamples(int samples) {
+    m_frameSamples.store(samples, std::memory_order_relaxed);
 }
 
 void AudioEngine::setMicDevice(const QString &deviceId) {

@@ -201,6 +201,9 @@ public:
     }
     void toggleBSet() { setBSetEnabled(!m_bSetEnabled); }
 
+    // Streaming Latency (SL command)
+    int streamingLatency() const { return m_streamingLatency; }
+
     // Audio Effects (FX command)
     int afxMode() const { return m_afxMode; } // 0=off, 1=delay, 2=pitch-map
 
@@ -634,6 +637,9 @@ signals:
     void dataRateChanged(int rate);              // DR: 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
     void dataRateBChanged(int rate);             // DR$: Sub RX data rate
 
+    // Streaming latency
+    void streamingLatencyChanged(int tier); // SL: 0-7
+
     // Error/notification messages from K4 (ERxx: format)
     void errorNotificationReceived(int errorCode, const QString &message);
 
@@ -801,6 +807,9 @@ private:
     int m_qskDelayCW = -1;
     int m_qskDelayVoice = -1;
     int m_qskDelayData = -1;
+
+    // Streaming Latency (SL command)
+    int m_streamingLatency = -1; // 0-7, -1 = not yet received
 
     // Audio effects (FX command)
     int m_afxMode = 0; // 0=off, 1=delay, 2=pitch-map
@@ -1115,6 +1124,7 @@ private:
     void handleRV(const QString &cmd);   // Firmware Version (RV.)
     void handleSIFP(const QString &cmd); // Power Supply Info
 
+    void handleSL(const QString &cmd); // Streaming Latency
     void handleMN(const QString &cmd); // Message Bank
     void handleER(const QString &cmd); // Error notifications
 

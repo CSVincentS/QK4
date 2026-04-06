@@ -384,6 +384,11 @@ void RadioManagerDialog::onSaveClicked() {
         RadioSettings::instance()->addRadio(entry);
     }
 
+    // If connected to this radio, notify that SL changed so it can be sent live
+    if (!m_connectedHost.isEmpty() && entry.host == m_connectedHost) {
+        emit streamingLatencyChanged(entry.streamingLatency);
+    }
+
     // Find the saved entry's new index (list is sorted alphabetically)
     const auto radios = RadioSettings::instance()->radios();
     for (int i = 0; i < radios.size(); i++) {

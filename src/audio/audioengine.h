@@ -44,6 +44,10 @@ public:
     void setBalanceMode(int mode);
     void setBalanceOffset(int offset); // -50 to +50
 
+    // TX frame size (dynamic, matches SL tier)
+    void setFrameSamples(int samples); // 240, 480, 720, or 1440
+    int frameSamples() const { return m_frameSamples.load(std::memory_order_relaxed); }
+
     // Microphone settings
     void setMicGain(float gain); // 0.0 to 1.0
     float micGain() const { return m_micGain.load(std::memory_order_relaxed); }
@@ -62,7 +66,7 @@ public:
     static QList<QPair<QString, QString>> availableOutputDevices(); // (id, description)
 
 signals:
-    void microphoneFrame(const QByteArray &s16leData); // Complete frame (240 samples, S16LE @ 12kHz)
+    void microphoneFrame(const QByteArray &s16leData); // Complete frame (S16LE @ 12kHz, size matches SL tier)
     void micLevelChanged(float level);                 // RMS level 0.0-1.0 for meter display
     void bufferStatus(int queueBytes, int maxBytes, bool prebuffering);
 
@@ -130,9 +134,9 @@ private:
     static constexpr float MIC_GAIN_SCALE = 2.0f;
 
     // Microphone frame buffering for Opus encoding
-    // Buffer accumulates S16LE samples at 12kHz until we have a complete frame
-    static constexpr int FRAME_SAMPLES = 240;                                // 20ms at 12kHz
-    static constexpr int FRAME_BYTES_S16LE = FRAME_SAMPLES * sizeof(qint16); // 480 bytes
+    // Buffer accumulates S16LE samples at 12kHz until we have a complete frame.
+    // Frame size is dynamic, matching the SL tier (240/480/720/1440 samples).
+    std::atomic<int> m_frameSamples{240}; // Default 20ms, updated on SL change
     QByteArray m_micBuffer;
 
     // Timer for polling microphone data (more reliable than readyRead signal)

@@ -42,6 +42,11 @@ int getNextSpanDown(int currentSpan);
 /// prefix is "RE" (RX) or "TE" (TX), bands must have exactly 8 values in [-16, +16].
 QString buildEqCommand(const QString &prefix, const QVector<int> &bands);
 
+/// Convert SL tier (0-7) to Opus frame size in samples per channel at 12kHz.
+/// SL0=240 (20ms), SL1-2=480 (40ms), SL3-5=720 (60ms), SL6-7=1440 (120ms).
+/// Returns 720 (SL3 default) for out-of-range values.
+int slTierToFrameSamples(int sl);
+
 } // namespace RadioUtils
 
 #endif // RADIOUTILS_H

@@ -238,6 +238,9 @@ void RadioState::reset() {
     m_essbEnabled = false;
     m_ssbTxBw = -1;
 
+    // Streaming Latency
+    m_streamingLatency = -1;
+
     // Text Decode
     m_textDecodeMode = -1;
     m_textDecodeThreshold = -1;
@@ -1198,6 +1201,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"MN", [this](const QString &c) { handleMN(c); }});
     m_commandHandlers.append({"ES", [this](const QString &c) { handleES(c); }});
     m_commandHandlers.append({"SD", [this](const QString &c) { handleSD(c); }});
+    m_commandHandlers.append({"SL", [this](const QString &c) { handleSL(c); }});
     m_commandHandlers.append({"SB", [this](const QString &c) { handleSB(c); }});
     m_commandHandlers.append({"DV", [this](const QString &c) { handleDV(c); }});
     m_commandHandlers.append({"DR", [this](const QString &c) { handleDR(c); }});
@@ -2220,6 +2224,20 @@ void RadioState::handleSD(const QString &cmd) {
 // =============================================================================
 // Individual Command Handlers - Control State
 // =============================================================================
+
+void RadioState::handleSL(const QString &cmd) {
+    // SL - Streaming Latency: SL0 through SL7
+    if (cmd.length() <= 2)
+        return;
+    bool ok;
+    int tier = cmd.mid(2).toInt(&ok);
+    if (!ok || tier < 0 || tier > 7)
+        return;
+    if (tier != m_streamingLatency) {
+        m_streamingLatency = tier;
+        emit streamingLatencyChanged(m_streamingLatency);
+    }
+}
 
 void RadioState::handleSB(const QString &cmd) {
     // SB - Sub Receiver: SB0=off, SB1=on, SB3=on (diversity)

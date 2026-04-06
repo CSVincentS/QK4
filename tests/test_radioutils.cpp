@@ -72,6 +72,18 @@ private slots:
         QCOMPARE(RadioUtils::SPAN_MAX, 368000);
         QVERIFY(RadioUtils::SPAN_THRESHOLD_UP > RadioUtils::SPAN_THRESHOLD_DOWN);
     }
+
+    // slTierToFrameSamples — verified via pcap at all SL tiers
+    void testSlTier_SL0() { QCOMPARE(RadioUtils::slTierToFrameSamples(0), 240); }
+    void testSlTier_SL1() { QCOMPARE(RadioUtils::slTierToFrameSamples(1), 480); }
+    void testSlTier_SL2() { QCOMPARE(RadioUtils::slTierToFrameSamples(2), 480); }
+    void testSlTier_SL3() { QCOMPARE(RadioUtils::slTierToFrameSamples(3), 720); }
+    void testSlTier_SL4() { QCOMPARE(RadioUtils::slTierToFrameSamples(4), 720); }
+    void testSlTier_SL5() { QCOMPARE(RadioUtils::slTierToFrameSamples(5), 720); }
+    void testSlTier_SL6() { QCOMPARE(RadioUtils::slTierToFrameSamples(6), 1440); }
+    void testSlTier_SL7() { QCOMPARE(RadioUtils::slTierToFrameSamples(7), 1440); }
+    void testSlTier_outOfRange_negative() { QCOMPARE(RadioUtils::slTierToFrameSamples(-1), 720); }
+    void testSlTier_outOfRange_high() { QCOMPARE(RadioUtils::slTierToFrameSamples(8), 720); }
 };
 
 QTEST_MAIN(TestRadioUtils)
