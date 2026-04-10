@@ -98,6 +98,7 @@ set(SOURCES
     src/ui/sidecontrolpanel.cpp
     src/ui/bottommenubar.cpp
     src/ui/menuoverlay.cpp
+    src/ui/mousevfoindicator.cpp
     src/ui/vfowidget.cpp
     src/ui/frequencydisplaywidget.cpp
     src/ui/vforowwidget.cpp
@@ -182,6 +183,7 @@ set(HEADERS
     src/ui/sidecontrolpanel.h
     src/ui/bottommenubar.h
     src/ui/menuoverlay.h
+    src/ui/mousevfoindicator.h
     src/ui/vfowidget.h
     src/ui/frequencydisplaywidget.h
     src/ui/vforowwidget.h

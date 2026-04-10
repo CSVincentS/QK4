@@ -9,6 +9,7 @@ class ConnectionController;
 class DxClusterController;
 class RadioState;
 class DxSpotOverlay;
+class MouseVfoIndicator;
 class VFOWidget;
 class QFrame;
 class QPushButton;
@@ -63,6 +64,9 @@ private:
     QPushButton *m_centerBtnB = nullptr;
     QLabel *m_vfoIndicatorA = nullptr;
     QLabel *m_vfoIndicatorB = nullptr;
+    MouseVfoIndicator *m_mouseVfoIndicatorA = nullptr;
+    MouseVfoIndicator *m_mouseVfoIndicatorB = nullptr;
+    bool m_scrollVfoB = false;
     int m_mouseQsyMode = 0;
 
     DxClusterController *m_dxClusterController = nullptr;
