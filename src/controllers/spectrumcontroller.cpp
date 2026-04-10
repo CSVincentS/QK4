@@ -315,7 +315,11 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         // PSK-D/FSK-D: passband centered at dial+IS, so subtract IS to place passband on click
         freq = adjustClickFreqForMode(freq, false);
-        QString cmd = QString("FA%1;").arg(freq, 11, 10, QChar('0'));
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("FA%1;").arg(snapped, 11, 10, QChar('0'));
         m_connectionController->sendCAT(cmd);
         // Request frequency back to update UI (K4 doesn't echo SET commands)
         m_connectionController->sendCAT("FA;");
@@ -385,7 +389,11 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         if (!m_connectionController->isConnected() || freq <= 0)
             return;
         freq = adjustClickFreqForMode(freq, true); // right-click on Pan A → VFO B
-        QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
         m_connectionController->sendCAT(cmd);
         m_connectionController->sendCAT("FB;");
     });
@@ -472,7 +480,11 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         bool tuneA = (m_mouseQsyMode == 1);
         freq = adjustClickFreqForMode(freq, !tuneA);
         QString vfo = tuneA ? "FA" : "FB";
-        QString cmd = QString("%1%2;").arg(vfo).arg(freq, 11, 10, QChar('0'));
+        int stepHz = RadioUtils::tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("%1%2;").arg(vfo).arg(snapped, 11, 10, QChar('0'));
         m_connectionController->sendCAT(cmd);
         m_connectionController->sendCAT(vfo + ";");
     });
@@ -544,7 +556,11 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         // L=A R=B mode: right-click always tunes VFO B
         freq = adjustClickFreqForMode(freq, true);
-        QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
         m_connectionController->sendCAT(cmd);
         m_connectionController->sendCAT("FB;");
     });
