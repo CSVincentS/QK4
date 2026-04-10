@@ -246,6 +246,7 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
 
     m_consoleOutput = new QPlainTextEdit(this);
     m_consoleOutput->setReadOnly(true);
+    m_consoleOutput->setFocusPolicy(Qt::NoFocus);
     m_consoleOutput->setMaximumBlockCount(500);
     m_consoleOutput->setStyleSheet(
         QString("QPlainTextEdit { background-color: %1; color: %2; border: 1px solid %3; "
@@ -253,6 +254,7 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
             .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
             .arg(K4Styles::Dimensions::FontSizeSmall));
     m_consoleOutput->setMinimumHeight(80);
+    m_consoleOutput->setMaximumHeight(200);
     layout->addWidget(m_consoleOutput, 1);
 
     // Command input
@@ -443,7 +445,6 @@ void DxClusterPage::updateStatus() {
     bool selectedConnected = (state == DxClusterClient::Connected);
     m_connectBtn->setEnabled(!selectedConnected && !m_addMode && row >= 0);
     m_disconnectBtn->setEnabled(selectedConnected);
-    m_consoleInput->setEnabled(selectedConnected);
 }
 
 void DxClusterPage::updateFormState() {
