@@ -55,6 +55,7 @@
 #include <QRegularExpression>
 #include <QMouseEvent>
 #include <QMoveEvent>
+#include <QShortcut>
 
 Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
 
@@ -81,6 +82,14 @@ MainWindow::MainWindow(QWidget *parent)
     // "QRhiWidget: No QRhi" errors and blank panadapter display.
     setupUi();
     setupMenuBar();
+
+    // ESC — halt all transmission regardless of which child widget has focus.
+    // QShortcut fires at window scope; keyPressEvent only fires when the window frame itself has focus.
+    auto *escShortcut = new QShortcut(Qt::Key_Escape, this);
+    connect(escShortcut, &QShortcut::activated, this, [this]() {
+        if (m_connectionController->isConnected())
+            m_connectionController->sendCAT("RX;");
+    });
 
     // Menu items are populated from MEDF responses in onCatResponse()
     // when the radio sends RDY; after connection
@@ -4258,14 +4267,6 @@ void MainWindow::moveEvent(QMoveEvent *event) {
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
-    // ESC — halt all transmission (CW, DVR, voice memories, manual PTT)
-    if (event->key() == Qt::Key_Escape) {
-        if (m_connectionController->isConnected())
-            m_connectionController->sendCAT("RX;");
-        event->accept();
-        return;
-    }
-
     // Handle F1-F12 for keyboard macros
     if (event->key() >= Qt::Key_F1 && event->key() <= Qt::Key_F12) {
         int fKeyNum = event->key() - Qt::Key_F1 + 1; // 1-12
