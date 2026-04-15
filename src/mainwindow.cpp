@@ -4690,6 +4690,17 @@ void MainWindow::executeMacro(const QString &functionId) {
         qCDebug(qk4Main) << "Executing macro" << functionId << ":" << macro.command;
         if (m_connectionController->isConnected()) {
             m_connectionController->sendCAT(macro.command);
+
+            // RT1;/RT0;/SW54; are silent SET commands — K4 does not echo RT state back.
+            // Query current state so the UI stays in sync after execution.
+            const QString &cmd = macro.command;
+            if (cmd.contains("RT1") || cmd.contains("RT0") || cmd.contains("RT/") || cmd.contains("SW54")) {
+                m_connectionController->sendCAT("RT;");
+                m_connectionController->sendCAT("RT$;");
+            }
+            if (cmd.contains("XT1") || cmd.contains("XT0") || cmd.contains("XT/") || cmd.contains("SW74")) {
+                m_connectionController->sendCAT("XT;");
+            }
         }
     } else {
         qCDebug(qk4Main) << "No macro configured for" << functionId;
