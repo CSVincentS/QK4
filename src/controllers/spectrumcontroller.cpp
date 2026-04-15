@@ -722,17 +722,23 @@ void SpectrumController::updateTxMarkers() {
     qint64 txVfoDial = split ? static_cast<qint64>(m_radioState->vfoB()) : static_cast<qint64>(m_radioState->vfoA());
     qint64 txFreq = txVfoDial + xitOffset;
 
+    // Only show marker when the offset is actually non-zero (TX ≠ RX).
+    // When RIT/XIT is on but offset is 0.00, TX = RX — no marker needed. Matches K4 behaviour.
+    bool ritAShifted = ritA && (m_radioState->ritXitOffset() != 0);
+    bool ritBShifted = ritB && (m_radioState->ritXitOffsetB() != 0);
+    bool xitShifted = xit && (xitOffset != 0);
+
     // Panadapter A (VFO A spectrum):
     //   SPLIT on: always show — TX from VFO B, different VFO than this spectrum
     //   No split + BSET: real K4 shows no TX marker (user focused on VFO B)
     //   No split: when RIT A or XIT shifts TX != RX
-    bool showTxOnA = split ? true : (bset ? false : (ritA || xit));
+    bool showTxOnA = split ? true : (bset ? false : (ritAShifted || xitShifted));
     // Panadapter B (VFO B spectrum):
     //   SPLIT + XIT: show TX marker (XIT shifts TX away from VFO B dial)
     //   SPLIT + RIT B: show (RIT shifts RX away from TX)
     //   No split + BSET: real K4 shows no TX marker (user focused on VFO B)
     //   No split: show when RIT A or XIT — TX from VFO A, different VFO than this spectrum
-    bool showTxOnB = split ? (ritB || xit) : (bset ? false : (ritA || xit));
+    bool showTxOnB = split ? (ritBShifted || xitShifted) : (bset ? false : (ritAShifted || xitShifted));
 
     m_panadapterA->setTxMarker(txFreq, showTxOnA);
     m_panadapterB->setTxMarker(txFreq, showTxOnB);
