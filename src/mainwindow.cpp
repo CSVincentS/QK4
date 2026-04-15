@@ -4258,6 +4258,14 @@ void MainWindow::moveEvent(QMoveEvent *event) {
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
+    // ESC — halt all transmission (CW, DVR, voice memories, manual PTT)
+    if (event->key() == Qt::Key_Escape) {
+        if (m_connectionController->isConnected())
+            m_connectionController->sendCAT("RX;");
+        event->accept();
+        return;
+    }
+
     // Handle F1-F12 for keyboard macros
     if (event->key() >= Qt::Key_F1 && event->key() <= Qt::Key_F12) {
         int fKeyNum = event->key() - Qt::Key_F1 + 1; // 1-12
