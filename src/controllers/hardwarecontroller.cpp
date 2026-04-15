@@ -241,6 +241,8 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
     switch (m_kpodDevice->rockerPosition()) {
     case KpodDevice::RockerLeft: // VFO A
     {
+        if (m_radioState->lockA())
+            break;
         quint64 currentFreq = m_radioState->vfoA();
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(ticks) * stepHz;
@@ -253,6 +255,8 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
 
     case KpodDevice::RockerCenter: // VFO B
     {
+        if (m_radioState->lockB())
+            break;
         quint64 currentFreq = m_radioState->vfoB();
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(ticks) * stepHz;

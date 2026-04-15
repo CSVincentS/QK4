@@ -320,6 +320,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         // Guard: only send if connected and frequency is valid
         if (!m_connectionController->isConnected() || freq <= 0)
             return;
+        if (m_radioState->lockA())
+            return;
         // PSK-D/FSK-D: passband centered at dial+IS, so subtract IS to place passband on click
         freq = adjustClickFreqForMode(freq, false);
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
@@ -342,6 +344,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         // Guard: only send if connected and frequency is valid
         if (!m_connectionController->isConnected() || freq <= 0)
             return;
+        if (m_radioState->lockA())
+            return;
         freq = adjustClickFreqForMode(freq, false);
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
         qint64 snapped = (freq / stepHz) * stepHz;
@@ -359,6 +363,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         // Scroll follows the mouse VFO focus indicator (last clicked VFO)
         bool tuneB = m_scrollVfoB;
+        if (tuneB ? m_radioState->lockB() : m_radioState->lockA())
+            return;
         quint64 currentFreq = tuneB ? m_radioState->vfoB() : m_radioState->vfoA();
         int stepHz = RadioUtils::tuningStepToHz(tuneB ? m_radioState->tuningStepB() : m_radioState->tuningStep());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
@@ -402,6 +408,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         if (!m_connectionController->isConnected() || freq <= 0)
             return;
+        if (m_radioState->lockB())
+            return;
         freq = adjustClickFreqForMode(freq, true); // right-click on Pan A → VFO B
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
         qint64 snapped = (freq / stepHz) * stepHz;
@@ -420,6 +428,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         if (m_mouseQsyMode == 0) // Left Only — right-drag disabled
             return;
         if (!m_connectionController->isConnected() || freq <= 0)
+            return;
+        if (m_radioState->lockB())
             return;
         freq = adjustClickFreqForMode(freq, true); // right-drag on Pan A → VFO B
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
@@ -496,6 +506,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         // L=A R=B mode: left-click on Pan B tunes VFO A
         bool tuneA = (m_mouseQsyMode == 1);
+        if (tuneA ? m_radioState->lockA() : m_radioState->lockB())
+            return;
         freq = adjustClickFreqForMode(freq, !tuneA);
         QString vfo = tuneA ? "FA" : "FB";
         int stepHz = RadioUtils::tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
@@ -519,6 +531,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         // L=A R=B mode: left-drag on Pan B tunes VFO A
         bool tuneA = (m_mouseQsyMode == 1);
+        if (tuneA ? m_radioState->lockA() : m_radioState->lockB())
+            return;
         freq = adjustClickFreqForMode(freq, !tuneA);
         QString vfo = tuneA ? "FA" : "FB";
         int stepHz = RadioUtils::tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
@@ -536,6 +550,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         // Scroll follows the mouse VFO focus indicator (last clicked VFO)
         bool tuneB = m_scrollVfoB;
+        if (tuneB ? m_radioState->lockB() : m_radioState->lockA())
+            return;
         quint64 currentFreq = tuneB ? m_radioState->vfoB() : m_radioState->vfoA();
         int stepHz = RadioUtils::tuningStepToHz(tuneB ? m_radioState->tuningStepB() : m_radioState->tuningStep());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
@@ -579,6 +595,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         if (!m_connectionController->isConnected() || freq <= 0)
             return;
+        if (m_radioState->lockB())
+            return;
         // L=A R=B mode: right-click always tunes VFO B
         freq = adjustClickFreqForMode(freq, true);
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
@@ -598,6 +616,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         if (m_mouseQsyMode == 0) // Left Only — right-drag disabled
             return;
         if (!m_connectionController->isConnected() || freq <= 0)
+            return;
+        if (m_radioState->lockB())
             return;
         // L=A R=B mode: right-drag always tunes VFO B
         freq = adjustClickFreqForMode(freq, true);
