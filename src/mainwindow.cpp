@@ -85,10 +85,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     // ESC — halt all transmission regardless of which child widget has focus.
     // QShortcut fires at window scope; keyPressEvent only fires when the window frame itself has focus.
+    // Clears both the K4 TX state (RX;) and QK4's internal PTT/audio state so the UI unlocks too.
     auto *escShortcut = new QShortcut(Qt::Key_Escape, this);
     connect(escShortcut, &QShortcut::activated, this, [this]() {
         if (m_connectionController->isConnected())
             m_connectionController->sendCAT("RX;");
+        m_audioController->setPttActive(false);
+        m_bottomMenuBar->setPttActive(false);
     });
 
     // Menu items are populated from MEDF responses in onCatResponse()
