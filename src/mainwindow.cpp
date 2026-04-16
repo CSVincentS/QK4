@@ -55,6 +55,7 @@
 #include <QRegularExpression>
 #include <QMouseEvent>
 #include <QMoveEvent>
+#include <QCloseEvent>
 #include <QShortcut>
 
 Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
@@ -1823,6 +1824,22 @@ MainWindow::MainWindow(QWidget *parent)
 
     // resize directly instead of deferring - testing if deferred resize affects QRhi
     // QTimer::singleShot(0, this, [this]() { resize(1340, 800); });
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    // Deterministic audio teardown BEFORE the event loop exits. On Linux with
+    // the PipeWire Qt Multimedia backend, destroying an active QAudioSink from
+    // libc atexit races the PipeWire RT worker thread and segfaults in
+    // pw_stream_dequeue_buffer. Stopping the sinks here — while the audio and
+    // sidetone thread event loops are still servicing BlockingQueuedConnection
+    // — guarantees no live QAudioSink/QAudioSource remains at process exit.
+    if (m_audioController) {
+        m_audioController->shutdown();
+    }
+    if (m_hardwareController) {
+        m_hardwareController->shutdownSidetone();
+    }
+    QMainWindow::closeEvent(event);
 }
 
 MainWindow::~MainWindow() {

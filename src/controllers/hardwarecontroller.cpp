@@ -199,6 +199,15 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     });
 }
 
+void HardwareController::shutdownSidetone() {
+    // Synchronous sidetone sink teardown — required from MainWindow::closeEvent
+    // so QAudioSink is destroyed while the event loop is still alive, not
+    // during libc atexit (which races PipeWire's RT worker on Linux).
+    if (m_sidetoneGenerator && m_sidetoneThread && m_sidetoneThread->isRunning()) {
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "stop", Qt::BlockingQueuedConnection);
+    }
+}
+
 HardwareController::~HardwareController() {
     disconnect(this);
     // Shutdown order: HaliKey → Keyer → Sidetone → KPOD
