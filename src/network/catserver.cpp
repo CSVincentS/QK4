@@ -3,6 +3,15 @@
 #include "protocol.h"
 #include "tcpclient.h"
 
+namespace {
+// RadioState::Mode enum values already match K4 mode codes (LSB=1..DATA_R=9, no 8).
+// Unknown (0) is not a valid K4 mode digit, so fall back to USB (2) to match the
+// legacy buildModeResponse() default.
+int k4ModeDigit(RadioState::Mode mode) {
+    return (mode == RadioState::Unknown) ? 2 : static_cast<int>(mode);
+}
+} // namespace
+
 CatServer::CatServer(RadioState *state, QObject *parent)
     : QObject(parent), m_server(new QTcpServer(this)), m_radioState(state) {
     connect(m_server, &QTcpServer::newConnection, this, &CatServer::onNewConnection);
@@ -171,6 +180,15 @@ QString CatServer::handleCommand(const QString &cmd) {
         }
     }
 
+    // Handle VFO-B suffix GET queries (args == "$" means "query VFO B", no value to SET).
+    // The letter-only prefix extractor strips "$" into args, so "MD$;" arrives here as
+    // prefix="MD", args="$" and would otherwise fall through to the SET path.
+    if (args == "$") {
+        if (prefix == "MD") {
+            return QString("MD$%1;").arg(k4ModeDigit(m_radioState->modeB()));
+        }
+    }
+
     // Handle GET commands (no args) - respond from RadioState
     if (args.isEmpty()) {
         // VFO A frequency
@@ -197,34 +215,35 @@ QString CatServer::handleCommand(const QString &cmd) {
         if (prefix == "FR") {
             return "FR0;"; // Always VFO A for RX
         }
-        // IF command - comprehensive status (K4 format, 38 chars total)
-        // Format:
-        // IF[freq:11][blanks:5][±offset:6][rit:1][xit:1][bank:1][ch:2][tx:1][mode:2][vfo:1][scan:1][split:1][data:2];
+        // IF command - K4 basic radio information (38 chars total).
+        // Per K4 CAT spec (K3-compat, K31 extended) — byte-exact layout:
+        //   IF[freq:11]     [+/-][offset:4][r][x] 00[t][m]0[s][p][b][d]1 ;
+        // where r=RIT, x=XIT, t=TX, m=mode (1 digit), s=scan, p=split,
+        // b=band-change flag, d=data submode; the space, 00, 0, 1, and trailing
+        // space are fixed literals required for K2/K3 parser compatibility.
         if (prefix == "IF") {
-            quint64 freq = m_radioState->frequency();
-            int offset = m_radioState->ritXitOffset();
-            int ritOn = m_radioState->ritEnabled() ? 1 : 0;
-            int xitOn = m_radioState->xitEnabled() ? 1 : 0;
-            int mode = m_radioState->mode();
-            int tx = m_radioState->isTransmitting() ? 1 : 0;
-            int split = m_radioState->splitEnabled() ? 1 : 0;
+            const int offsetRaw = m_radioState->ritXitOffset();
 
-            QString response = QString("IF%1     %2%3%4%5%6%7%8%9%10%11%12%13;")
-                                   .arg(freq, 11, 10, QChar('0')) // P1: freq (11)
-                                   // 5 blanks for step size (P2)
-                                   .arg(offset >= 0 ? "+" : "-")         // P3: offset sign
-                                   .arg(qAbs(offset), 5, 10, QChar('0')) // P3: offset value (5 digits)
-                                   .arg(ritOn)                           // P4: RIT on/off (1)
-                                   .arg(xitOn)                           // P5: XIT on/off (1)
-                                   .arg(0)                               // P6: Memory bank (1)
-                                   .arg("00")                            // P7: Memory channel (2)
-                                   .arg(tx)                              // P8: TX status (1)
-                                   .arg(mode, 2, 10, QChar('0'))         // P9: Mode (2 digits)
-                                   .arg(0)                               // P10: VFO/Mem (1)
-                                   .arg(0)                               // P11: Scan (1)
-                                   .arg(split)                           // P12: Split (1)
-                                   .arg("00");                           // P13: Data submode (2)
-            return response;
+            QString r;
+            r.reserve(38);
+            r += "IF";
+            r += QString::number(m_radioState->frequency()).rightJustified(11, '0');
+            r += "     "; // P2: tuning-step blanks (K3 compat)
+            r += (offsetRaw >= 0 ? '+' : '-');
+            r += QString::number(qAbs(offsetRaw)).rightJustified(4, '0');
+            r += (m_radioState->ritEnabled() ? '1' : '0');
+            r += (m_radioState->xitEnabled() ? '1' : '0');
+            r += ' ';  // fixed separator
+            r += "00"; // fixed (K2 memory bank / channel placeholders)
+            r += (m_radioState->isTransmitting() ? '1' : '0');
+            r += QString::number(k4ModeDigit(m_radioState->mode()));
+            r += '0'; // fixed
+            r += '0'; // P11: scan (not implemented)
+            r += (m_radioState->splitEnabled() ? '1' : '0');
+            r += '0';   // band-change flag (on-demand query → always 0)
+            r += '0';   // data submode (not tracked)
+            r += "1 ;"; // fixed '1' + trailing space + terminator
+            return r;
         }
         // RIT offset
         if (prefix == "RO") {
@@ -301,6 +320,10 @@ QString CatServer::handleCommand(const QString &cmd) {
         if (prefix == "SB") {
             // Check if sub receiver is active (typically based on dual watch or diversity)
             return "SB0;"; // Sub RX off by default
+        }
+        // DV - Diversity on/off (polled every cycle by N1MM)
+        if (prefix == "DV") {
+            return QString("DV%1;").arg(m_radioState->diversityEnabled() ? 1 : 0);
         }
         // SM - S-meter reading
         if (prefix == "SM") {

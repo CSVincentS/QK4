@@ -215,6 +215,123 @@ private slots:
     }
 
     // =========================================================================
+    // IF response — byte-exact K4 spec layout (38 chars)
+    // Format: IF[freq:11]     [+/-][offset:4][r][x] 00[t][m]0[s][p][b][d]1 ;
+    // =========================================================================
+
+    void testIfResponseCwIdle() {
+        // Matches a real K4 capture: 7.031740 MHz, CW, RX idle, no RIT/XIT/split
+        RadioState rs;
+        rs.parseCATCommand("FA00007031740;");
+        rs.parseCATCommand("MD3;");
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "IF;"), QString("IF00007031740     +000000 0003000001 ;"));
+    }
+
+    void testIfResponseLsbIdle() {
+        // 14.250000 MHz, LSB, RX idle
+        RadioState rs;
+        rs.parseCATCommand("FA00014250000;");
+        rs.parseCATCommand("MD1;");
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "IF;"), QString("IF00014250000     +000000 0001000001 ;"));
+    }
+
+    void testIfResponseComposite() {
+        // 14.074000 MHz, USB, RIT on at +50 Hz, split on, TX on.
+        // Locks down the per-bit field positions so a future width regression fails loudly.
+        RadioState rs;
+        rs.parseCATCommand("FA00014074000;");
+        rs.parseCATCommand("MD2;");
+        rs.parseCATCommand("RT1;");
+        rs.parseCATCommand("RO+0050;");
+        rs.parseCATCommand("FT1;");
+        rs.parseCATCommand("TX;");
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "IF;"), QString("IF00014074000     +005010 0012001001 ;"));
+    }
+
+    // =========================================================================
+    // MD$ — VFO B mode query (N1MM polls this every cycle)
+    // =========================================================================
+
+    void testModeBQuery() {
+        RadioState rs;
+        rs.parseCATCommand("MD$2;"); // VFO B → USB
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "MD$;"), QString("MD$2;"));
+    }
+
+    // =========================================================================
+    // DV — Diversity state (N1MM polls this every cycle)
+    // =========================================================================
+
+    void testDiversityOff() {
+        RadioState rs;
+        // Default: diversity off
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "DV;"), QString("DV0;"));
+    }
+
+    void testDiversityOn() {
+        RadioState rs;
+        rs.parseCATCommand("DV1;");
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "DV;"), QString("DV1;"));
+    }
+
+    // =========================================================================
+    // Regression: external SET command → optimistic RadioState update
+    // MainWindow wires catCommandReceived → parseCATCommand so external KSxxx;
+    // immediately updates QK4's keyerSpeed (and emits keyerSpeedChanged for UI).
+    // =========================================================================
+
+    void testExternalKsUpdatesKeyerSpeed() {
+        RadioState rs;
+        rs.parseCATCommand("KS020;"); // baseline 20 WPM
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        // Mirror MainWindow's catCommandReceived handler: optimistic local parse.
+        QObject::connect(&server, &CatServer::catCommandReceived, &rs,
+                         [&rs](const QString &cmd) { rs.parseCATCommand(cmd); });
+
+        QSignalSpy spy(&rs, &RadioState::keyerSpeedChanged);
+
+        QTcpSocket client;
+        client.connectToHost("127.0.0.1", server.port());
+        QVERIFY(client.waitForConnected(1000));
+        QCoreApplication::processEvents();
+
+        client.write("KS025;");
+        client.flush();
+        QTest::qWait(100);
+
+        QCOMPARE(rs.keyerSpeed(), 25);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 25);
+        client.disconnectFromHost();
+    }
+
+    // =========================================================================
     // SET commands — should emit catCommandReceived signal
     // =========================================================================
 
