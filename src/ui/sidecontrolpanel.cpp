@@ -433,25 +433,29 @@ void SideControlPanel::setDisplayMode(bool isCWMode) {
     if (m_isCWMode == isCWMode)
         return;
     m_isCWMode = isCWMode;
+    m_wpmIsPrimary = true; // reset: primary face shows WPM (CW) or MIC (Voice)
 
     if (isCWMode) {
         m_wpmBtn->setPrimaryLabel("WPM");
         m_wpmBtn->setAlternateLabel("PTCH");
+        m_wpmBtn->setPrimaryValue(m_hasCachedWpm ? QString::number(m_cachedWpm) : QStringLiteral("--"));
+        m_wpmBtn->setAlternateValue(m_hasCachedPitch ? QString::number(m_cachedPitch, 'f', 2) : QStringLiteral("--"));
     } else {
         m_wpmBtn->setPrimaryLabel("MIC");
         m_wpmBtn->setAlternateLabel("CMP");
+        m_wpmBtn->setPrimaryValue(m_hasCachedMicGain ? QString::number(m_cachedMicGain) : QStringLiteral("--"));
+        m_wpmBtn->setAlternateValue(m_hasCachedCompression ? QString::number(m_cachedCompression)
+                                                           : QStringLiteral("--"));
     }
-    // Reset to show primary value
-    m_wpmIsPrimary = true;
-    m_wpmBtn->setPrimaryValue("--");
-    m_wpmBtn->setAlternateValue("--");
 }
 
 // ===== Value Setters =====
 
 void SideControlPanel::setWpm(int wpm) {
+    m_cachedWpm = wpm;
+    m_hasCachedWpm = true;
     if (!m_isCWMode)
-        return; // Only set in CW mode
+        return; // button is showing MIC/CMP — value is cached for next CW switch
     if (m_wpmIsPrimary) {
         m_wpmBtn->setPrimaryValue(QString::number(wpm));
     } else {
@@ -460,8 +464,10 @@ void SideControlPanel::setWpm(int wpm) {
 }
 
 void SideControlPanel::setPitch(double pitch) {
+    m_cachedPitch = pitch;
+    m_hasCachedPitch = true;
     if (!m_isCWMode)
-        return; // Only set in CW mode
+        return; // button is showing MIC/CMP — value is cached for next CW switch
     QString pitchStr = QString::number(pitch, 'f', 2);
     if (!m_wpmIsPrimary) {
         m_wpmBtn->setPrimaryValue(pitchStr);
@@ -471,8 +477,10 @@ void SideControlPanel::setPitch(double pitch) {
 }
 
 void SideControlPanel::setMicGain(int gain) {
+    m_cachedMicGain = gain;
+    m_hasCachedMicGain = true;
     if (m_isCWMode)
-        return; // Only set in Voice mode
+        return; // button is showing WPM/PTCH — value is cached for next voice switch
     if (m_wpmIsPrimary) {
         m_wpmBtn->setPrimaryValue(QString::number(gain));
     } else {
@@ -481,8 +489,10 @@ void SideControlPanel::setMicGain(int gain) {
 }
 
 void SideControlPanel::setCompression(int comp) {
+    m_cachedCompression = comp;
+    m_hasCachedCompression = true;
     if (m_isCWMode)
-        return; // Only set in Voice mode
+        return; // button is showing WPM/PTCH — value is cached for next voice switch
     if (!m_wpmIsPrimary) {
         m_wpmBtn->setPrimaryValue(QString::number(comp));
     } else {

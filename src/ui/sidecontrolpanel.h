@@ -157,6 +157,17 @@ private:
     // Track mode (CW shows WPM/PTCH, Voice shows MIC/CMP)
     bool m_isCWMode = true;
 
+    // Cached Group 1 values so mode switches and external CAT updates (e.g. KSxxx;
+    // arriving while in non-CW mode) are never lost — reapplied on mode change.
+    int m_cachedWpm = 0;
+    double m_cachedPitch = 0.0;
+    int m_cachedMicGain = 0;
+    int m_cachedCompression = 0;
+    bool m_hasCachedWpm = false;
+    bool m_hasCachedPitch = false;
+    bool m_hasCachedMicGain = false;
+    bool m_hasCachedCompression = false;
+
     // Track which function is currently primary for each button
     // (needed to emit correct signal on scroll)
     bool m_wpmIsPrimary = true;    // WPM/PTCH (CW) or MIC/CMP (Voice)
