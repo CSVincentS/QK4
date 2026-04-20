@@ -17,6 +17,15 @@ target_include_directories(test_radiostate_registry PRIVATE ${CMAKE_SOURCE_DIR}/
 target_link_libraries(test_radiostate_registry Qt6::Core Qt6::Test)
 add_test(NAME RadioStateRegistryTests COMMAND test_radiostate_registry)
 
+# RadioState::parseCATCommand() dispatch microbenchmark — not wired into
+# add_test() so it doesn't run during every `ctest` invocation; build and
+# invoke explicitly when checking for perf regressions.
+add_executable(bench_radiostate bench_radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+)
+target_include_directories(bench_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(bench_radiostate Qt6::Core Qt6::Test)
+
 # RadioUtils shared utility tests
 add_executable(test_radioutils test_radioutils.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp
