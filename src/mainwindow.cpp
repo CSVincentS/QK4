@@ -99,476 +99,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupNotificationWidget();
     setupConnectionWiring();
 
-    // RadioState signals -> UI updates (VFO A)
-    connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::onFrequencyChanged);
-    connect(m_radioState, &RadioState::modeChanged, this, &MainWindow::onModeChanged);
-    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode) {
-        onVoxChanged(false); // Refresh VOX display when mode changes (VOX is mode-specific)
-    });
-    // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
-    connect(m_radioState, &RadioState::dataSubModeChanged, this, [this](int) { updateModeLabels(); });
-    connect(m_radioState, &RadioState::sMeterChanged, this, &MainWindow::onSMeterChanged);
-    // RX EQ state -> popup (Main and Sub RX share the same EQ)
-    connect(m_radioState, &RadioState::rxEqChanged, this, [this]() {
-        if (m_rxEqPopup) {
-            m_rxEqPopup->setAllBands(m_radioState->rxEqBands());
-        }
-    });
-    // TX EQ state -> popup
-    connect(m_radioState, &RadioState::txEqChanged, this, [this]() {
-        if (m_txEqPopup) {
-            m_txEqPopup->setAllBands(m_radioState->txEqBands());
-        }
-    });
-
-    // Antenna configuration signals - update popups when state changes
-    connect(m_radioState, &RadioState::mainRxAntCfgChanged, this, [this]() {
-        if (m_mainRxAntCfgPopup) {
-            m_mainRxAntCfgPopup->setDisplayAll(m_radioState->mainRxDisplayAll());
-            m_mainRxAntCfgPopup->setAntennaMask(m_radioState->mainRxAntMask());
-        }
-    });
-    connect(m_radioState, &RadioState::subRxAntCfgChanged, this, [this]() {
-        if (m_subRxAntCfgPopup) {
-            m_subRxAntCfgPopup->setDisplayAll(m_radioState->subRxDisplayAll());
-            m_subRxAntCfgPopup->setAntennaMask(m_radioState->subRxAntMask());
-        }
-    });
-    connect(m_radioState, &RadioState::txAntCfgChanged, this, [this]() {
-        if (m_txAntCfgPopup) {
-            m_txAntCfgPopup->setDisplayAll(m_radioState->txDisplayAll());
-            m_txAntCfgPopup->setAntennaMask(m_radioState->txAntMask());
-        }
-    });
-
-    // RadioState signals -> UI updates (VFO B)
-    connect(m_radioState, &RadioState::frequencyBChanged, this, &MainWindow::onFrequencyBChanged);
-    connect(m_radioState, &RadioState::modeBChanged, this, &MainWindow::onModeBChanged);
-    // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
-    connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this](int) { updateModeLabels(); });
-    connect(m_radioState, &RadioState::sMeterBChanged, this, &MainWindow::onSMeterBChanged);
-    // Auto-hide mini pan B when VFOs move to different bands (and SUB RX is off)
-    connect(m_radioState, &RadioState::frequencyChanged, m_spectrumController,
-            &SpectrumController::checkAndHideMiniPanB);
-    connect(m_radioState, &RadioState::frequencyBChanged, m_spectrumController,
-            &SpectrumController::checkAndHideMiniPanB);
-
-    // RadioState signals -> Status bar updates
-    connect(m_radioState, &RadioState::rfPowerChanged, this, &MainWindow::onRfPowerChanged);
-    connect(m_radioState, &RadioState::supplyVoltageChanged, this, &MainWindow::onSupplyVoltageChanged);
-    connect(m_radioState, &RadioState::supplyCurrentChanged, this, &MainWindow::onSupplyCurrentChanged);
-    connect(m_radioState, &RadioState::swrChanged, this, &MainWindow::onSwrChanged);
-
-    // Display FPS (synthetic menu item)
-    connect(m_radioState, &RadioState::displayFpsChanged, this, &MainWindow::onDisplayFpsChanged);
-
-    // Error/notification messages from K4 (ERxx: format) -> show notification popup
-    connect(m_radioState, &RadioState::errorNotificationReceived, this, &MainWindow::onErrorNotification);
-
-    // TX Meter data -> update power displays and VFO multifunction meters during TX
-    connect(m_radioState, &RadioState::txMeterChanged, this, [this](int alc, int comp, double fwdPower, double swr) {
-        // Update status bar power label
-        QString powerStr;
-        if (fwdPower < 10.0) {
-            powerStr = QString("%1 W").arg(fwdPower, 0, 'f', 1);
-        } else {
-            powerStr = QString("%1 W").arg(static_cast<int>(fwdPower));
-        }
-        m_powerLabel->setText(powerStr);
-        // Update side panel power reading
-        m_sideControlPanel->setPowerReading(fwdPower);
-
-        // Calculate PA drain current (Id) from forward power and supply voltage
-        // Formula: Id = ForwardPower / (Voltage × Efficiency)
-        // K4 PA efficiency is approximately 34% (measured: 80W @ 17A @ 13.8V)
-        double voltage = m_radioState->supplyVoltage();
-        double paCurrent = 0.0;
-        if (voltage > 0 && fwdPower > 0) {
-            constexpr double K4_PA_EFFICIENCY = 0.34; // Measured: 80W @ 17A @ 13.8V
-            paCurrent = fwdPower / (voltage * K4_PA_EFFICIENCY);
-        }
-
-        // Update TX meters only on the active TX VFO
-        // SPLIT OFF: VFO A transmits, SPLIT ON: VFO B transmits
-        if (m_radioState->splitEnabled()) {
-            m_vfoB->setTxMeters(alc, comp, fwdPower, swr);
-            m_vfoB->setTxMeterCurrent(paCurrent);
-        } else {
-            m_vfoA->setTxMeters(alc, comp, fwdPower, swr);
-            m_vfoA->setTxMeterCurrent(paCurrent);
-        }
-    });
-
-    // TX state changes -> switch VFO meters between S-meter (RX) and Po (TX) mode
-    // Also change TX indicator color to red when transmitting
-    connect(m_radioState, &RadioState::transmitStateChanged, this, [this](bool transmitting) {
-        // Only the active TX VFO switches to TX meter mode
-        // SPLIT OFF: VFO A transmits, SPLIT ON: VFO B transmits
-        // The non-TX VFO stays in S-meter mode (showing received signal)
-        if (m_radioState->splitEnabled()) {
-            m_vfoA->setTransmitting(false); // VFO A stays in RX mode
-            m_vfoB->setTransmitting(transmitting);
-        } else {
-            m_vfoA->setTransmitting(transmitting);
-            m_vfoB->setTransmitting(false); // VFO B stays in RX mode
-        }
-
-        // TX indicator and triangles turn red when transmitting
-        QString color = transmitting ? K4Styles::Colors::TxRed : K4Styles::Colors::AccentAmber;
-        m_txIndicator->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                         .arg(color)
-                                         .arg(K4Styles::Dimensions::FontSizeIndicator));
-        m_txTriangle->setStyleSheet(
-            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
-        m_txTriangleB->setStyleSheet(
-            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
-
-        // When XIT is active, show the actual TX frequency on the TX VFO display
-        // No split: VFO A displays TX freq; Split: VFO B displays TX freq
-        // On return to RX, restore the normal RX frequency display
-        if (m_radioState->xitEnabled()) {
-            if (m_radioState->splitEnabled()) {
-                onFrequencyBChanged(m_radioState->vfoB());
-            } else {
-                onFrequencyChanged(m_radioState->vfoA());
-            }
-        }
-    });
-
-    // SUB indicator - green when sub RX enabled, grey when off
-    // Also updates DIV indicator since DIV requires SUB to be on
-    // Also dims VFO B frequency and mode labels when SUB RX is off
-    connect(m_radioState, &RadioState::subRxEnabledChanged, this, [this](bool enabled) {
-        if (enabled) {
-            m_subLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: black;"
-                                              "font-size: %2px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::StatusGreen)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-            // If DIV is also on, light up the DIV indicator (handles timing when SB3 comes after DV1)
-            if (m_radioState->diversityEnabled()) {
-                m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                                  "color: black;"
-                                                  "font-size: %2px;"
-                                                  "font-weight: bold;"
-                                                  "border-radius: 2px;")
-                                              .arg(K4Styles::Colors::StatusGreen)
-                                              .arg(K4Styles::Dimensions::FontSizeNormal));
-            }
-            // Restore VFO B frequency and mode to normal white
-            m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::TextWhite));
-            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                            .arg(K4Styles::Colors::TextWhite)
-                                            .arg(K4Styles::Dimensions::FontSizeLarge));
-        } else {
-            m_subLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: %2;"
-                                              "font-size: %3px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-            // DIV requires SUB - turn off DIV indicator when SUB is off
-            m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: %2;"
-                                              "font-size: %3px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-            // Dim VFO B frequency and mode to indicate SUB RX is off
-            m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
-            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                            .arg(K4Styles::Colors::InactiveGray)
-                                            .arg(K4Styles::Dimensions::FontSizeLarge));
-
-            // Auto-hide mini pan B if VFOs are on different bands (can't have mini pan B without SUB RX)
-            m_spectrumController->checkAndHideMiniPanB();
-        }
-    });
-
-    // DIV indicator - green only when BOTH diversity AND sub RX are enabled
-    // (DIV requires SUB to be on - can't have DIV without SUB)
-    connect(m_radioState, &RadioState::diversityChanged, this, [this](bool enabled) {
-        // DIV only shows green if both diversity is enabled AND sub RX is enabled
-        bool showActive = enabled && m_radioState->subReceiverEnabled();
-        if (showActive) {
-            m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: black;"
-                                              "font-size: %2px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::StatusGreen)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-        } else {
-            m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: %2;"
-                                              "font-size: %3px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-        }
-    });
-
-    // VFO Lock indicators - show lock arc on VFO A/B squares when locked
-    connect(m_radioState, &RadioState::lockAChanged, this, [this](bool locked) { m_vfoRow->setLockA(locked); });
-    connect(m_radioState, &RadioState::lockBChanged, this, [this](bool locked) { m_vfoRow->setLockB(locked); });
-
-    // RadioState signals -> Side control panel updates (BW/SHFT/HI/LO)
-    // Helper to update all 4 filter display values (called on BW or SHFT change)
-    // When B SET is enabled, shows VFO B (Sub RX) filter values instead of VFO A
-    auto updateFilterDisplay = [this]() {
-        bool bSet = m_radioState->bSetEnabled();
-
-        // Get bandwidth and shift from correct VFO
-        int bwHz = bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth();
-        int shiftHz = bSet ? m_radioState->shiftBHz() : m_radioState->shiftHz();
-
-        // BW/SHFT in kHz
-        m_sideControlPanel->setBandwidth(bwHz / 1000.0);
-        m_sideControlPanel->setShift(shiftHz / 1000.0);
-
-        // Calculate and set HI/LO in kHz (clamp LO to 0, then derive HI from LO + BW)
-        int lowHz = qMax(0, shiftHz - (bwHz / 2));
-        int highHz = lowHz + bwHz;
-        m_sideControlPanel->setHighCut(highHz / 1000.0);
-        m_sideControlPanel->setLowCut(lowHz / 1000.0);
-    };
-    connect(m_radioState, &RadioState::filterBandwidthChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::ifShiftChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::filterBandwidthBChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::ifShiftBChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::bSetChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::keyerSpeedChanged, m_sideControlPanel, &SideControlPanel::setWpm);
-    connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitch) {
-        m_sideControlPanel->setPitch(pitch / 1000.0); // Hz to kHz (500Hz = 0.50)
-    });
-    connect(m_radioState, &RadioState::rfPowerChanged, this,
-            [this](double watts, bool) { m_sideControlPanel->setPower(watts); });
-    connect(m_radioState, &RadioState::qskDelayChanged, this, [this](int delay) {
-        m_sideControlPanel->setDelay(delay / 100.0); // 10ms units to seconds (20 -> 0.20)
-    });
-    connect(m_radioState, &RadioState::rfGainChanged, m_sideControlPanel, &SideControlPanel::setMainRfGain);
-    connect(m_radioState, &RadioState::squelchChanged, m_sideControlPanel, &SideControlPanel::setMainSquelch);
-    connect(m_radioState, &RadioState::rfGainBChanged, m_sideControlPanel, &SideControlPanel::setSubRfGain);
-    connect(m_radioState, &RadioState::squelchBChanged, m_sideControlPanel, &SideControlPanel::setSubSquelch);
-    connect(m_radioState, &RadioState::micGainChanged, m_sideControlPanel, &SideControlPanel::setMicGain);
-    connect(m_radioState, &RadioState::compressionChanged, m_sideControlPanel, &SideControlPanel::setCompression);
-    // Mode-dependent WPM/PTCH vs MIC/CMP display
-    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
-        bool isCW = (mode == RadioState::CW || mode == RadioState::CW_R);
-        m_sideControlPanel->setDisplayMode(isCW);
-        // Refresh values after mode switch
-        if (isCW) {
-            m_sideControlPanel->setWpm(m_radioState->keyerSpeed());
-            m_sideControlPanel->setPitch(m_radioState->cwPitch() / 1000.0);
-        } else {
-            m_sideControlPanel->setMicGain(m_radioState->micGain());
-            m_sideControlPanel->setCompression(m_radioState->compression());
-        }
-    });
-
-    // RadioState signals -> Center section updates
-    connect(m_radioState, &RadioState::splitChanged, this, &MainWindow::onSplitChanged);
-    connect(m_radioState, &RadioState::antennaChanged, this, &MainWindow::onAntennaChanged);
-    connect(m_radioState, &RadioState::antennaNameChanged, this, &MainWindow::onAntennaNameChanged);
-    connect(m_radioState, &RadioState::voxChanged, this, &MainWindow::onVoxChanged);
-    connect(m_radioState, &RadioState::qskEnabledChanged, this, &MainWindow::onQskEnabledChanged);
-    connect(m_radioState, &RadioState::testModeChanged, this, &MainWindow::onTestModeChanged);
-    connect(m_radioState, &RadioState::atuModeChanged, this, &MainWindow::onAtuModeChanged);
-    connect(m_radioState, &RadioState::ritXitChanged, this, [this](bool ritEnabled, bool xitEnabled, int offset) {
-        if (!m_radioState->bSetEnabled()) {
-            // BSET off: RIT/XIT state from VFO A
-            // In split mode, XIT offset lives in RO$ (VFO B register).
-            // Use RO$ when XIT is active OR when XIT was active (preserved value on toggle-off)
-            int displayOffset = offset;
-            if (m_radioState->splitEnabled() && !ritEnabled && m_radioState->ritXitOffsetB() != 0)
-                displayOffset = m_radioState->ritXitOffsetB();
-            onRitXitChanged(ritEnabled, xitEnabled, displayOffset);
-        } else {
-            // BSET on: RIT from VFO B (RO$); XIT from RO (no split) or RO$ (split)
-            int displayOffset;
-            if (xitEnabled)
-                displayOffset = m_radioState->splitEnabled() ? m_radioState->ritXitOffsetB() : offset;
-            else
-                displayOffset = m_radioState->ritXitOffsetB();
-            onRitXitChanged(m_radioState->ritEnabledB(), xitEnabled, displayOffset);
-        }
-    });
-    connect(m_radioState, &RadioState::ritXitBChanged, this, [this](bool ritEnabled, int offset) {
-        if (m_radioState->bSetEnabled()) {
-            // BSET on: VFO B offset changed — update display
-            onRitXitChanged(ritEnabled, m_radioState->xitEnabled(), offset);
-        } else if (m_radioState->splitEnabled() && m_radioState->xitEnabled()) {
-            // Split + XIT: K4 routes XIT offset to RO$ (VFO B register)
-            onRitXitChanged(m_radioState->ritEnabled(), true, offset);
-        }
-    });
-    connect(m_radioState, &RadioState::messageBankChanged, this, &MainWindow::onMessageBankChanged);
-
-    // Filter position indicators
-    connect(m_radioState, &RadioState::filterPositionChanged, this,
-            [this](int pos) { m_filterAWidget->setFilterPosition(pos); });
-    connect(m_radioState, &RadioState::filterPositionBChanged, this,
-            [this](int pos) { m_filterBWidget->setFilterPosition(pos); });
-
-    // Filter bandwidth and shift → FilterIndicatorWidget shape
-    connect(m_radioState, &RadioState::filterBandwidthChanged, this,
-            [this](int bw) { m_filterAWidget->setBandwidth(bw); });
-    connect(m_radioState, &RadioState::filterBandwidthBChanged, this,
-            [this](int bw) { m_filterBWidget->setBandwidth(bw); });
-    connect(m_radioState, &RadioState::ifShiftChanged, this, [this](int shift) { m_filterAWidget->setShift(shift); });
-    connect(m_radioState, &RadioState::ifShiftBChanged, this, [this](int shift) { m_filterBWidget->setShift(shift); });
-    // Mode affects filter indicator shift center calculation
-    connect(m_radioState, &RadioState::modeChanged, this,
-            [this](RadioState::Mode mode) { m_filterAWidget->setMode(RadioState::modeToString(mode)); });
-    connect(m_radioState, &RadioState::modeBChanged, this,
-            [this](RadioState::Mode mode) { m_filterBWidget->setMode(RadioState::modeToString(mode)); });
-    // DATA submode affects filter indicator shape (RTTY dual triangles)
-    connect(m_radioState, &RadioState::dataSubModeChanged, this,
-            [this](int subMode) { m_filterAWidget->setDataSubMode(subMode); });
-    connect(m_radioState, &RadioState::dataSubModeBChanged, this,
-            [this](int subMode) { m_filterBWidget->setDataSubMode(subMode); });
-
-    // RadioState signals -> Processing state updates (AGC, PRE, ATT, NB, NR)
-    connect(m_radioState, &RadioState::processingChanged, this, &MainWindow::onProcessingChanged);
-    connect(m_radioState, &RadioState::processingChangedB, this, &MainWindow::onProcessingChangedB);
-
-    // RadioState signals -> MAIN RX / SUB RX popup button label updates
-    // AFX button: primary = "AFX ON/OFF", alternate = mode (DELAY/PITCH/OFF)
-    connect(m_radioState, &RadioState::afxModeChanged, this, [this](int mode) {
-        QString primary = (mode == 0) ? "AFX OFF" : "AFX ON";
-        QString alternate;
-        switch (mode) {
-        case 0:
-            alternate = "OFF";
-            break;
-        case 1:
-            alternate = "DELAY";
-            break;
-        case 2:
-            alternate = "PITCH";
-            break;
-        }
-        if (m_mainRxPopup)
-            m_mainRxPopup->setButtonLabel(3, primary, alternate);
-        if (m_subRxPopup)
-            m_subRxPopup->setButtonLabel(3, primary, alternate);
-    });
-
-    // AGC button: primary = speed (AGC-S/AGC-F), alternate = ON/OFF
-    connect(m_radioState, &RadioState::processingChanged, this, [this]() {
-        QString primary;
-        QString alternate;
-        switch (m_radioState->agcSpeed()) {
-        case RadioState::AGC_Off:
-            primary = "AGC";
-            alternate = "OFF";
-            break;
-        case RadioState::AGC_Slow:
-            primary = "AGC-S";
-            alternate = "ON";
-            break;
-        case RadioState::AGC_Fast:
-            primary = "AGC-F";
-            alternate = "ON";
-            break;
-        }
-        if (m_mainRxPopup)
-            m_mainRxPopup->setButtonLabel(4, primary, alternate);
-    });
-
-    connect(m_radioState, &RadioState::processingChangedB, this, [this]() {
-        QString primary;
-        QString alternate;
-        switch (m_radioState->agcSpeedB()) {
-        case RadioState::AGC_Off:
-            primary = "AGC";
-            alternate = "OFF";
-            break;
-        case RadioState::AGC_Slow:
-            primary = "AGC-S";
-            alternate = "ON";
-            break;
-        case RadioState::AGC_Fast:
-            primary = "AGC-F";
-            alternate = "ON";
-            break;
-        }
-        if (m_subRxPopup)
-            m_subRxPopup->setButtonLabel(4, primary, alternate);
-    });
-
-    // APF button: Main RX APF state -> MAIN RX popup and VFO A indicator
-    connect(m_radioState, &RadioState::apfChanged, this, [this](bool enabled, int width) {
-        QString alternate;
-        if (!enabled) {
-            alternate = "OFF";
-        } else {
-            static const char *bwNames[] = {"30Hz", "50Hz", "150Hz"};
-            alternate = bwNames[qBound(0, width, 2)];
-        }
-        if (m_mainRxPopup)
-            m_mainRxPopup->setButtonLabel(5, "APF", alternate);
-        m_vfoA->setApf(enabled, width);
-    });
-
-    // APF button: Sub RX APF state -> SUB RX popup and VFO B indicator
-    connect(m_radioState, &RadioState::apfBChanged, this, [this](bool enabled, int width) {
-        QString alternate;
-        if (!enabled) {
-            alternate = "OFF";
-        } else {
-            static const char *bwNames[] = {"30Hz", "50Hz", "150Hz"};
-            alternate = bwNames[qBound(0, width, 2)];
-        }
-        if (m_subRxPopup)
-            m_subRxPopup->setButtonLabel(5, "APF", alternate);
-        m_vfoB->setApf(enabled, width);
-    });
-
-    // RadioState waterfall height -> mini-pans (panadapter wiring is in SpectrumController)
-    connect(m_radioState, &RadioState::waterfallHeightChanged, this, [this](int percent) {
-        m_vfoA->setMiniPanWaterfallHeight(percent);
-        m_vfoB->setMiniPanWaterfallHeight(percent);
-    });
-
-    // RadioState display state -> DisplayPopup (for button face updates)
-    // Separate LCD and EXT signals
-    connect(m_radioState, &RadioState::dualPanModeLcdChanged, m_displayPopup, &DisplayPopupWidget::setDualPanModeLcd);
-    connect(m_radioState, &RadioState::dualPanModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDualPanModeExt);
-    connect(m_radioState, &RadioState::displayModeLcdChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeLcd);
-    connect(m_radioState, &RadioState::displayModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeExt);
-    connect(m_radioState, &RadioState::waterfallColorChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallColor);
-    connect(m_radioState, &RadioState::averagingChanged, m_displayPopup, &DisplayPopupWidget::setAveraging);
-    connect(m_radioState, &RadioState::averagingChanged, this, [this](int level) {
-        m_vfoA->setMiniPanAveraging(level);
-        m_vfoB->setMiniPanAveraging(level);
-    });
-    connect(m_radioState, &RadioState::peakModeChanged, m_displayPopup, &DisplayPopupWidget::setPeakMode);
-    connect(m_radioState, &RadioState::fixedTuneChanged, m_displayPopup, &DisplayPopupWidget::setFixedTuneMode);
-    connect(m_radioState, &RadioState::freezeChanged, m_displayPopup, &DisplayPopupWidget::setFreeze);
-    connect(m_radioState, &RadioState::vfoACursorChanged, m_displayPopup, &DisplayPopupWidget::setVfoACursor);
-    connect(m_radioState, &RadioState::vfoBCursorChanged, m_displayPopup, &DisplayPopupWidget::setVfoBCursor);
-    connect(m_radioState, &RadioState::autoRefLevelChanged, m_displayPopup, &DisplayPopupWidget::setAutoRefLevel);
-    connect(m_radioState, &RadioState::scaleChanged, m_displayPopup, &DisplayPopupWidget::setScale);
-    connect(m_radioState, &RadioState::ddcNbModeChanged, m_displayPopup, &DisplayPopupWidget::setDdcNbMode);
-    connect(m_radioState, &RadioState::ddcNbLevelChanged, m_displayPopup, &DisplayPopupWidget::setDdcNbLevel);
-    connect(m_radioState, &RadioState::waterfallHeightChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallHeight);
-    connect(m_radioState, &RadioState::waterfallHeightExtChanged, m_displayPopup,
-            &DisplayPopupWidget::setWaterfallHeightExt);
-    // Also update span/ref values in popup
-    connect(m_radioState, &RadioState::spanChanged, this, [this](int spanHz) {
-        m_displayPopup->setSpanValueA(spanHz / 1000.0); // Hz to kHz
-    });
-    connect(m_radioState, &RadioState::spanBChanged, this, [this](int spanHz) {
-        m_displayPopup->setSpanValueB(spanHz / 1000.0); // Hz to kHz
-    });
-    connect(m_radioState, &RadioState::refLevelChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueA);
-    connect(m_radioState, &RadioState::refLevelBChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueB);
+    setupRadioStateWiring();
 
     // Averaging control +/- -> local only (not sent to K4 — our smoothing differs from K4's)
     connect(m_displayPopup, &DisplayPopupWidget::averagingIncrementRequested, this, [this]() {
@@ -1910,6 +1441,479 @@ void MainWindow::setupConnectionWiring() {
 
     // Protocol CAT responses -> RadioState (via ConnectionController re-emitted signal)
     connect(m_connectionController, &ConnectionController::catResponseReceived, this, &MainWindow::onCatResponse);
+}
+
+void MainWindow::setupRadioStateWiring() {
+    // RadioState signals -> UI updates (VFO A)
+    connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::onFrequencyChanged);
+    connect(m_radioState, &RadioState::modeChanged, this, &MainWindow::onModeChanged);
+    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode) {
+        onVoxChanged(false); // Refresh VOX display when mode changes (VOX is mode-specific)
+    });
+    // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
+    connect(m_radioState, &RadioState::dataSubModeChanged, this, [this](int) { updateModeLabels(); });
+    connect(m_radioState, &RadioState::sMeterChanged, this, &MainWindow::onSMeterChanged);
+    // RX EQ state -> popup (Main and Sub RX share the same EQ)
+    connect(m_radioState, &RadioState::rxEqChanged, this, [this]() {
+        if (m_rxEqPopup) {
+            m_rxEqPopup->setAllBands(m_radioState->rxEqBands());
+        }
+    });
+    // TX EQ state -> popup
+    connect(m_radioState, &RadioState::txEqChanged, this, [this]() {
+        if (m_txEqPopup) {
+            m_txEqPopup->setAllBands(m_radioState->txEqBands());
+        }
+    });
+
+    // Antenna configuration signals - update popups when state changes
+    connect(m_radioState, &RadioState::mainRxAntCfgChanged, this, [this]() {
+        if (m_mainRxAntCfgPopup) {
+            m_mainRxAntCfgPopup->setDisplayAll(m_radioState->mainRxDisplayAll());
+            m_mainRxAntCfgPopup->setAntennaMask(m_radioState->mainRxAntMask());
+        }
+    });
+    connect(m_radioState, &RadioState::subRxAntCfgChanged, this, [this]() {
+        if (m_subRxAntCfgPopup) {
+            m_subRxAntCfgPopup->setDisplayAll(m_radioState->subRxDisplayAll());
+            m_subRxAntCfgPopup->setAntennaMask(m_radioState->subRxAntMask());
+        }
+    });
+    connect(m_radioState, &RadioState::txAntCfgChanged, this, [this]() {
+        if (m_txAntCfgPopup) {
+            m_txAntCfgPopup->setDisplayAll(m_radioState->txDisplayAll());
+            m_txAntCfgPopup->setAntennaMask(m_radioState->txAntMask());
+        }
+    });
+
+    // RadioState signals -> UI updates (VFO B)
+    connect(m_radioState, &RadioState::frequencyBChanged, this, &MainWindow::onFrequencyBChanged);
+    connect(m_radioState, &RadioState::modeBChanged, this, &MainWindow::onModeBChanged);
+    // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
+    connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this](int) { updateModeLabels(); });
+    connect(m_radioState, &RadioState::sMeterBChanged, this, &MainWindow::onSMeterBChanged);
+    // Auto-hide mini pan B when VFOs move to different bands (and SUB RX is off)
+    connect(m_radioState, &RadioState::frequencyChanged, m_spectrumController,
+            &SpectrumController::checkAndHideMiniPanB);
+    connect(m_radioState, &RadioState::frequencyBChanged, m_spectrumController,
+            &SpectrumController::checkAndHideMiniPanB);
+
+    // RadioState signals -> Status bar updates
+    connect(m_radioState, &RadioState::rfPowerChanged, this, &MainWindow::onRfPowerChanged);
+    connect(m_radioState, &RadioState::supplyVoltageChanged, this, &MainWindow::onSupplyVoltageChanged);
+    connect(m_radioState, &RadioState::supplyCurrentChanged, this, &MainWindow::onSupplyCurrentChanged);
+    connect(m_radioState, &RadioState::swrChanged, this, &MainWindow::onSwrChanged);
+
+    // Display FPS (synthetic menu item)
+    connect(m_radioState, &RadioState::displayFpsChanged, this, &MainWindow::onDisplayFpsChanged);
+
+    // Error/notification messages from K4 (ERxx: format) -> show notification popup
+    connect(m_radioState, &RadioState::errorNotificationReceived, this, &MainWindow::onErrorNotification);
+
+    // TX Meter data -> update power displays and VFO multifunction meters during TX
+    connect(m_radioState, &RadioState::txMeterChanged, this, [this](int alc, int comp, double fwdPower, double swr) {
+        // Update status bar power label
+        QString powerStr;
+        if (fwdPower < 10.0) {
+            powerStr = QString("%1 W").arg(fwdPower, 0, 'f', 1);
+        } else {
+            powerStr = QString("%1 W").arg(static_cast<int>(fwdPower));
+        }
+        m_powerLabel->setText(powerStr);
+        // Update side panel power reading
+        m_sideControlPanel->setPowerReading(fwdPower);
+
+        // Calculate PA drain current (Id) from forward power and supply voltage
+        // Formula: Id = ForwardPower / (Voltage × Efficiency)
+        // K4 PA efficiency is approximately 34% (measured: 80W @ 17A @ 13.8V)
+        double voltage = m_radioState->supplyVoltage();
+        double paCurrent = 0.0;
+        if (voltage > 0 && fwdPower > 0) {
+            constexpr double K4_PA_EFFICIENCY = 0.34; // Measured: 80W @ 17A @ 13.8V
+            paCurrent = fwdPower / (voltage * K4_PA_EFFICIENCY);
+        }
+
+        // Update TX meters only on the active TX VFO
+        // SPLIT OFF: VFO A transmits, SPLIT ON: VFO B transmits
+        if (m_radioState->splitEnabled()) {
+            m_vfoB->setTxMeters(alc, comp, fwdPower, swr);
+            m_vfoB->setTxMeterCurrent(paCurrent);
+        } else {
+            m_vfoA->setTxMeters(alc, comp, fwdPower, swr);
+            m_vfoA->setTxMeterCurrent(paCurrent);
+        }
+    });
+
+    // TX state changes -> switch VFO meters between S-meter (RX) and Po (TX) mode
+    // Also change TX indicator color to red when transmitting
+    connect(m_radioState, &RadioState::transmitStateChanged, this, [this](bool transmitting) {
+        // Only the active TX VFO switches to TX meter mode
+        // SPLIT OFF: VFO A transmits, SPLIT ON: VFO B transmits
+        // The non-TX VFO stays in S-meter mode (showing received signal)
+        if (m_radioState->splitEnabled()) {
+            m_vfoA->setTransmitting(false); // VFO A stays in RX mode
+            m_vfoB->setTransmitting(transmitting);
+        } else {
+            m_vfoA->setTransmitting(transmitting);
+            m_vfoB->setTransmitting(false); // VFO B stays in RX mode
+        }
+
+        // TX indicator and triangles turn red when transmitting
+        QString color = transmitting ? K4Styles::Colors::TxRed : K4Styles::Colors::AccentAmber;
+        m_txIndicator->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                         .arg(color)
+                                         .arg(K4Styles::Dimensions::FontSizeIndicator));
+        m_txTriangle->setStyleSheet(
+            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
+        m_txTriangleB->setStyleSheet(
+            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
+
+        // When XIT is active, show the actual TX frequency on the TX VFO display
+        // No split: VFO A displays TX freq; Split: VFO B displays TX freq
+        // On return to RX, restore the normal RX frequency display
+        if (m_radioState->xitEnabled()) {
+            if (m_radioState->splitEnabled()) {
+                onFrequencyBChanged(m_radioState->vfoB());
+            } else {
+                onFrequencyChanged(m_radioState->vfoA());
+            }
+        }
+    });
+
+    // SUB indicator - green when sub RX enabled, grey when off
+    // Also updates DIV indicator since DIV requires SUB to be on
+    // Also dims VFO B frequency and mode labels when SUB RX is off
+    connect(m_radioState, &RadioState::subRxEnabledChanged, this, [this](bool enabled) {
+        if (enabled) {
+            m_subLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: black;"
+                                              "font-size: %2px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::StatusGreen)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
+            // If DIV is also on, light up the DIV indicator (handles timing when SB3 comes after DV1)
+            if (m_radioState->diversityEnabled()) {
+                m_divLabel->setStyleSheet(QString("background-color: %1;"
+                                                  "color: black;"
+                                                  "font-size: %2px;"
+                                                  "font-weight: bold;"
+                                                  "border-radius: 2px;")
+                                              .arg(K4Styles::Colors::StatusGreen)
+                                              .arg(K4Styles::Dimensions::FontSizeNormal));
+            }
+            // Restore VFO B frequency and mode to normal white
+            m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::TextWhite));
+            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                            .arg(K4Styles::Colors::TextWhite)
+                                            .arg(K4Styles::Dimensions::FontSizeLarge));
+        } else {
+            m_subLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: %2;"
+                                              "font-size: %3px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
+            // DIV requires SUB - turn off DIV indicator when SUB is off
+            m_divLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: %2;"
+                                              "font-size: %3px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
+            // Dim VFO B frequency and mode to indicate SUB RX is off
+            m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
+            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                            .arg(K4Styles::Colors::InactiveGray)
+                                            .arg(K4Styles::Dimensions::FontSizeLarge));
+
+            // Auto-hide mini pan B if VFOs are on different bands (can't have mini pan B without SUB RX)
+            m_spectrumController->checkAndHideMiniPanB();
+        }
+    });
+
+    // DIV indicator - green only when BOTH diversity AND sub RX are enabled
+    // (DIV requires SUB to be on - can't have DIV without SUB)
+    connect(m_radioState, &RadioState::diversityChanged, this, [this](bool enabled) {
+        // DIV only shows green if both diversity is enabled AND sub RX is enabled
+        bool showActive = enabled && m_radioState->subReceiverEnabled();
+        if (showActive) {
+            m_divLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: black;"
+                                              "font-size: %2px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::StatusGreen)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
+        } else {
+            m_divLabel->setStyleSheet(QString("background-color: %1;"
+                                              "color: %2;"
+                                              "font-size: %3px;"
+                                              "font-weight: bold;"
+                                              "border-radius: 2px;")
+                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+                                          .arg(K4Styles::Dimensions::FontSizeNormal));
+        }
+    });
+
+    // VFO Lock indicators - show lock arc on VFO A/B squares when locked
+    connect(m_radioState, &RadioState::lockAChanged, this, [this](bool locked) { m_vfoRow->setLockA(locked); });
+    connect(m_radioState, &RadioState::lockBChanged, this, [this](bool locked) { m_vfoRow->setLockB(locked); });
+
+    // RadioState signals -> Side control panel updates (BW/SHFT/HI/LO)
+    // Helper to update all 4 filter display values (called on BW or SHFT change)
+    // When B SET is enabled, shows VFO B (Sub RX) filter values instead of VFO A
+    auto updateFilterDisplay = [this]() {
+        bool bSet = m_radioState->bSetEnabled();
+
+        // Get bandwidth and shift from correct VFO
+        int bwHz = bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth();
+        int shiftHz = bSet ? m_radioState->shiftBHz() : m_radioState->shiftHz();
+
+        // BW/SHFT in kHz
+        m_sideControlPanel->setBandwidth(bwHz / 1000.0);
+        m_sideControlPanel->setShift(shiftHz / 1000.0);
+
+        // Calculate and set HI/LO in kHz (clamp LO to 0, then derive HI from LO + BW)
+        int lowHz = qMax(0, shiftHz - (bwHz / 2));
+        int highHz = lowHz + bwHz;
+        m_sideControlPanel->setHighCut(highHz / 1000.0);
+        m_sideControlPanel->setLowCut(lowHz / 1000.0);
+    };
+    connect(m_radioState, &RadioState::filterBandwidthChanged, this, updateFilterDisplay);
+    connect(m_radioState, &RadioState::ifShiftChanged, this, updateFilterDisplay);
+    connect(m_radioState, &RadioState::filterBandwidthBChanged, this, updateFilterDisplay);
+    connect(m_radioState, &RadioState::ifShiftBChanged, this, updateFilterDisplay);
+    connect(m_radioState, &RadioState::bSetChanged, this, updateFilterDisplay);
+    connect(m_radioState, &RadioState::keyerSpeedChanged, m_sideControlPanel, &SideControlPanel::setWpm);
+    connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitch) {
+        m_sideControlPanel->setPitch(pitch / 1000.0); // Hz to kHz (500Hz = 0.50)
+    });
+    connect(m_radioState, &RadioState::rfPowerChanged, this,
+            [this](double watts, bool) { m_sideControlPanel->setPower(watts); });
+    connect(m_radioState, &RadioState::qskDelayChanged, this, [this](int delay) {
+        m_sideControlPanel->setDelay(delay / 100.0); // 10ms units to seconds (20 -> 0.20)
+    });
+    connect(m_radioState, &RadioState::rfGainChanged, m_sideControlPanel, &SideControlPanel::setMainRfGain);
+    connect(m_radioState, &RadioState::squelchChanged, m_sideControlPanel, &SideControlPanel::setMainSquelch);
+    connect(m_radioState, &RadioState::rfGainBChanged, m_sideControlPanel, &SideControlPanel::setSubRfGain);
+    connect(m_radioState, &RadioState::squelchBChanged, m_sideControlPanel, &SideControlPanel::setSubSquelch);
+    connect(m_radioState, &RadioState::micGainChanged, m_sideControlPanel, &SideControlPanel::setMicGain);
+    connect(m_radioState, &RadioState::compressionChanged, m_sideControlPanel, &SideControlPanel::setCompression);
+    // Mode-dependent WPM/PTCH vs MIC/CMP display
+    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
+        bool isCW = (mode == RadioState::CW || mode == RadioState::CW_R);
+        m_sideControlPanel->setDisplayMode(isCW);
+        // Refresh values after mode switch
+        if (isCW) {
+            m_sideControlPanel->setWpm(m_radioState->keyerSpeed());
+            m_sideControlPanel->setPitch(m_radioState->cwPitch() / 1000.0);
+        } else {
+            m_sideControlPanel->setMicGain(m_radioState->micGain());
+            m_sideControlPanel->setCompression(m_radioState->compression());
+        }
+    });
+
+    // RadioState signals -> Center section updates
+    connect(m_radioState, &RadioState::splitChanged, this, &MainWindow::onSplitChanged);
+    connect(m_radioState, &RadioState::antennaChanged, this, &MainWindow::onAntennaChanged);
+    connect(m_radioState, &RadioState::antennaNameChanged, this, &MainWindow::onAntennaNameChanged);
+    connect(m_radioState, &RadioState::voxChanged, this, &MainWindow::onVoxChanged);
+    connect(m_radioState, &RadioState::qskEnabledChanged, this, &MainWindow::onQskEnabledChanged);
+    connect(m_radioState, &RadioState::testModeChanged, this, &MainWindow::onTestModeChanged);
+    connect(m_radioState, &RadioState::atuModeChanged, this, &MainWindow::onAtuModeChanged);
+    connect(m_radioState, &RadioState::ritXitChanged, this, [this](bool ritEnabled, bool xitEnabled, int offset) {
+        if (!m_radioState->bSetEnabled()) {
+            // BSET off: RIT/XIT state from VFO A
+            // In split mode, XIT offset lives in RO$ (VFO B register).
+            // Use RO$ when XIT is active OR when XIT was active (preserved value on toggle-off)
+            int displayOffset = offset;
+            if (m_radioState->splitEnabled() && !ritEnabled && m_radioState->ritXitOffsetB() != 0)
+                displayOffset = m_radioState->ritXitOffsetB();
+            onRitXitChanged(ritEnabled, xitEnabled, displayOffset);
+        } else {
+            // BSET on: RIT from VFO B (RO$); XIT from RO (no split) or RO$ (split)
+            int displayOffset;
+            if (xitEnabled)
+                displayOffset = m_radioState->splitEnabled() ? m_radioState->ritXitOffsetB() : offset;
+            else
+                displayOffset = m_radioState->ritXitOffsetB();
+            onRitXitChanged(m_radioState->ritEnabledB(), xitEnabled, displayOffset);
+        }
+    });
+    connect(m_radioState, &RadioState::ritXitBChanged, this, [this](bool ritEnabled, int offset) {
+        if (m_radioState->bSetEnabled()) {
+            // BSET on: VFO B offset changed — update display
+            onRitXitChanged(ritEnabled, m_radioState->xitEnabled(), offset);
+        } else if (m_radioState->splitEnabled() && m_radioState->xitEnabled()) {
+            // Split + XIT: K4 routes XIT offset to RO$ (VFO B register)
+            onRitXitChanged(m_radioState->ritEnabled(), true, offset);
+        }
+    });
+    connect(m_radioState, &RadioState::messageBankChanged, this, &MainWindow::onMessageBankChanged);
+
+    // Filter position indicators
+    connect(m_radioState, &RadioState::filterPositionChanged, this,
+            [this](int pos) { m_filterAWidget->setFilterPosition(pos); });
+    connect(m_radioState, &RadioState::filterPositionBChanged, this,
+            [this](int pos) { m_filterBWidget->setFilterPosition(pos); });
+
+    // Filter bandwidth and shift → FilterIndicatorWidget shape
+    connect(m_radioState, &RadioState::filterBandwidthChanged, this,
+            [this](int bw) { m_filterAWidget->setBandwidth(bw); });
+    connect(m_radioState, &RadioState::filterBandwidthBChanged, this,
+            [this](int bw) { m_filterBWidget->setBandwidth(bw); });
+    connect(m_radioState, &RadioState::ifShiftChanged, this, [this](int shift) { m_filterAWidget->setShift(shift); });
+    connect(m_radioState, &RadioState::ifShiftBChanged, this, [this](int shift) { m_filterBWidget->setShift(shift); });
+    // Mode affects filter indicator shift center calculation
+    connect(m_radioState, &RadioState::modeChanged, this,
+            [this](RadioState::Mode mode) { m_filterAWidget->setMode(RadioState::modeToString(mode)); });
+    connect(m_radioState, &RadioState::modeBChanged, this,
+            [this](RadioState::Mode mode) { m_filterBWidget->setMode(RadioState::modeToString(mode)); });
+    // DATA submode affects filter indicator shape (RTTY dual triangles)
+    connect(m_radioState, &RadioState::dataSubModeChanged, this,
+            [this](int subMode) { m_filterAWidget->setDataSubMode(subMode); });
+    connect(m_radioState, &RadioState::dataSubModeBChanged, this,
+            [this](int subMode) { m_filterBWidget->setDataSubMode(subMode); });
+
+    // RadioState signals -> Processing state updates (AGC, PRE, ATT, NB, NR)
+    connect(m_radioState, &RadioState::processingChanged, this, &MainWindow::onProcessingChanged);
+    connect(m_radioState, &RadioState::processingChangedB, this, &MainWindow::onProcessingChangedB);
+
+    // RadioState signals -> MAIN RX / SUB RX popup button label updates
+    // AFX button: primary = "AFX ON/OFF", alternate = mode (DELAY/PITCH/OFF)
+    connect(m_radioState, &RadioState::afxModeChanged, this, [this](int mode) {
+        QString primary = (mode == 0) ? "AFX OFF" : "AFX ON";
+        QString alternate;
+        switch (mode) {
+        case 0:
+            alternate = "OFF";
+            break;
+        case 1:
+            alternate = "DELAY";
+            break;
+        case 2:
+            alternate = "PITCH";
+            break;
+        }
+        if (m_mainRxPopup)
+            m_mainRxPopup->setButtonLabel(3, primary, alternate);
+        if (m_subRxPopup)
+            m_subRxPopup->setButtonLabel(3, primary, alternate);
+    });
+
+    // AGC button: primary = speed (AGC-S/AGC-F), alternate = ON/OFF
+    connect(m_radioState, &RadioState::processingChanged, this, [this]() {
+        QString primary;
+        QString alternate;
+        switch (m_radioState->agcSpeed()) {
+        case RadioState::AGC_Off:
+            primary = "AGC";
+            alternate = "OFF";
+            break;
+        case RadioState::AGC_Slow:
+            primary = "AGC-S";
+            alternate = "ON";
+            break;
+        case RadioState::AGC_Fast:
+            primary = "AGC-F";
+            alternate = "ON";
+            break;
+        }
+        if (m_mainRxPopup)
+            m_mainRxPopup->setButtonLabel(4, primary, alternate);
+    });
+
+    connect(m_radioState, &RadioState::processingChangedB, this, [this]() {
+        QString primary;
+        QString alternate;
+        switch (m_radioState->agcSpeedB()) {
+        case RadioState::AGC_Off:
+            primary = "AGC";
+            alternate = "OFF";
+            break;
+        case RadioState::AGC_Slow:
+            primary = "AGC-S";
+            alternate = "ON";
+            break;
+        case RadioState::AGC_Fast:
+            primary = "AGC-F";
+            alternate = "ON";
+            break;
+        }
+        if (m_subRxPopup)
+            m_subRxPopup->setButtonLabel(4, primary, alternate);
+    });
+
+    // APF button: Main RX APF state -> MAIN RX popup and VFO A indicator
+    connect(m_radioState, &RadioState::apfChanged, this, [this](bool enabled, int width) {
+        QString alternate;
+        if (!enabled) {
+            alternate = "OFF";
+        } else {
+            static const char *bwNames[] = {"30Hz", "50Hz", "150Hz"};
+            alternate = bwNames[qBound(0, width, 2)];
+        }
+        if (m_mainRxPopup)
+            m_mainRxPopup->setButtonLabel(5, "APF", alternate);
+        m_vfoA->setApf(enabled, width);
+    });
+
+    // APF button: Sub RX APF state -> SUB RX popup and VFO B indicator
+    connect(m_radioState, &RadioState::apfBChanged, this, [this](bool enabled, int width) {
+        QString alternate;
+        if (!enabled) {
+            alternate = "OFF";
+        } else {
+            static const char *bwNames[] = {"30Hz", "50Hz", "150Hz"};
+            alternate = bwNames[qBound(0, width, 2)];
+        }
+        if (m_subRxPopup)
+            m_subRxPopup->setButtonLabel(5, "APF", alternate);
+        m_vfoB->setApf(enabled, width);
+    });
+
+    // RadioState waterfall height -> mini-pans (panadapter wiring is in SpectrumController)
+    connect(m_radioState, &RadioState::waterfallHeightChanged, this, [this](int percent) {
+        m_vfoA->setMiniPanWaterfallHeight(percent);
+        m_vfoB->setMiniPanWaterfallHeight(percent);
+    });
+
+    // RadioState display state -> DisplayPopup (for button face updates)
+    // Separate LCD and EXT signals
+    connect(m_radioState, &RadioState::dualPanModeLcdChanged, m_displayPopup, &DisplayPopupWidget::setDualPanModeLcd);
+    connect(m_radioState, &RadioState::dualPanModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDualPanModeExt);
+    connect(m_radioState, &RadioState::displayModeLcdChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeLcd);
+    connect(m_radioState, &RadioState::displayModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeExt);
+    connect(m_radioState, &RadioState::waterfallColorChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallColor);
+    connect(m_radioState, &RadioState::averagingChanged, m_displayPopup, &DisplayPopupWidget::setAveraging);
+    connect(m_radioState, &RadioState::averagingChanged, this, [this](int level) {
+        m_vfoA->setMiniPanAveraging(level);
+        m_vfoB->setMiniPanAveraging(level);
+    });
+    connect(m_radioState, &RadioState::peakModeChanged, m_displayPopup, &DisplayPopupWidget::setPeakMode);
+    connect(m_radioState, &RadioState::fixedTuneChanged, m_displayPopup, &DisplayPopupWidget::setFixedTuneMode);
+    connect(m_radioState, &RadioState::freezeChanged, m_displayPopup, &DisplayPopupWidget::setFreeze);
+    connect(m_radioState, &RadioState::vfoACursorChanged, m_displayPopup, &DisplayPopupWidget::setVfoACursor);
+    connect(m_radioState, &RadioState::vfoBCursorChanged, m_displayPopup, &DisplayPopupWidget::setVfoBCursor);
+    connect(m_radioState, &RadioState::autoRefLevelChanged, m_displayPopup, &DisplayPopupWidget::setAutoRefLevel);
+    connect(m_radioState, &RadioState::scaleChanged, m_displayPopup, &DisplayPopupWidget::setScale);
+    connect(m_radioState, &RadioState::ddcNbModeChanged, m_displayPopup, &DisplayPopupWidget::setDdcNbMode);
+    connect(m_radioState, &RadioState::ddcNbLevelChanged, m_displayPopup, &DisplayPopupWidget::setDdcNbLevel);
+    connect(m_radioState, &RadioState::waterfallHeightChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallHeight);
+    connect(m_radioState, &RadioState::waterfallHeightExtChanged, m_displayPopup,
+            &DisplayPopupWidget::setWaterfallHeightExt);
+    // Also update span/ref values in popup
+    connect(m_radioState, &RadioState::spanChanged, this, [this](int spanHz) {
+        m_displayPopup->setSpanValueA(spanHz / 1000.0); // Hz to kHz
+    });
+    connect(m_radioState, &RadioState::spanBChanged, this, [this](int spanHz) {
+        m_displayPopup->setSpanValueB(spanHz / 1000.0); // Hz to kHz
+    });
+    connect(m_radioState, &RadioState::refLevelChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueA);
+    connect(m_radioState, &RadioState::refLevelBChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueB);
 }
 
 void MainWindow::setupMenuBar() {

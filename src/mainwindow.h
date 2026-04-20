@@ -154,6 +154,7 @@ private:
     void setupTextDecodeWindows();
     void setupNotificationWidget();
     void setupConnectionWiring();
+    void setupRadioStateWiring();
 
     void updateConnectionState(TcpClient::ConnectionState state);
     QString formatFrequency(quint64 freq);
