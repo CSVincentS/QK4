@@ -101,138 +101,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupRadioStateWiring();
 
-    // Protocol spectrum data -> SpectrumController (via ConnectionController re-emitted signals)
-    connect(m_connectionController, &ConnectionController::spectrumDataReceived, m_spectrumController,
-            &SpectrumController::onSpectrumData);
-    connect(m_connectionController, &ConnectionController::miniSpectrumDataReceived, m_spectrumController,
-            &SpectrumController::onMiniSpectrumData);
+    setupSpectrumDataRouting();
 
-    // Clock timer for date/time display — 1 Hz tick is fine; sub-second drift on a clock label
-    // is imperceptible and saves 50× timer overhead vs 50 ms updates.
-    constexpr int kClockUpdateIntervalMs = 1000;
-    connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);
-    m_clockTimer->start(kClockUpdateIntervalMs);
-    updateDateTime();
+    setupClockTimer();
 
-    // Hardware controller owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads
-    m_hardwareController = new HardwareController(m_radioState, m_connectionController, this);
+    setupHardwareController();
 
-    // KPOD button presses → macro execution
-    connect(m_hardwareController, &HardwareController::macroRequested, this, &MainWindow::executeMacro);
+    setupKpa1500();
 
-    // HaliKey footswitch PTT → TX audio + UI indicator
-    connect(m_hardwareController, &HardwareController::pttRequested, this, [this](bool active) {
-        if (m_connectionController->isConnected()) {
-            m_audioController->setPttActive(active);
-            m_bottomMenuBar->setPttActive(active);
-        }
-    });
-
-    // KPA1500 amplifier client
-    m_kpa1500Client = new KPA1500Client(this);
-
-    // Connect KPA1500 signals
-    connect(m_kpa1500Client, &KPA1500Client::connected, this, &MainWindow::onKpa1500Connected);
-    connect(m_kpa1500Client, &KPA1500Client::disconnected, this, &MainWindow::onKpa1500Disconnected);
-    connect(m_kpa1500Client, &KPA1500Client::errorOccurred, this, &MainWindow::onKpa1500Error);
-
-    // Wire KPA1500 data signals to embedded mini panel in right side panel
-    auto *kpaMini = m_rightSidePanel->kpa1500Mini();
-    connect(m_kpa1500Client, &KPA1500Client::powerChanged, this, [kpaMini](double fwd, double ref, double) {
-        kpaMini->setForwardPower(static_cast<float>(fwd));
-        kpaMini->setReflectedPower(static_cast<float>(ref));
-    });
-    connect(m_kpa1500Client, &KPA1500Client::swrChanged, this,
-            [kpaMini](double swr) { kpaMini->setSWR(static_cast<float>(swr)); });
-    connect(m_kpa1500Client, &KPA1500Client::paTemperatureChanged, this,
-            [kpaMini](double tempC) { kpaMini->setTemperature(static_cast<float>(tempC)); });
-    connect(m_kpa1500Client, &KPA1500Client::operatingStateChanged, this,
-            [kpaMini](KPA1500Client::OperatingState state) { kpaMini->setMode(state == KPA1500Client::StateOperate); });
-    connect(m_kpa1500Client, &KPA1500Client::atuModeChanged, this,
-            [kpaMini](bool modeInline) { kpaMini->setAtuMode(modeInline); });
-    connect(m_kpa1500Client, &KPA1500Client::atuInlineChanged, this,
-            [kpaMini](bool relayInline) { kpaMini->setAtuInline(relayInline); });
-    connect(m_kpa1500Client, &KPA1500Client::antennaChanged, this,
-            [kpaMini](int antenna) { kpaMini->setAntenna(antenna); });
-    connect(m_kpa1500Client, &KPA1500Client::faultStatusChanged, this,
-            [kpaMini](KPA1500Client::FaultStatus status, const QString &) {
-                kpaMini->setFault(status == KPA1500Client::FaultActive);
-            });
-    connect(m_kpa1500Client, &KPA1500Client::connected, this, [kpaMini]() {
-        kpaMini->setConnected(true);
-        kpaMini->setVisible(true);
-    });
-    connect(m_kpa1500Client, &KPA1500Client::disconnected, this, [kpaMini]() {
-        kpaMini->setConnected(false);
-        kpaMini->setVisible(false);
-    });
-
-    // Wire mini panel button signals to KPA1500 commands
-    connect(kpaMini, &Kpa1500MiniPanel::modeToggled, this,
-            [this](bool operate) { m_kpa1500Client->sendCommand(operate ? "^OS1;" : "^OS0;"); });
-    connect(kpaMini, &Kpa1500MiniPanel::atuTuneRequested, this, [this]() { m_kpa1500Client->sendCommand("^FT;"); });
-    connect(kpaMini, &Kpa1500MiniPanel::atuModeToggled, this,
-            [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AMI;" : "^AMB;"); });
-    connect(kpaMini, &Kpa1500MiniPanel::antennaChanged, this,
-            [this](int ant) { m_kpa1500Client->sendCommand(QString("^AN%1;").arg(ant)); });
-
-    // Connect to settings for KPA1500 enable/disable and settings changes
-    connect(RadioSettings::instance(), &RadioSettings::kpa1500EnabledChanged, this,
-            &MainWindow::onKpa1500EnabledChanged);
-    connect(RadioSettings::instance(), &RadioSettings::kpa1500SettingsChanged, this,
-            &MainWindow::onKpa1500SettingsChanged);
-
-    // KPA1500 connects when K4 connects (in onAuthenticated), not on app start
-
-    // Initialize KPA1500 status display
-    updateKpa1500Status();
-
-    // CAT server for external app integration (WSJT-X, MacLoggerDX, etc.)
-    // Apps connect using their built-in K4 support - no protocol translation needed
-    m_catServer = new CatServer(m_radioState, this);
-    m_catServer->setTcpClient(m_connectionController->tcpClient());
-
-    // Forward CAT commands from external apps to the real K4
-    connect(m_catServer, &CatServer::catCommandReceived, this, [this](const QString &command) {
-        m_connectionController->sendCAT(command);
-        // Optimistically update RadioState so the panadapter passband tracks immediately,
-        // without waiting for the K4's AI4 roundtrip. Spectrum packets from the K4 arrive
-        // before the CAT echo, so m_centerFreq moves while m_tunedFreq is still stale —
-        // the passband goes off-screen until the echo lands. Mirrors what the VFO scroll
-        // wheel handler already does: sendCAT + parseCATCommand together.
-        m_radioState->parseCATCommand(command);
-    });
-
-    // Surface CAT server bind failures to the user
-    connect(m_catServer, &CatServer::errorOccurred, this,
-            [this](const QString &error) { qWarning() << "CAT server:" << error; });
-
-    // TX;/RX; from external apps controls audio input gate
-    // Audio stream itself triggers K4 TX - timing-critical for FT8/FT4
-    connect(m_catServer, &CatServer::pttRequested, this, [this](bool on) {
-        m_audioController->setPttActive(on);
-        m_bottomMenuBar->setPttActive(on);
-    });
-
-    // Connect to settings for CAT server enable/disable
-    connect(RadioSettings::instance(), &RadioSettings::catServerEnabledChanged, this, [this](bool enabled) {
-        if (enabled) {
-            m_catServer->start(RadioSettings::instance()->catServerPort());
-        } else {
-            m_catServer->stop();
-        }
-    });
-    connect(RadioSettings::instance(), &RadioSettings::catServerPortChanged, this, [this](quint16 port) {
-        if (RadioSettings::instance()->catServerEnabled()) {
-            m_catServer->stop();
-            m_catServer->start(port);
-        }
-    });
-
-    // Start CAT server if enabled
-    if (RadioSettings::instance()->catServerEnabled()) {
-        m_catServer->start(RadioSettings::instance()->catServerPort());
-    }
+    setupCatServer();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -1914,6 +1791,149 @@ void MainWindow::setupRadioStateWiring() {
     });
     connect(m_radioState, &RadioState::refLevelChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueA);
     connect(m_radioState, &RadioState::refLevelBChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueB);
+}
+
+void MainWindow::setupSpectrumDataRouting() {
+    // Protocol spectrum data -> SpectrumController (via ConnectionController re-emitted signals)
+    connect(m_connectionController, &ConnectionController::spectrumDataReceived, m_spectrumController,
+            &SpectrumController::onSpectrumData);
+    connect(m_connectionController, &ConnectionController::miniSpectrumDataReceived, m_spectrumController,
+            &SpectrumController::onMiniSpectrumData);
+}
+
+void MainWindow::setupClockTimer() {
+    // Clock timer for date/time display — 1 Hz tick is fine; sub-second drift on a clock label
+    // is imperceptible and saves 50× timer overhead vs 50 ms updates.
+    constexpr int kClockUpdateIntervalMs = 1000;
+    connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);
+    m_clockTimer->start(kClockUpdateIntervalMs);
+    updateDateTime();
+}
+
+void MainWindow::setupHardwareController() {
+    // Hardware controller owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads
+    m_hardwareController = new HardwareController(m_radioState, m_connectionController, this);
+
+    // KPOD button presses → macro execution
+    connect(m_hardwareController, &HardwareController::macroRequested, this, &MainWindow::executeMacro);
+
+    // HaliKey footswitch PTT → TX audio + UI indicator
+    connect(m_hardwareController, &HardwareController::pttRequested, this, [this](bool active) {
+        if (m_connectionController->isConnected()) {
+            m_audioController->setPttActive(active);
+            m_bottomMenuBar->setPttActive(active);
+        }
+    });
+}
+
+void MainWindow::setupKpa1500() {
+    // KPA1500 amplifier client
+    m_kpa1500Client = new KPA1500Client(this);
+
+    // Connect KPA1500 signals
+    connect(m_kpa1500Client, &KPA1500Client::connected, this, &MainWindow::onKpa1500Connected);
+    connect(m_kpa1500Client, &KPA1500Client::disconnected, this, &MainWindow::onKpa1500Disconnected);
+    connect(m_kpa1500Client, &KPA1500Client::errorOccurred, this, &MainWindow::onKpa1500Error);
+
+    // Wire KPA1500 data signals to embedded mini panel in right side panel
+    auto *kpaMini = m_rightSidePanel->kpa1500Mini();
+    connect(m_kpa1500Client, &KPA1500Client::powerChanged, this, [kpaMini](double fwd, double ref, double) {
+        kpaMini->setForwardPower(static_cast<float>(fwd));
+        kpaMini->setReflectedPower(static_cast<float>(ref));
+    });
+    connect(m_kpa1500Client, &KPA1500Client::swrChanged, this,
+            [kpaMini](double swr) { kpaMini->setSWR(static_cast<float>(swr)); });
+    connect(m_kpa1500Client, &KPA1500Client::paTemperatureChanged, this,
+            [kpaMini](double tempC) { kpaMini->setTemperature(static_cast<float>(tempC)); });
+    connect(m_kpa1500Client, &KPA1500Client::operatingStateChanged, this,
+            [kpaMini](KPA1500Client::OperatingState state) { kpaMini->setMode(state == KPA1500Client::StateOperate); });
+    connect(m_kpa1500Client, &KPA1500Client::atuModeChanged, this,
+            [kpaMini](bool modeInline) { kpaMini->setAtuMode(modeInline); });
+    connect(m_kpa1500Client, &KPA1500Client::atuInlineChanged, this,
+            [kpaMini](bool relayInline) { kpaMini->setAtuInline(relayInline); });
+    connect(m_kpa1500Client, &KPA1500Client::antennaChanged, this,
+            [kpaMini](int antenna) { kpaMini->setAntenna(antenna); });
+    connect(m_kpa1500Client, &KPA1500Client::faultStatusChanged, this,
+            [kpaMini](KPA1500Client::FaultStatus status, const QString &) {
+                kpaMini->setFault(status == KPA1500Client::FaultActive);
+            });
+    connect(m_kpa1500Client, &KPA1500Client::connected, this, [kpaMini]() {
+        kpaMini->setConnected(true);
+        kpaMini->setVisible(true);
+    });
+    connect(m_kpa1500Client, &KPA1500Client::disconnected, this, [kpaMini]() {
+        kpaMini->setConnected(false);
+        kpaMini->setVisible(false);
+    });
+
+    // Wire mini panel button signals to KPA1500 commands
+    connect(kpaMini, &Kpa1500MiniPanel::modeToggled, this,
+            [this](bool operate) { m_kpa1500Client->sendCommand(operate ? "^OS1;" : "^OS0;"); });
+    connect(kpaMini, &Kpa1500MiniPanel::atuTuneRequested, this, [this]() { m_kpa1500Client->sendCommand("^FT;"); });
+    connect(kpaMini, &Kpa1500MiniPanel::atuModeToggled, this,
+            [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AMI;" : "^AMB;"); });
+    connect(kpaMini, &Kpa1500MiniPanel::antennaChanged, this,
+            [this](int ant) { m_kpa1500Client->sendCommand(QString("^AN%1;").arg(ant)); });
+
+    // Connect to settings for KPA1500 enable/disable and settings changes
+    connect(RadioSettings::instance(), &RadioSettings::kpa1500EnabledChanged, this,
+            &MainWindow::onKpa1500EnabledChanged);
+    connect(RadioSettings::instance(), &RadioSettings::kpa1500SettingsChanged, this,
+            &MainWindow::onKpa1500SettingsChanged);
+
+    // KPA1500 connects when K4 connects (in onAuthenticated), not on app start
+
+    // Initialize KPA1500 status display
+    updateKpa1500Status();
+}
+
+void MainWindow::setupCatServer() {
+    // CAT server for external app integration (WSJT-X, MacLoggerDX, etc.)
+    // Apps connect using their built-in K4 support - no protocol translation needed
+    m_catServer = new CatServer(m_radioState, this);
+    m_catServer->setTcpClient(m_connectionController->tcpClient());
+
+    // Forward CAT commands from external apps to the real K4
+    connect(m_catServer, &CatServer::catCommandReceived, this, [this](const QString &command) {
+        m_connectionController->sendCAT(command);
+        // Optimistically update RadioState so the panadapter passband tracks immediately,
+        // without waiting for the K4's AI4 roundtrip. Spectrum packets from the K4 arrive
+        // before the CAT echo, so m_centerFreq moves while m_tunedFreq is still stale —
+        // the passband goes off-screen until the echo lands. Mirrors what the VFO scroll
+        // wheel handler already does: sendCAT + parseCATCommand together.
+        m_radioState->parseCATCommand(command);
+    });
+
+    // Surface CAT server bind failures to the user
+    connect(m_catServer, &CatServer::errorOccurred, this,
+            [this](const QString &error) { qWarning() << "CAT server:" << error; });
+
+    // TX;/RX; from external apps controls audio input gate
+    // Audio stream itself triggers K4 TX - timing-critical for FT8/FT4
+    connect(m_catServer, &CatServer::pttRequested, this, [this](bool on) {
+        m_audioController->setPttActive(on);
+        m_bottomMenuBar->setPttActive(on);
+    });
+
+    // Connect to settings for CAT server enable/disable
+    connect(RadioSettings::instance(), &RadioSettings::catServerEnabledChanged, this, [this](bool enabled) {
+        if (enabled) {
+            m_catServer->start(RadioSettings::instance()->catServerPort());
+        } else {
+            m_catServer->stop();
+        }
+    });
+    connect(RadioSettings::instance(), &RadioSettings::catServerPortChanged, this, [this](quint16 port) {
+        if (RadioSettings::instance()->catServerEnabled()) {
+            m_catServer->stop();
+            m_catServer->start(port);
+        }
+    });
+
+    // Start CAT server if enabled
+    if (RadioSettings::instance()->catServerEnabled()) {
+        m_catServer->start(RadioSettings::instance()->catServerPort());
+    }
 }
 
 void MainWindow::setupMenuBar() {

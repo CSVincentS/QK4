@@ -155,6 +155,11 @@ private:
     void setupNotificationWidget();
     void setupConnectionWiring();
     void setupRadioStateWiring();
+    void setupSpectrumDataRouting();
+    void setupClockTimer();
+    void setupHardwareController();
+    void setupKpa1500();
+    void setupCatServer();
 
     void updateConnectionState(TcpClient::ConnectionState state);
     QString formatFrequency(quint64 freq);
