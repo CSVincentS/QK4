@@ -64,18 +64,7 @@ Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), m_radioState(new RadioState(this)), m_clockTimer(new QTimer(this)),
       m_menuModel(new MenuModel(this)), m_menuOverlay(nullptr) {
-    // Connection controller owns TcpClient, I/O thread, and NetworkMetrics
-    m_connectionController = new ConnectionController(m_radioState, this);
-
-    // Audio controller owns AudioEngine, Opus codecs, audio thread, and PTT state
-    m_audioController = new AudioController(m_connectionController, m_radioState, this);
-
-    // Spectrum controller owns panadapters, span buttons, and all spectrum wiring
-    m_spectrumController = new SpectrumController(m_connectionController, m_radioState, this);
-
-    // DX Cluster controller owns the cluster TCP client and spot cache
-    m_dxClusterController = new DxClusterController(m_radioState, this);
-    m_spectrumController->setDxClusterController(m_dxClusterController);
+    setupControllers();
 
     // IMPORTANT: setupUi() MUST be called BEFORE setupMenuBar()!
     // Qt 6.10.1 bug on macOS Tahoe: calling menuBar() before creating QRhiWidget
@@ -95,102 +84,10 @@ MainWindow::MainWindow(QWidget *parent)
         m_bottomMenuBar->setPttActive(false);
     });
 
-    // Menu items are populated from MEDF responses in onCatResponse()
-    // when the radio sends RDY; after connection
-
-    // Create menu overlay (positioned over spectrum container)
-    m_menuOverlay = new MenuOverlayWidget(m_menuModel, this);
-    m_menuOverlay->hide();
-
-    // Connect menu overlay signals
-    connect(m_menuOverlay, &MenuOverlayWidget::menuValueChangeRequested, this, &MainWindow::onMenuValueChangeRequested);
-    connect(m_menuOverlay, &MenuOverlayWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setMenuActive(false);
-        }
-    });
-
-    // Connect menu model value changes for display settings
-    connect(m_menuModel, &MenuModel::menuValueChanged, this, &MainWindow::onMenuModelValueChanged);
-
-    // Also check initial values when menu items are first loaded from MEDF
-    connect(m_menuModel, &MenuModel::menuItemAdded, this, [this](int menuId) {
-        const MenuItem *item = m_menuModel->getMenuItem(menuId);
-        if (item && item->name == "Spectrum Amplitude Units") {
-            bool useSUnits = (item->currentValue == 1);
-            qCDebug(qk4Main) << "Initial spectrum amplitude units:" << (useSUnits ? "S-UNITS" : "dBm");
-            if (m_spectrumController->panadapterA()) {
-                m_spectrumController->panadapterA()->setAmplitudeUnits(useSUnits);
-            }
-            if (m_spectrumController->panadapterB()) {
-                m_spectrumController->panadapterB()->setAmplitudeUnits(useSUnits);
-            }
-        }
-        if (item && item->name == "Mouse L/R Button QSY") {
-            m_mouseQsyMenuId = item->id;
-            m_mouseQsyMode = item->currentValue;
-            m_spectrumController->setMouseQsyMode(m_mouseQsyMode);
-            qCDebug(qk4Main) << "Mouse L/R Button QSY: menuId=" << m_mouseQsyMenuId << "mode=" << m_mouseQsyMode;
-        }
-        if (item && item->name == "FSK Mark-Tone") {
-            m_fskMarkToneMenuId = item->id;
-            int toneHz = item->options[item->currentValue].toInt();
-            qCDebug(qk4Main) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
-            if (m_spectrumController->panadapterA())
-                m_spectrumController->panadapterA()->setFskMarkTone(toneHz);
-            if (m_spectrumController->panadapterB())
-                m_spectrumController->panadapterB()->setFskMarkTone(toneHz);
-        }
-    });
-
-    // Create band selection popup
-    m_bandPopup = new BandPopupWidget(this);
-    connect(m_bandPopup, &BandPopupWidget::bandSelected, this, &MainWindow::onBandSelected);
-    connect(m_bandPopup, &BandPopupWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setBandActive(false);
-        }
-    });
-
-    // Create display popup
-    m_displayPopup = new DisplayPopupWidget(this);
-    connect(m_displayPopup, &DisplayPopupWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setDisplayActive(false);
-        }
-    });
-    // DisplayPopup pan mode changed -> update panadapter display
-    // (K4 doesn't echo #DPM commands, so DisplayPopup notifies us directly)
-    connect(m_displayPopup, &DisplayPopupWidget::dualPanModeChanged, this, [this](int mode) {
-        switch (mode) {
-        case 0: // A only
-            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::MainOnly);
-            break;
-        case 1: // B only
-            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::SubOnly);
-            break;
-        case 2: // Dual (A+B)
-            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::Dual);
-            break;
-        }
-    });
-
-    // DisplayPopup CAT commands -> TcpClient
-    connect(m_displayPopup, &DisplayPopupWidget::catCommandRequested, this,
-            [this](const QString &cmd) { m_connectionController->sendCAT(cmd); });
-
-    // Create Fn popup with dual-action buttons (macro system)
-    m_fnPopup = new FnPopupWidget(this);
-    connect(m_fnPopup, &FnPopupWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setFnActive(false);
-        }
-    });
-    connect(m_fnPopup, &FnPopupWidget::functionTriggered, this, &MainWindow::onFnFunctionTriggered);
-
-    // Create macro configuration dialog (full-screen overlay)
-    m_macroDialog = new MacroDialog(this);
-    m_macroDialog->hide();
+    setupMenuOverlay();
+    setupBandPopup();
+    setupDisplayPopup();
+    setupFnPopup();
 
     // Create button row popups for MAIN RX, SUB RX, TX
 
@@ -1859,6 +1756,130 @@ MainWindow::~MainWindow() {
         disconnect(m_kpa1500Client, nullptr, this, nullptr);
         m_kpa1500Client->disconnectFromHost();
     }
+}
+
+// ============================================================================
+// Phase 2 mechanical extractions — constructor setup helpers.
+// Pure cut/paste from the constructor body; no behavior change. See
+// PATTERNS.md → Controller Pattern for what will migrate in Phase 3.
+// ============================================================================
+
+void MainWindow::setupControllers() {
+    // Connection controller owns TcpClient, I/O thread, and NetworkMetrics
+    m_connectionController = new ConnectionController(m_radioState, this);
+
+    // Audio controller owns AudioEngine, Opus codecs, audio thread, and PTT state
+    m_audioController = new AudioController(m_connectionController, m_radioState, this);
+
+    // Spectrum controller owns panadapters, span buttons, and all spectrum wiring
+    m_spectrumController = new SpectrumController(m_connectionController, m_radioState, this);
+
+    // DX Cluster controller owns the cluster TCP client and spot cache
+    m_dxClusterController = new DxClusterController(m_radioState, this);
+    m_spectrumController->setDxClusterController(m_dxClusterController);
+}
+
+void MainWindow::setupMenuOverlay() {
+    // Menu items are populated from MEDF responses in onCatResponse()
+    // when the radio sends RDY; after connection
+
+    // Create menu overlay (positioned over spectrum container)
+    m_menuOverlay = new MenuOverlayWidget(m_menuModel, this);
+    m_menuOverlay->hide();
+
+    // Connect menu overlay signals
+    connect(m_menuOverlay, &MenuOverlayWidget::menuValueChangeRequested, this, &MainWindow::onMenuValueChangeRequested);
+    connect(m_menuOverlay, &MenuOverlayWidget::closed, this, [this]() {
+        if (m_bottomMenuBar) {
+            m_bottomMenuBar->setMenuActive(false);
+        }
+    });
+
+    // Connect menu model value changes for display settings
+    connect(m_menuModel, &MenuModel::menuValueChanged, this, &MainWindow::onMenuModelValueChanged);
+
+    // Also check initial values when menu items are first loaded from MEDF
+    connect(m_menuModel, &MenuModel::menuItemAdded, this, [this](int menuId) {
+        const MenuItem *item = m_menuModel->getMenuItem(menuId);
+        if (item && item->name == "Spectrum Amplitude Units") {
+            bool useSUnits = (item->currentValue == 1);
+            qCDebug(qk4Main) << "Initial spectrum amplitude units:" << (useSUnits ? "S-UNITS" : "dBm");
+            if (m_spectrumController->panadapterA()) {
+                m_spectrumController->panadapterA()->setAmplitudeUnits(useSUnits);
+            }
+            if (m_spectrumController->panadapterB()) {
+                m_spectrumController->panadapterB()->setAmplitudeUnits(useSUnits);
+            }
+        }
+        if (item && item->name == "Mouse L/R Button QSY") {
+            m_mouseQsyMenuId = item->id;
+            m_mouseQsyMode = item->currentValue;
+            m_spectrumController->setMouseQsyMode(m_mouseQsyMode);
+            qCDebug(qk4Main) << "Mouse L/R Button QSY: menuId=" << m_mouseQsyMenuId << "mode=" << m_mouseQsyMode;
+        }
+        if (item && item->name == "FSK Mark-Tone") {
+            m_fskMarkToneMenuId = item->id;
+            int toneHz = item->options[item->currentValue].toInt();
+            qCDebug(qk4Main) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
+            if (m_spectrumController->panadapterA())
+                m_spectrumController->panadapterA()->setFskMarkTone(toneHz);
+            if (m_spectrumController->panadapterB())
+                m_spectrumController->panadapterB()->setFskMarkTone(toneHz);
+        }
+    });
+}
+
+void MainWindow::setupBandPopup() {
+    m_bandPopup = new BandPopupWidget(this);
+    connect(m_bandPopup, &BandPopupWidget::bandSelected, this, &MainWindow::onBandSelected);
+    connect(m_bandPopup, &BandPopupWidget::closed, this, [this]() {
+        if (m_bottomMenuBar) {
+            m_bottomMenuBar->setBandActive(false);
+        }
+    });
+}
+
+void MainWindow::setupDisplayPopup() {
+    m_displayPopup = new DisplayPopupWidget(this);
+    connect(m_displayPopup, &DisplayPopupWidget::closed, this, [this]() {
+        if (m_bottomMenuBar) {
+            m_bottomMenuBar->setDisplayActive(false);
+        }
+    });
+    // DisplayPopup pan mode changed -> update panadapter display
+    // (K4 doesn't echo #DPM commands, so DisplayPopup notifies us directly)
+    connect(m_displayPopup, &DisplayPopupWidget::dualPanModeChanged, this, [this](int mode) {
+        switch (mode) {
+        case 0: // A only
+            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::MainOnly);
+            break;
+        case 1: // B only
+            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::SubOnly);
+            break;
+        case 2: // Dual (A+B)
+            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::Dual);
+            break;
+        }
+    });
+
+    // DisplayPopup CAT commands -> TcpClient
+    connect(m_displayPopup, &DisplayPopupWidget::catCommandRequested, this,
+            [this](const QString &cmd) { m_connectionController->sendCAT(cmd); });
+}
+
+void MainWindow::setupFnPopup() {
+    // Create Fn popup with dual-action buttons (macro system)
+    m_fnPopup = new FnPopupWidget(this);
+    connect(m_fnPopup, &FnPopupWidget::closed, this, [this]() {
+        if (m_bottomMenuBar) {
+            m_bottomMenuBar->setFnActive(false);
+        }
+    });
+    connect(m_fnPopup, &FnPopupWidget::functionTriggered, this, &MainWindow::onFnFunctionTriggered);
+
+    // Create macro configuration dialog (full-screen overlay)
+    m_macroDialog = new MacroDialog(this);
+    m_macroDialog->hide();
 }
 
 void MainWindow::setupMenuBar() {

@@ -134,6 +134,17 @@ private:
     void setupUi();
     void setupTopStatusBar(QWidget *parent);
     void setupVfoSection(QWidget *parent);
+
+    // Phase 2 mechanical extractions — see PATTERNS.md / CONVENTIONS.md Rule 12.
+    // These move inline constructor code into named helpers for readability;
+    // no behavior change. Phase 3 lifts some of these seams into dedicated
+    // controller classes under src/controllers/.
+    void setupControllers();
+    void setupMenuOverlay();
+    void setupBandPopup();
+    void setupDisplayPopup();
+    void setupFnPopup();
+
     void updateConnectionState(TcpClient::ConnectionState state);
     QString formatFrequency(quint64 freq);
     void updateModeLabels();
