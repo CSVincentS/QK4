@@ -34,6 +34,13 @@ PanadapterRhiWidget *SpectrumController::panadapterB() const {
     return m_panadapterB;
 }
 
+void SpectrumController::clearDisplays() {
+    if (m_panadapterA)
+        m_panadapterA->clear();
+    if (m_panadapterB)
+        m_panadapterB->clear();
+}
+
 void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA, VFOWidget *vfoB) {
     m_vfoA = vfoA;
     m_vfoB = vfoB;

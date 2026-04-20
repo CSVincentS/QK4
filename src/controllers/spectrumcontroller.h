@@ -40,6 +40,10 @@ public:
     void setMouseQsyMode(int mode);
     void setDxClusterController(DxClusterController *controller);
 
+    // Clear both panadapter displays — used when the K4 disconnects to
+    // prevent stale spectrum data from sitting on-screen.
+    void clearDisplays();
+
 public slots:
     void onSpectrumData(int receiver, const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq,
                         qint32 sampleRate, float noiseFloor);

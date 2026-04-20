@@ -135,6 +135,28 @@ void StatusBarController::setConnectionStatus(const QString &text, const QString
         m_connectionStatusLabel->setStyleSheet(styleSheet);
 }
 
+void StatusBarController::showDisconnected() {
+    m_connectionStatusLabel->setText("K4");
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                               .arg(K4Styles::Colors::InactiveGray)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
+    m_titleLabel->setText("Elecraft K4");
+}
+
+void StatusBarController::showConnecting() {
+    m_connectionStatusLabel->setText("K4");
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                               .arg(K4Styles::Colors::AccentAmber)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
+}
+
+void StatusBarController::showConnected() {
+    m_connectionStatusLabel->setText("K4");
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                               .arg(K4Styles::Colors::StatusGreen)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
+}
+
 void StatusBarController::setForwardPower(double watts) {
     QString powerStr;
     if (watts < 10.0) {

@@ -63,6 +63,10 @@ public:
     // Set which receiver is active for filter controls
     void setActiveReceiver(bool isSubRx);
 
+    // Reset all displayed values (knobs, readings) to idle state on K4
+    // disconnect so stale data doesn't linger on-screen.
+    void resetToDefaults();
+
     // Volume control
     int volume() const;
     int subVolume() const;

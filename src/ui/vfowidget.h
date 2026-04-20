@@ -68,6 +68,12 @@ public:
     // Access to frequency display for styling (e.g., dimming when SUB RX off)
     FrequencyDisplayWidget *frequencyDisplay() const { return m_frequencyDisplay; }
 
+    // Reset all displayed state to idle defaults. Used on K4 disconnect so
+    // stale values don't linger on-screen. Also clears the mini-pan and
+    // resets its mode/filter overlay to sensible defaults for the next
+    // connect.
+    void resetToDefaults();
+
     // Get type
     VFOType type() const { return m_type; }
 

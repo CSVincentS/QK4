@@ -39,6 +39,10 @@ public:
     // Shape color (for VFO A/B color coding)
     void setShapeColor(const QColor &fill, const QColor &outline);
 
+    // Reset to idle state on K4 disconnect: zero bandwidth, 50 decahertz
+    // shift, centered filter position, empty mode, no data sub-mode.
+    void resetToDefaults();
+
 protected:
     void paintEvent(QPaintEvent *event) override;
 

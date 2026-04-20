@@ -110,6 +110,12 @@ private:
     void setupCatServer();
 
     void updateConnectionState(TcpClient::ConnectionState state);
+    // Disconnect-path helper — owners of their own state each implement a
+    // reset method (VFOWidget::resetToDefaults, SideControlPanel::resetToDefaults,
+    // StatusBarController::clearReadings, SpectrumController::clearDisplays,
+    // KPA1500UiController::disconnectFromHost, RadioState::reset). This helper
+    // covers only the labels MainWindow still owns directly.
+    void resetUiForDisconnect();
     QString formatFrequency(quint64 freq);
     void updateModeLabels();
 

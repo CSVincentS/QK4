@@ -352,6 +352,28 @@ void VFOWidget::setMiniPanAveraging(int level) {
         m_miniPan->setAveraging(level);
 }
 
+void VFOWidget::resetToDefaults() {
+    setFrequency(QString());
+    setSMeterValue(0);
+    setTransmitting(false);
+    setTxMeters(0, 0, 0, 1.0);
+    setAGC("AGC");
+    setPreamp(false, 0);
+    setAtt(false, 0);
+    setNB(false);
+    setNR(false);
+    setNotch(false, false);
+    setApf(false, 0);
+    setTuningRate(0);
+    if (m_miniPan)
+        m_miniPan->clear();
+    setMiniPanMode("USB");
+    setMiniPanFilterBandwidth(2400);
+    setMiniPanIfShift(50);
+    setMiniPanCwPitch(600);
+    setMiniPanNotchFilter(false, 0);
+}
+
 void VFOWidget::showNormal() {
     m_stackedWidget->setCurrentIndex(0);
 }

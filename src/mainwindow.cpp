@@ -2030,207 +2030,84 @@ void MainWindow::onSMeterBChanged(double value) {
 void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
     switch (state) {
     case TcpClient::Disconnected:
-        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px;")
-                                                             .arg(K4Styles::Colors::InactiveGray)
-                                                             .arg(K4Styles::Dimensions::FontSizeButton));
-        m_statusBarController->setTitle("Elecraft K4");
-        // Stop audio engine to prevent accessing invalid data
-        m_audioController->stopAudio();
-
-        // Clear all UI state to avoid showing stale data
-        // Clear spectrum displays
-        m_spectrumController->panadapterA()->clear();
-        m_spectrumController->panadapterB()->clear();
-
-        // Clear mini-pan displays
-        if (m_vfoA->miniPan())
-            m_vfoA->miniPan()->clear();
-        if (m_vfoB->miniPan())
-            m_vfoB->miniPan()->clear();
-
-        // Reset VFO displays and embedded meters
-        m_vfoA->setFrequency(0);
-        m_vfoA->setSMeterValue(0);
-        m_vfoA->setTransmitting(false);
-        m_vfoA->setTxMeters(0, 0, 0, 1.0);
-        m_vfoB->setFrequency(0);
-        m_vfoB->setSMeterValue(0);
-        m_vfoB->setTransmitting(false);
-        m_vfoB->setTxMeters(0, 0, 0, 1.0);
-
-        // Reset model state so all change-guards fire on reconnect
-        m_radioState->reset();
-
-        // --- Reset all remaining UI to clean default state ---
-
-        // Mode labels
-        m_modeALabel->setText("");
-        m_modeBLabel->setText("");
-
-        // Antenna labels
-        m_txAntennaLabel->setText("");
-        m_rxAntALabel->setText("");
-        m_rxAntBLabel->setText("");
-
-        // Split
-        m_splitLabel->setText("SPLIT OFF");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                        .arg(K4Styles::Colors::AccentAmber)
-                                        .arg(K4Styles::Dimensions::FontSizeButton));
-
-        // TX indicators (default: left triangle, amber)
-        m_txTriangle->setText("◀");
-        m_txTriangleB->setText("");
-
-        // B SET
-        m_bSetLabel->setVisible(false);
-
-        // SUB/DIV (disabled state)
-        m_subLabel->setStyleSheet(
-            QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
-                .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                .arg(K4Styles::Dimensions::FontSizeNormal));
-        m_divLabel->setStyleSheet(
-            QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
-                .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                .arg(K4Styles::Dimensions::FontSizeNormal));
-
-        // Dim VFO B (SUB off state)
-        m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
-        m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                        .arg(K4Styles::Colors::InactiveGray)
-                                        .arg(K4Styles::Dimensions::FontSizeLarge));
-
-        // Message bank
-        m_msgBankLabel->setText("MSG: I");
-        m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                          .arg(K4Styles::Colors::AccentAmber)
-                                          .arg(K4Styles::Dimensions::FontSizeButton));
-
-        // RIT/XIT (disabled state)
-        m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::InactiveGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-        m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::InactiveGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-        m_ritXitValueLabel->setText("+0.00");
-        m_ritXitValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                              .arg(K4Styles::Colors::InactiveGray)
-                                              .arg(K4Styles::Dimensions::FontSizePopup));
-
-        // ATU (grey/inactive)
-        m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::TextGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-
-        // VOX / QSK (grey/inactive)
-        m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::TextGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-        m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::TextGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-
-        // TEST (hidden)
-        m_vfoRow->setTestVisible(false);
-
-        // VFO indicators (AGC, PRE, ATT, NB, NR, Notch, APF, Tuning Rate)
-        m_vfoA->setAGC("AGC");
-        m_vfoA->setPreamp(false, 0);
-        m_vfoA->setAtt(false, 0);
-        m_vfoA->setNB(false);
-        m_vfoA->setNR(false);
-        m_vfoA->setNotch(false, false);
-        m_vfoA->setApf(false, 0);
-        m_vfoA->setTuningRate(0);
-
-        m_vfoB->setAGC("AGC");
-        m_vfoB->setPreamp(false, 0);
-        m_vfoB->setAtt(false, 0);
-        m_vfoB->setNB(false);
-        m_vfoB->setNR(false);
-        m_vfoB->setNotch(false, false);
-        m_vfoB->setApf(false, 0);
-        m_vfoB->setTuningRate(0);
-
-        // VFO locks (both unlocked)
-        m_vfoRow->setLockA(false);
-        m_vfoRow->setLockB(false);
-
-        // Side control panel values
-        m_sideControlPanel->setBandwidth(0);
-        m_sideControlPanel->setShift(0);
-        m_sideControlPanel->setHighCut(0);
-        m_sideControlPanel->setLowCut(0);
-        m_sideControlPanel->setPower(0);
-        m_sideControlPanel->setDelay(0);
-        m_sideControlPanel->setWpm(0);
-        m_sideControlPanel->setPitch(0);
-        m_sideControlPanel->setMicGain(0);
-        m_sideControlPanel->setCompression(0);
-        m_sideControlPanel->setMainRfGain(0);
-        m_sideControlPanel->setMainSquelch(0);
-        m_sideControlPanel->setSubRfGain(0);
-        m_sideControlPanel->setSubSquelch(0);
-
-        // Status bar values
-        m_statusBarController->clearReadings();
-        m_sideControlPanel->setPowerReading(0);
-        m_sideControlPanel->setSwr(1.0);
-        m_sideControlPanel->setVoltage(0);
-        m_sideControlPanel->setCurrent(0);
-
-        // Filter indicator widgets
-        m_filterAWidget->setBandwidth(0);
-        m_filterAWidget->setShift(50);
-        m_filterAWidget->setFilterPosition(1);
-        m_filterAWidget->setMode("");
-        m_filterBWidget->setBandwidth(0);
-        m_filterBWidget->setShift(50);
-        m_filterBWidget->setFilterPosition(1);
-        m_filterBWidget->setMode("");
-        m_filterAWidget->setDataSubMode(0);
-        m_filterBWidget->setDataSubMode(0);
-
-        // VFO mini-pan overlays (reset mode/filter state)
-        m_vfoA->setMiniPanMode("USB");
-        m_vfoA->setMiniPanFilterBandwidth(2400);
-        m_vfoA->setMiniPanIfShift(50);
-        m_vfoA->setMiniPanCwPitch(600);
-        m_vfoA->setMiniPanNotchFilter(false, 0);
-        m_vfoB->setMiniPanMode("USB");
-        m_vfoB->setMiniPanFilterBandwidth(2400);
-        m_vfoB->setMiniPanIfShift(50);
-        m_vfoB->setMiniPanCwPitch(600);
-        m_vfoB->setMiniPanNotchFilter(false, 0);
-
-        // Clear menu model
-        m_menuController->menuModel()->clear();
-
-        // Disconnect KPA1500 when K4 disconnects.
-        m_kpa1500UiController->disconnectFromHost();
-
+        m_statusBarController->showDisconnected();
+        resetUiForDisconnect();
         break;
-
     case TcpClient::Connecting:
-        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                             .arg(K4Styles::Colors::AccentAmber)
-                                                             .arg(K4Styles::Dimensions::FontSizeButton));
-        break;
-
     case TcpClient::Authenticating:
-        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                             .arg(K4Styles::Colors::AccentAmber)
-                                                             .arg(K4Styles::Dimensions::FontSizeButton));
+        m_statusBarController->showConnecting();
         break;
-
     case TcpClient::Connected:
-        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                             .arg(K4Styles::Colors::StatusGreen)
-                                                             .arg(K4Styles::Dimensions::FontSizeButton));
+        m_statusBarController->showConnected();
         break;
     }
+}
+
+// WHY: split out from updateConnectionState so the Disconnected branch is
+// scannable. Each owning controller / widget absorbs its own subset of the
+// reset; this helper covers only the labels MainWindow still owns directly
+// (mode / antenna / split / bset / sub-div / RIT-XIT / ATU / VOX-QSK / msg).
+void MainWindow::resetUiForDisconnect() {
+    m_audioController->stopAudio();
+    m_spectrumController->clearDisplays();
+    m_vfoA->resetToDefaults();
+    m_vfoB->resetToDefaults();
+    m_vfoRow->setLockA(false);
+    m_vfoRow->setLockB(false);
+    m_vfoRow->setTestVisible(false);
+    m_sideControlPanel->resetToDefaults();
+    m_filterAWidget->resetToDefaults();
+    m_filterBWidget->resetToDefaults();
+    m_statusBarController->clearReadings();
+    m_menuController->menuModel()->clear();
+    m_kpa1500UiController->disconnectFromHost();
+    m_radioState->reset();
+
+    // MainWindow-owned labels that no controller has absorbed yet.
+    m_modeALabel->setText("");
+    m_modeBLabel->setText("");
+    m_txAntennaLabel->setText("");
+    m_rxAntALabel->setText("");
+    m_rxAntBLabel->setText("");
+    m_txTriangle->setText("◀");
+    m_txTriangleB->setText("");
+    m_bSetLabel->setVisible(false);
+    m_ritXitValueLabel->setText("+0.00");
+    m_msgBankLabel->setText("MSG: I");
+    m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                      .arg(K4Styles::Colors::AccentAmber)
+                                      .arg(K4Styles::Dimensions::FontSizeButton));
+    m_splitLabel->setText("SPLIT OFF");
+    m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                    .arg(K4Styles::Colors::AccentAmber)
+                                    .arg(K4Styles::Dimensions::FontSizeButton));
+
+    // Disabled / inactive styling for state labels.
+    const QString disabledLarge = QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::InactiveGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge);
+    const QString greyedLarge = QString("color: %1; font-size: %2px; font-weight: bold;")
+                                    .arg(K4Styles::Colors::TextGray)
+                                    .arg(K4Styles::Dimensions::FontSizeLarge);
+    m_modeBLabel->setStyleSheet(disabledLarge);
+    m_ritLabel->setStyleSheet(disabledLarge);
+    m_xitLabel->setStyleSheet(disabledLarge);
+    m_atuLabel->setStyleSheet(greyedLarge);
+    m_voxLabel->setStyleSheet(greyedLarge);
+    m_qskLabel->setStyleSheet(greyedLarge);
+    m_ritXitValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                          .arg(K4Styles::Colors::InactiveGray)
+                                          .arg(K4Styles::Dimensions::FontSizePopup));
+
+    const QString subDivDisabled =
+        QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
+            .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
+            .arg(K4Styles::Dimensions::FontSizeNormal);
+    m_subLabel->setStyleSheet(subDivDisabled);
+    m_divLabel->setStyleSheet(subDivDisabled);
+
+    // VFO B dim — SUB off state.
+    m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
 }
 
 void MainWindow::onRfPowerChanged(double watts, bool isQrp) {

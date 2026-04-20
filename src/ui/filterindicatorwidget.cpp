@@ -263,3 +263,11 @@ void FilterIndicatorWidget::paintEvent(QPaintEvent *) {
     QRectF textRect(0, textY, w, h - textY);
     painter.drawText(textRect, Qt::AlignHCenter | Qt::AlignTop, text);
 }
+
+void FilterIndicatorWidget::resetToDefaults() {
+    setBandwidth(0);
+    setShift(50);
+    setFilterPosition(1);
+    setMode("");
+    setDataSubMode(0);
+}

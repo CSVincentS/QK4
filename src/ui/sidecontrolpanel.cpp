@@ -628,6 +628,30 @@ void SideControlPanel::setCurrent(double amps) {
     m_voltageCurrentLabel->setText(QString("%1  %2A").arg(voltsPart).arg(amps, 0, 'f', 1));
 }
 
+void SideControlPanel::resetToDefaults() {
+    // Knob / filter values
+    setBandwidth(0);
+    setShift(0);
+    setHighCut(0);
+    setLowCut(0);
+    setPower(0);
+    setDelay(0);
+    setWpm(0);
+    setPitch(0);
+    setMicGain(0);
+    setCompression(0);
+    setMainRfGain(0);
+    setMainSquelch(0);
+    setSubRfGain(0);
+    setSubSquelch(0);
+
+    // Status readings
+    setPowerReading(0);
+    setSwr(1.0);
+    setVoltage(0);
+    setCurrent(0);
+}
+
 QPushButton *SideControlPanel::createIconButton(const QString &text) {
     auto *btn = new QPushButton(text, this);
     btn->setFixedSize(K4Styles::Dimensions::CompactButtonSize, K4Styles::Dimensions::CompactButtonSize);
