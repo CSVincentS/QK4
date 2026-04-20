@@ -12,7 +12,6 @@
 #include "settings/radiosettings.h"
 #include "models/radiostate.h"
 #include "ui/vfowidget.h"
-#include "ui/wheelaccumulator.h"
 
 class AudioController;
 class SpectrumController;
@@ -27,6 +26,7 @@ class ButtonRowDispatcher;
 class MacroController;
 class ProcessingDisplayController;
 class VfoRowIndicatorController;
+class RitXitController;
 class AntennaConfigController;
 class AntennaDisplayController;
 class TextDecodeController;
@@ -69,7 +69,6 @@ private slots:
     void onSupplyVoltageChanged(double volts);
     void onSupplyCurrentChanged(double amps);
     void onSwrChanged(double swr);
-    void onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset);
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
     void toggleDisplayPopup();
@@ -191,6 +190,7 @@ private:
     MacroController *m_macroController;
     ProcessingDisplayController *m_processingDisplayController;
     VfoRowIndicatorController *m_vfoRowIndicatorController;
+    RitXitController *m_ritXitController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     AntennaDisplayController *m_antennaDisplayController;
@@ -214,8 +214,6 @@ private:
 
     // Notification popup for K4 error/status messages (ERxx:)
     NotificationWidget *m_notificationWidget;
-
-    WheelAccumulator m_ritWheelAccumulator;
 };
 
 #endif // MAINWINDOW_H

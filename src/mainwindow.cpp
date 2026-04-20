@@ -12,6 +12,7 @@
 #include "controllers/macrocontroller.h"
 #include "controllers/processingdisplaycontroller.h"
 #include "controllers/vforowindicatorcontroller.h"
+#include "controllers/ritxitcontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -123,6 +124,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
                                                       m_qskLabel,   m_atuLabel,   m_msgBankLabel};
     m_vfoRowIndicatorController =
         new VfoRowIndicatorController(m_radioState, m_spectrumController, m_vfoRow, rowLabels, this);
+
+    m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
+                                              m_xitLabel, m_ritXitValueLabel, this);
+    // RIT offset shifts rendered VFO frequency — refresh displays on any
+    // RIT/XIT state change emitted by the controller.
+    connect(m_ritXitController, &RitXitController::displayRefreshRequested, this, [this]() {
+        onFrequencyChanged(m_radioState->vfoA());
+        onFrequencyBChanged(m_radioState->vfoB());
+    });
 
     setupCatServer();
 }
@@ -436,34 +446,7 @@ void MainWindow::setupRadioStateWiring() {
     // RadioState signals -> Center section updates
     // VFO-row indicator labels (split / vox / qsk / test / atu / msg bank)
     // are observed by VfoRowIndicatorController; see setupUi constructor.
-    connect(m_radioState, &RadioState::ritXitChanged, this, [this](bool ritEnabled, bool xitEnabled, int offset) {
-        if (!m_radioState->bSetEnabled()) {
-            // BSET off: RIT/XIT state from VFO A
-            // In split mode, XIT offset lives in RO$ (VFO B register).
-            // Use RO$ when XIT is active OR when XIT was active (preserved value on toggle-off)
-            int displayOffset = offset;
-            if (m_radioState->splitEnabled() && !ritEnabled && m_radioState->ritXitOffsetB() != 0)
-                displayOffset = m_radioState->ritXitOffsetB();
-            onRitXitChanged(ritEnabled, xitEnabled, displayOffset);
-        } else {
-            // BSET on: RIT from VFO B (RO$); XIT from RO (no split) or RO$ (split)
-            int displayOffset;
-            if (xitEnabled)
-                displayOffset = m_radioState->splitEnabled() ? m_radioState->ritXitOffsetB() : offset;
-            else
-                displayOffset = m_radioState->ritXitOffsetB();
-            onRitXitChanged(m_radioState->ritEnabledB(), xitEnabled, displayOffset);
-        }
-    });
-    connect(m_radioState, &RadioState::ritXitBChanged, this, [this](bool ritEnabled, int offset) {
-        if (m_radioState->bSetEnabled()) {
-            // BSET on: VFO B offset changed — update display
-            onRitXitChanged(ritEnabled, m_radioState->xitEnabled(), offset);
-        } else if (m_radioState->splitEnabled() && m_radioState->xitEnabled()) {
-            // Split + XIT: K4 routes XIT offset to RO$ (VFO B register)
-            onRitXitChanged(m_radioState->ritEnabled(), true, offset);
-        }
-    });
+    // RIT/XIT label state + wheel/click handling owned by RitXitController.
 
     // Filter position indicators
     connect(m_radioState, &RadioState::filterPositionChanged, this,
@@ -788,12 +771,7 @@ void MainWindow::setupUi() {
         // Change side panel BW/SHFT indicator color (cyan=MainRx, green=SubRx)
         m_sideControlPanel->setActiveReceiver(enabled);
 
-        // Switch RIT/XIT display to match active VFO
-        if (enabled) {
-            onRitXitChanged(m_radioState->ritEnabledB(), m_radioState->xitEnabled(), m_radioState->ritXitOffsetB());
-        } else {
-            onRitXitChanged(m_radioState->ritEnabled(), m_radioState->xitEnabled(), m_radioState->ritXitOffset());
-        }
+        // RIT/XIT display refresh on BSET toggle is handled inside RitXitController.
     });
 
     // Bottom Menu Bar
@@ -2138,53 +2116,6 @@ void MainWindow::onDisplayFpsChanged(int fps) {
     m_menuController->setDisplayFps(fps);
 }
 
-void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
-    // Update RIT label
-    if (ritEnabled) {
-        m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold; border: none;")
-                                      .arg(K4Styles::Colors::TextWhite)
-                                      .arg(K4Styles::Dimensions::FontSizeMedium));
-    } else {
-        m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
-                                      .arg(K4Styles::Colors::InactiveGray)
-                                      .arg(K4Styles::Dimensions::FontSizeMedium));
-    }
-
-    // Update XIT label
-    if (xitEnabled) {
-        m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold; border: none;")
-                                      .arg(K4Styles::Colors::TextWhite)
-                                      .arg(K4Styles::Dimensions::FontSizeMedium));
-    } else {
-        m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
-                                      .arg(K4Styles::Colors::InactiveGray)
-                                      .arg(K4Styles::Dimensions::FontSizeMedium));
-    }
-
-    // Update offset value (in kHz)
-    // Value is white if RIT or XIT is on, grey if both are off
-    double offsetKHz = offset / 1000.0;
-    QString sign = (offset >= 0) ? "+" : "";
-    m_ritXitValueLabel->setText(QString("%1%2").arg(sign).arg(offsetKHz, 0, 'f', 2));
-
-    QString valueColor = (ritEnabled || xitEnabled) ? K4Styles::Colors::TextWhite : K4Styles::Colors::InactiveGray;
-    m_ritXitValueLabel->setStyleSheet(
-        QString("color: %1; font-size: %2px; font-weight: bold; border: none; padding: 0 11px;")
-            .arg(valueColor)
-            .arg(K4Styles::Dimensions::FontSizePopup));
-
-    // Refresh frequency displays and panadapter passband — RIT offset affects receive frequency
-    onFrequencyChanged(m_radioState->vfoA());
-    onFrequencyBChanged(m_radioState->vfoB());
-
-    // Update panadapter passband positions (tuned frequency includes RIT offset when active)
-    // When BSET is on, panadapter A shows VFO B's passband position (matching the UI switch)
-    m_spectrumController->updatePanadapterPassbands();
-
-    // Update TX marker — shows where we'll transmit when RIT/XIT splits TX from RX
-    m_spectrumController->updateTxMarkers();
-}
-
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     // Clicks on VFO-A square / mode label → mode popup targeted at VFO A.
     if ((watched == m_vfoASquare || watched == m_modeALabel) && event->type() == QEvent::MouseButtonPress) {
@@ -2217,45 +2148,19 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         }
     }
 
-    // RIT label click - toggle RIT on/off (SW54 routes correctly when BSET targets VFO B)
-    if (watched == m_ritLabel && event->type() == QEvent::MouseButtonPress) {
-        bool bSet = m_radioState->bSetEnabled();
-        m_connectionController->sendCAT(bSet ? "SW54;" : "RT/;");
-        // K4 doesn't echo RT$/RO$ for SW54 — query VFO B RIT state
-        if (bSet) {
-            m_connectionController->sendCAT("RT$;");
-            m_connectionController->sendCAT("RO$;");
-        }
-        return true;
-    }
-
-    // XIT label click - toggle XIT on/off
-    if (watched == m_xitLabel && event->type() == QEvent::MouseButtonPress) {
-        m_connectionController->sendCAT("XT/;");
-        return true;
+    // RIT / XIT label clicks + wheel routed to RitXitController.
+    if (watched == m_ritLabel && event->type() == QEvent::MouseButtonPress)
+        return m_ritXitController->handleRitLabelClick();
+    if (watched == m_xitLabel && event->type() == QEvent::MouseButtonPress)
+        return m_ritXitController->handleXitLabelClick();
+    if (event->type() == QEvent::Wheel &&
+        (watched == m_ritXitBox || watched == m_ritLabel || watched == m_xitLabel || watched == m_ritXitValueLabel)) {
+        return m_ritXitController->handleWheel(static_cast<QWheelEvent *>(event));
     }
 
     // TX indicator click - toggle split on/off
     if (watched == m_txIndicator && event->type() == QEvent::MouseButtonPress) {
         m_connectionController->sendCAT("SW145;");
-        return true;
-    }
-
-    // Mouse wheel on RIT/XIT box (or its child widgets) - adjust offset using RU/RD commands
-    // K4 routes RU;/RD; based on active mode: RIT → RO (VFO A), XIT → RO$ (VFO B)
-    // BSET + RIT: use RU$/RD$ to force VFO B's RIT offset
-    if (event->type() == QEvent::Wheel &&
-        (watched == m_ritXitBox || watched == m_ritLabel || watched == m_xitLabel || watched == m_ritXitValueLabel)) {
-        auto *wheelEvent = static_cast<QWheelEvent *>(event);
-        int steps = m_ritWheelAccumulator.accumulate(wheelEvent);
-        if (steps != 0) {
-            bool bSet = m_radioState->bSetEnabled();
-            bool adjustB = bSet && !m_radioState->xitEnabled();
-            QString upCmd = adjustB ? "RU$;" : "RU;";
-            QString downCmd = adjustB ? "RD$;" : "RD;";
-            for (int i = 0; i < qAbs(steps); ++i)
-                m_connectionController->sendCAT(steps > 0 ? upCmd : downCmd);
-        }
         return true;
     }
 
