@@ -1036,14 +1036,17 @@ void RadioState::registerCommandHandlers() {
                                   handleIntPair(c, 3, m_filterPositionB, 1, 3, &RadioState::filterPositionBChanged);
                               }});
     // RG$ — strips leading dash before parsing
+    // WHY: K4 reports RF gain as an attenuation in the range -0..-60 dB
+    // ("RG-030;" = -30 dB). Throughout the codebase (SideControlPanel UI,
+    // MainWindow scroll handlers, setRfGain()) RF gain is carried as a
+    // positive *magnitude* 0..60; the minus sign is re-added only when
+    // dispatching CAT or formatting for display. We take qAbs() here to
+    // keep the magnitude convention explicit.
     m_commandHandlers.append({"RG$", [this](const QString &c) {
                                   if (c.length() <= 3)
                                       return;
-                                  QString val = c.mid(3);
-                                  if (val.startsWith('-'))
-                                      val = val.mid(1);
                                   bool ok;
-                                  int rg = val.toInt(&ok);
+                                  int rg = qAbs(c.mid(3).toInt(&ok));
                                   if (ok && m_rfGainB != rg) {
                                       m_rfGainB = rg;
                                       emit rfGainBChanged(m_rfGainB);
@@ -1157,14 +1160,12 @@ void RadioState::registerCommandHandlers() {
                               }});
     m_commandHandlers.append({"CW", [this](const QString &c) { handleCW(c); }});
     // RG — deduplicated inline (strips leading dash)
+    // WHY: see RG$ handler above — RF gain is carried as positive magnitude 0..60.
     m_commandHandlers.append({"RG", [this](const QString &c) {
                                   if (c.length() <= 2)
                                       return;
-                                  QString val = c.mid(2);
-                                  if (val.startsWith('-'))
-                                      val = val.mid(1);
                                   bool ok;
-                                  int rg = val.toInt(&ok);
+                                  int rg = qAbs(c.mid(2).toInt(&ok));
                                   if (ok && m_rfGain != rg) {
                                       m_rfGain = rg;
                                       emit rfGainChanged(m_rfGain);

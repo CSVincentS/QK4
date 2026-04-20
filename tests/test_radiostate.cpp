@@ -1648,12 +1648,12 @@ private slots:
         QCOMPARE(spy.count(), 0);
     }
 
-    // --- RG / RG$ (RF gain — handler strips leading '-') ---
-    // WHY: The K4 reports RF gain as a negative value (e.g. "RG-030;" for
-    // -30 dB), but the handler drops the sign and stores the magnitude. UI
-    // callers re-apply the negative sign for display. Locking this in as
-    // current behavior; if Phase 1 surfaces this as a real bug, fix it in a
-    // dedicated commit.
+    // --- RG / RG$ (RF gain — stored as positive magnitude 0..60) ---
+    // WHY: K4 reports RF gain as attenuation -0..-60 dB, but the entire
+    // QK4 codebase (SideControlPanel display, MainWindow scroll handler,
+    // setRfGain setter) carries it as a positive magnitude and re-adds
+    // the minus sign at the display/CAT boundary. Handler uses qAbs() to
+    // make that convention explicit.
     void testRfGainStoresMagnitude() {
         RadioState rs;
         QSignalSpy spy(&rs, &RadioState::rfGainChanged);
