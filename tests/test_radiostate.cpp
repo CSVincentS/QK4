@@ -2676,6 +2676,177 @@ private slots:
         rs.parseCATCommand("FP2;");
         QCOMPARE(spy.count(), 0);
     }
+
+    // =========================================================================
+    // Phase 0.8 Backfill — Sentinel-value audit
+    // Many RadioState fields are initialized to sentinels (-1, -999, -110,
+    // etc.) so the *first* CAT update after construction or reset() always
+    // differs from the stored value and fires a signal. The two risks the
+    // sentinel convention guards against:
+    //   1. reset() forgets a field → stale data persists past a reconnect.
+    //   2. A sentinel value collides with a legal value → first update is
+    //      silently absorbed; UI never refreshes.
+    // The tests below exercise the resilience of both invariants across a
+    // representative slice of subsystems.
+    // =========================================================================
+
+    // Directly verify reset() restores each sentinel-initialized field to
+    // its original value. A representative cross-subsystem sample.
+    void testResetRestoresSentinels() {
+        RadioState rs;
+        // Change state across every subsystem.
+        rs.parseCATCommand("FA00014074000;");
+        rs.parseCATCommand("FP1;");
+        rs.parseCATCommand("BW240;");
+        rs.parseCATCommand("IS50;");
+        rs.parseCATCommand("CW60;");
+        rs.parseCATCommand("MG050;");
+        rs.parseCATCommand("CP015;");
+        rs.parseCATCommand("RG-020;");
+        rs.parseCATCommand("SQ010;");
+        rs.parseCATCommand("KS020;");
+        rs.parseCATCommand("AN3;");
+        rs.parseCATCommand("AT1;");
+        rs.parseCATCommand("RO+0500;");
+        rs.parseCATCommand("VT3;");
+        rs.parseCATCommand("ML0050;");
+        rs.parseCATCommand("MN2;");
+        rs.parseCATCommand("SL3;");
+        rs.parseCATCommand("MI3;");
+        rs.parseCATCommand("VGV030;");
+        rs.parseCATCommand("VI020;");
+        rs.parseCATCommand("#SCL080;");
+        rs.parseCATCommand("#AVG05;");
+        rs.parseCATCommand("#PKM1;");
+        rs.parseCATCommand("DT2;");
+        rs.parseCATCommand("DR1;");
+        rs.parseCATCommand("TD132;");
+        rs.parseCATCommand("BL1+25;");
+
+        rs.reset();
+
+        // Frequency/VFO sentinels (these zero, not -1)
+        QCOMPARE(rs.frequency(), quint64(0));
+        QCOMPARE(rs.tuningStep(), -1);
+        QCOMPARE(rs.tuningStepB(), -1);
+        // Mode/filter
+        QCOMPARE(rs.mode(), RadioState::Unknown);
+        QCOMPARE(rs.modeB(), RadioState::Unknown);
+        QCOMPARE(rs.filterBandwidth(), -1);
+        QCOMPARE(rs.filterPosition(), -1);
+        QCOMPARE(rs.ifShift(), -1);
+        QCOMPARE(rs.cwPitch(), -1);
+        // Gain/levels
+        QCOMPARE(rs.rfPower(), -1.0);
+        QCOMPARE(rs.micGain(), -1);
+        QCOMPARE(rs.compression(), -1);
+        QCOMPARE(rs.rfGain(), -999);
+        QCOMPARE(rs.squelchLevel(), -1);
+        QCOMPARE(rs.keyerSpeed(), -1);
+        QCOMPARE(rs.keyingWeight(), -1);
+        QCOMPARE(rs.monitorLevelCW(), -1);
+        // Antenna / ATU
+        QCOMPARE(rs.atuMode(), -1);
+        // Message bank
+        QCOMPARE(rs.messageBank(), -1);
+        // Streaming
+        QCOMPARE(rs.streamingLatency(), -1);
+        // Audio routing
+        QCOMPARE(rs.lineOutLeft(), -1);
+        QCOMPARE(rs.lineInSoundCard(), -1);
+        QCOMPARE(rs.micInput(), -1);
+        // VOX/ESSB
+        QCOMPARE(rs.voxGainVoice(), -1);
+        QCOMPARE(rs.antiVox(), -1);
+        QCOMPARE(rs.ssbTxBw(), -1);
+        // Display
+        QCOMPARE(rs.scale(), -1);
+        QCOMPARE(rs.averaging(), -1);
+        QCOMPARE(rs.refLevel(), -110); // special sentinel (dBm)
+        QCOMPARE(rs.refLevelB(), -110);
+        // Balance uses -99 (outside valid -50..+50)
+        QCOMPARE(rs.balanceMode(), -1);
+        QCOMPARE(rs.balanceOffset(), -99);
+        // Data control
+        QCOMPARE(rs.dataSubMode(), -1);
+        QCOMPARE(rs.dataRate(), -1);
+        // Text decode
+        QCOMPARE(rs.textDecodeMode(), -1);
+        QCOMPARE(rs.textDecodeLines(), -1);
+        // RIT/XIT
+        QCOMPARE(rs.ritXitOffset(), 0); // reset uses 0, not sentinel
+        QCOMPARE(rs.ritEnabled(), false);
+        QCOMPARE(rs.xitEnabled(), false);
+    }
+
+    // Sentinel's functional contract: post-reset, the very next CAT packet
+    // for any field must fire its change signal (because stored state is
+    // different from incoming). Regression risk: a sentinel that collides
+    // with a legal value silently absorbs the first packet.
+    void testResetEnsuresNextCatEmits() {
+        // Representative sample across subsystems.
+        RadioState rs;
+        rs.parseCATCommand("FP1;");
+        rs.parseCATCommand("BW240;");
+        rs.parseCATCommand("MG050;");
+        rs.parseCATCommand("AT1;");
+        rs.parseCATCommand("#SCL080;");
+        rs.parseCATCommand("MN2;");
+        rs.parseCATCommand("DT2;");
+
+        rs.reset();
+
+        {
+            QSignalSpy spy(&rs, &RadioState::filterPositionChanged);
+            rs.parseCATCommand("FP1;"); // same input as before reset — must emit
+            QCOMPARE(spy.count(), 1);
+        }
+        {
+            QSignalSpy spy(&rs, &RadioState::filterBandwidthChanged);
+            rs.parseCATCommand("BW240;");
+            QCOMPARE(spy.count(), 1);
+        }
+        {
+            QSignalSpy spy(&rs, &RadioState::micGainChanged);
+            rs.parseCATCommand("MG050;");
+            QCOMPARE(spy.count(), 1);
+        }
+        {
+            QSignalSpy spy(&rs, &RadioState::atuModeChanged);
+            rs.parseCATCommand("AT1;");
+            QCOMPARE(spy.count(), 1);
+        }
+        {
+            QSignalSpy spy(&rs, &RadioState::scaleChanged);
+            rs.parseCATCommand("#SCL080;");
+            QCOMPARE(spy.count(), 1);
+        }
+        {
+            QSignalSpy spy(&rs, &RadioState::messageBankChanged);
+            rs.parseCATCommand("MN2;");
+            QCOMPARE(spy.count(), 1);
+        }
+        {
+            QSignalSpy spy(&rs, &RadioState::dataSubModeChanged);
+            rs.parseCATCommand("DT2;");
+            QCOMPARE(spy.count(), 1);
+        }
+    }
+
+    // Defaults-with-special-values check: a handful of fields use non-negative
+    // sentinels (default 50, 30, 1000, etc.) that could collide with legal
+    // values. Lock in the exact default so a regression changes it visibly.
+    void testNonNegativeSentinelDefaults() {
+        RadioState rs;
+        // waterfallHeight default = 50 (mid-range, legal value 0-100).
+        // Any CAT update with WFH050; is no-op.
+        QSignalSpy spy(&rs, &RadioState::waterfallHeightChanged);
+        rs.parseCATCommand("#WFH050;"); // same as default
+        QCOMPARE(spy.count(), 0);
+        // displayFps default = 30, waterfallHeightExt default = 50 —
+        // these are documented in reset() and protected by testWaterfallHeightParses
+        // using a value ≠ 50.
+    }
 };
 
 QTEST_MAIN(TestRadioState)
