@@ -1114,6 +1114,191 @@ private slots:
         rs.parseCATCommand("ACT11;"); // too short (need 7 chars)
         QCOMPARE(spy.count(), 0);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — DataControl subsystem
+    // Handlers: TD/TD$ (text decode cfg), TB/TB$ (text buffer), DT/DT$
+    // (data sub-mode), DR/DR$ (data rate), VT/VT$ (tuning step).
+    // DT/DT$ and DR/DR$ carry a 500ms optimistic-update cooldown that
+    // suppresses echoes of user-initiated changes — tested explicitly.
+    // =========================================================================
+
+    // --- TD (text decode cfg: TD<mode><threshold><lines>;) ---
+    void testTextDecodeParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::textDecodeChanged);
+        rs.parseCATCommand("TD132;"); // mode=1, threshold=3, lines=2
+        QCOMPARE(rs.textDecodeMode(), 1);
+        QCOMPARE(rs.textDecodeThreshold(), 3);
+        QCOMPARE(rs.textDecodeLines(), 2);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testTextDecodeLinesOutOfRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("TD132;"); // lines=2
+        rs.parseCATCommand("TD130;"); // lines=0 (< 1) — rejected
+        QCOMPARE(rs.textDecodeLines(), 2);
+    }
+
+    void testTextDecodeNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("TD132;");
+        QSignalSpy spy(&rs, &RadioState::textDecodeChanged);
+        rs.parseCATCommand("TD132;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testTextDecodeBParsesSymmetric() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::textDecodeBChanged);
+        rs.parseCATCommand("TD$132;");
+        QCOMPARE(rs.textDecodeModeB(), 1);
+        QCOMPARE(rs.textDecodeThresholdB(), 3);
+        QCOMPARE(rs.textDecodeLinesB(), 2);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- TB (text buffer stream — emits every non-empty decoded buffer) ---
+    void testTextBufferReceivedEmitsForMain() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::textBufferReceived);
+        rs.parseCATCommand("TB000 HELLO WORLD"); // no trailing semicolon required
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(1).toBool(), false); // isSubRx=false
+    }
+
+    void testTextBufferReceivedEmitsForSub() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::textBufferReceived);
+        rs.parseCATCommand("TB$000 HELLO WORLD");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(1).toBool(), true); // isSubRx=true
+    }
+
+    void testTextBufferEmptyDoesNotEmit() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::textBufferReceived);
+        rs.parseCATCommand("TB000"); // nothing after the 3-char header
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- DT / DT$ (Data sub-mode, 0-3) ---
+    void testDataSubModeParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::dataSubModeChanged);
+        rs.parseCATCommand("DT2;");
+        QCOMPARE(rs.dataSubMode(), 2);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 2);
+    }
+
+    void testDataSubModeOutOfRangeRejected() {
+        RadioState rs;
+        rs.parseCATCommand("DT2;");
+        QSignalSpy spy(&rs, &RadioState::dataSubModeChanged);
+        rs.parseCATCommand("DT4;"); // above 3
+        rs.parseCATCommand("DT9;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.dataSubMode(), 2);
+    }
+
+    void testDataSubModeNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("DT2;");
+        QSignalSpy spy(&rs, &RadioState::dataSubModeChanged);
+        rs.parseCATCommand("DT2;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // The 500ms optimistic cooldown suppresses CAT echoes of a just-made
+    // setter call so the UI doesn't briefly show the server-echoed value.
+    // WHY this matters for Phase 1: any split that moves state out of
+    // RadioState but leaves the timestamp check behind breaks this.
+    void testDataSubModeOptimisticCooldownSuppressesEcho() {
+        RadioState rs;
+        rs.setDataSubMode(2); // optimistic set — starts 500ms window
+        QSignalSpy spy(&rs, &RadioState::dataSubModeChanged);
+        rs.parseCATCommand("DT3;"); // would otherwise change to 3
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.dataSubMode(), 2); // suppressed; state retains optimistic value
+    }
+
+    void testDataSubModeBOptimisticCooldownSuppressesEcho() {
+        RadioState rs;
+        rs.setDataSubModeB(2);
+        QSignalSpy spy(&rs, &RadioState::dataSubModeBChanged);
+        rs.parseCATCommand("DT$3;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.dataSubModeB(), 2);
+    }
+
+    // --- DR / DR$ (Data rate, 0 or 1) ---
+    void testDataRateParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::dataRateChanged);
+        rs.parseCATCommand("DR1;");
+        QCOMPARE(rs.dataRate(), 1);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testDataRateOutOfRangeRejected() {
+        RadioState rs;
+        rs.parseCATCommand("DR1;");
+        QSignalSpy spy(&rs, &RadioState::dataRateChanged);
+        rs.parseCATCommand("DR2;"); // above 1
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.dataRate(), 1);
+    }
+
+    void testDataRateOptimisticCooldownSuppressesEcho() {
+        RadioState rs;
+        rs.setDataRate(1);
+        QSignalSpy spy(&rs, &RadioState::dataRateChanged);
+        rs.parseCATCommand("DR0;"); // would otherwise revert
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.dataRate(), 1);
+    }
+
+    void testDataRateBOptimisticCooldownSuppressesEcho() {
+        RadioState rs;
+        rs.setDataRateB(1);
+        QSignalSpy spy(&rs, &RadioState::dataRateBChanged);
+        rs.parseCATCommand("DR$0;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.dataRateB(), 1);
+    }
+
+    // --- VT / VT$ (Tuning step index, clamped 0-5) ---
+    void testTuningStepParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::tuningStepChanged);
+        rs.parseCATCommand("VT3;");
+        QCOMPARE(rs.tuningStep(), 3);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testTuningStepClampedTo5() {
+        RadioState rs;
+        rs.parseCATCommand("VT9;");
+        QCOMPARE(rs.tuningStep(), 5);
+    }
+
+    void testTuningStepNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("VT3;");
+        QSignalSpy spy(&rs, &RadioState::tuningStepChanged);
+        rs.parseCATCommand("VT3;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testTuningStepBParsesSymmetric() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::tuningStepBChanged);
+        rs.parseCATCommand("VT$2;");
+        QCOMPARE(rs.tuningStepB(), 2);
+        QCOMPARE(spy.count(), 1);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
