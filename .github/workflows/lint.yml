@@ -46,3 +46,36 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
+
+  sanitizer-tests:
+    # Phase 0.10 — ASAN + UBSAN build of the test binaries, running on
+    # every push. Protects the planned RadioState subsystem split and the
+    # MainWindow controller extraction against use-after-free and UB that
+    # unit tests would otherwise miss. Remove after the refactor if
+    # desired (the baseline cost is one Ubuntu job and ~2 min).
+    name: Sanitizer Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6 and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
+            qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
+            qt6-shadertools-dev \
+            libopus-dev libhidapi-dev libssl-dev libasound2-dev
+
+      - name: Configure CMake (sanitizers on for tests)
+        run: cmake -B build-san -DCMAKE_BUILD_TYPE=Debug -DQK4_TESTS_SANITIZE=ON
+
+      - name: Build instrumented tests
+        run: cmake --build build-san --target test_radiostate test_radiostate_registry test_radioutils test_protocol test_catserver test_dxcluster
+
+      - name: Run instrumented tests
+        # UBSAN_OPTIONS=halt_on_error=1 makes CI fail fast on any UB detection.
+        # ASAN is already set to abort via -fno-sanitize-recover=all in CMake.
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
+        run: ctest --test-dir build-san --output-on-failure

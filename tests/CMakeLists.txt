@@ -1,5 +1,17 @@
 # QK4 Unit Tests
 # Uses Qt Test framework for test infrastructure
+#
+# Optional sanitizer build: pass -DQK4_TESTS_SANITIZE=ON to compile test
+# executables with AddressSanitizer + UndefinedBehaviorSanitizer. Enabled
+# in CI for the duration of the RadioState / MainWindow refactor so
+# subsystem pointer shuffling can't introduce use-after-free quietly.
+option(QK4_TESTS_SANITIZE "Build tests with ASAN + UBSAN" OFF)
+
+if(QK4_TESTS_SANITIZE AND NOT MSVC)
+    message(STATUS "QK4 tests: ASAN+UBSAN enabled")
+    add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=address -fsanitize=undefined)
+endif()
 
 # RadioState CAT command parser tests
 add_executable(test_radiostate test_radiostate.cpp
