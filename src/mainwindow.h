@@ -23,6 +23,7 @@ class BottomMenuBar;
 class MenuController;
 class PopupManager;
 class BandNavigationController;
+class ButtonRowDispatcher;
 class AntennaConfigController;
 class TextDecodeController;
 class FilterIndicatorWidget;
@@ -95,14 +96,6 @@ private slots:
     void onFnFunctionTriggered(const QString &functionId);
     void executeMacro(const QString &functionId);
     void openMacroDialog();
-
-    // MAIN RX / SUB RX popup slots
-    void onMainRxButtonClicked(int index);
-    void onMainRxButtonRightClicked(int index);
-    void onSubRxButtonClicked(int index);
-    void onSubRxButtonRightClicked(int index);
-    void onTxButtonClicked(int index);
-    void onTxButtonRightClicked(int index);
 
 private:
     void setupMenuBar();
@@ -199,6 +192,7 @@ private:
     MenuController *m_menuController;
     PopupManager *m_popupManager;
     BandNavigationController *m_bandNavController;
+    ButtonRowDispatcher *m_buttonRowDispatcher;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     FeatureMenuController *m_featureMenuController;
