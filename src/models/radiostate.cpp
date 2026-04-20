@@ -963,6 +963,14 @@ void RadioState::handleBoolPairVal(const QString &cmd, int charPos, bool &member
 // into one call site; handlers that differ between main/sub (e.g., `MD` vs `MD$` often need to
 // emit different signals) stay as separate lambdas.
 
+QStringList RadioState::registeredCommandPrefixes() const {
+    QStringList prefixes;
+    prefixes.reserve(m_commandHandlers.size());
+    for (const auto &entry : m_commandHandlers)
+        prefixes.append(entry.prefix);
+    return prefixes;
+}
+
 void RadioState::registerCommandHandlers() {
     // Register handlers in order - will be sorted by prefix length (longest first)
     // This ensures "MD$" is checked before "MD", "NB$" before "NB", etc.

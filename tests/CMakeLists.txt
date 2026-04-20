@@ -9,6 +9,14 @@ target_include_directories(test_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radiostate Qt6::Core Qt6::Test)
 add_test(NAME RadioStateTests COMMAND test_radiostate)
 
+# RadioState command-registry structural invariant tests
+add_executable(test_radiostate_registry test_radiostate_registry.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+)
+target_include_directories(test_radiostate_registry PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_radiostate_registry Qt6::Core Qt6::Test)
+add_test(NAME RadioStateRegistryTests COMMAND test_radiostate_registry)
+
 # RadioUtils shared utility tests
 add_executable(test_radioutils test_radioutils.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp

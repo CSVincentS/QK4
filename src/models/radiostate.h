@@ -4,6 +4,7 @@
 #include <QMap>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <functional>
 
@@ -584,6 +585,12 @@ public:
     static Mode modeFromCode(int code);
     static QString modeToString(Mode mode);
     static QString dataSubModeToString(int subMode); // 0=DATA, 1=AFSK, 2=FSK, 3=PSK
+
+    // Introspection for tests. parseCATCommand() iterates m_commandHandlers in
+    // registration order and first-match-wins, so the registration order must be
+    // "shadow-safe": if prefix X is a proper prefix of prefix Y, Y must be
+    // registered before X. See tests/test_radiostate_registry.cpp.
+    QStringList registeredCommandPrefixes() const;
 
 signals:
     void frequencyChanged(quint64 freq);
