@@ -19,6 +19,7 @@
 #include "ui/filterindicatorwidget.h"
 #include "ui/k4styles.h"
 #include "controllers/antennaconfigcontroller.h"
+#include "controllers/antennadisplaycontroller.h"
 #include "controllers/textdecodecontroller.h"
 #include "controllers/menucontroller.h"
 #include "controllers/dxclustercontroller.h"
@@ -113,6 +114,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel->kpa1500Mini(), this);
 
     m_processingDisplayController = new ProcessingDisplayController(m_radioState, m_vfoA, m_vfoB, this);
+
+    m_antennaDisplayController =
+        new AntennaDisplayController(m_radioState, m_txAntennaLabel, m_rxAntALabel, m_rxAntBLabel, this);
 
     setupCatServer();
 }
@@ -425,8 +429,6 @@ void MainWindow::setupRadioStateWiring() {
 
     // RadioState signals -> Center section updates
     connect(m_radioState, &RadioState::splitChanged, this, &MainWindow::onSplitChanged);
-    connect(m_radioState, &RadioState::antennaChanged, this, &MainWindow::onAntennaChanged);
-    connect(m_radioState, &RadioState::antennaNameChanged, this, &MainWindow::onAntennaNameChanged);
     connect(m_radioState, &RadioState::voxChanged, this, &MainWindow::onVoxChanged);
     connect(m_radioState, &RadioState::qskEnabledChanged, this, &MainWindow::onQskEnabledChanged);
     connect(m_radioState, &RadioState::testModeChanged, this, &MainWindow::onTestModeChanged);
@@ -2154,89 +2156,6 @@ void MainWindow::onSplitChanged(bool enabled) {
     }
     // Split changes which VFO transmits — update TX markers
     m_spectrumController->updateTxMarkers();
-}
-
-void MainWindow::onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub) {
-    // Format Main RX antenna display based on AR command value
-    // K4 AR command values (from official K4 protocol documentation):
-    // 0 = Disconnected (all RX RF sources disconnected)
-    // 1 = EXT. XVTR IN / RX ANT IN2 (external transverter jack)
-    // 2 = RX USES TX ANT (follows TX antenna selection) - show resolved value
-    // 3 = INT. XVTR IN (internal transverter)
-    // 4 = RX ANT IN1 (receive antenna jack)
-    // 5 = ATU RX ANT1 (TX antenna 1 via ATU)
-    // 6 = ATU RX ANT2 (TX antenna 2 via ATU)
-    // 7 = ATU RX ANT3 (TX antenna 3 via ATU)
-    auto formatMainRxAntenna = [this, txAnt](int arValue) -> QString {
-        switch (arValue) {
-        case 0: // Disconnected
-            return "OFF";
-        case 1: // EXT. XVTR IN / RX ANT IN2
-            return QString("RX2:%1").arg(m_radioState->antennaName(5));
-        case 2: // RX USES TX ANT - show resolved value like K4 front panel
-            return QString("%1:%2").arg(txAnt).arg(m_radioState->antennaName(txAnt));
-        case 3: // INT. XVTR IN
-            return "INT XVTR";
-        case 4: // RX ANT IN1
-            return QString("RX1:%1").arg(m_radioState->antennaName(4));
-        case 5: // ATU RX ANT1
-            return QString("1:%1").arg(m_radioState->antennaName(1));
-        case 6: // ATU RX ANT2
-            return QString("2:%1").arg(m_radioState->antennaName(2));
-        case 7: // ATU RX ANT3
-            return QString("3:%1").arg(m_radioState->antennaName(3));
-        default:
-            return QString("AR%1").arg(arValue);
-        }
-    };
-
-    // Format Sub RX antenna display based on AR$ command value
-    // K4 AR$ command values (from official K4 protocol documentation):
-    // 0 = Disconnected (all RX RF sources disconnected)
-    // 1 = EXT. XVTR IN / RX ANT IN2 (external transverter jack)
-    // 2 = RX USES TX ANT (follows TX antenna selection) - show resolved value
-    // 3 = INT. XVTR IN (internal transverter)
-    // 4 = RX ANT IN1 (receive antenna jack)
-    // 5 = ATU RX ANT1 (TX antenna 1 via ATU)
-    // 6 = ATU RX ANT2 (TX antenna 2 via ATU)
-    // 7 = ATU RX ANT3 (TX antenna 3 via ATU)
-    auto formatSubRxAntenna = [this, txAnt](int arValue) -> QString {
-        switch (arValue) {
-        case 0: // Disconnected
-            return "OFF";
-        case 1: // EXT. XVTR IN / RX ANT IN2
-            return QString("RX2:%1").arg(m_radioState->antennaName(5));
-        case 2: // RX USES TX ANT - show resolved value like K4 front panel
-            return QString("%1:%2").arg(txAnt).arg(m_radioState->antennaName(txAnt));
-        case 3: // INT. XVTR IN
-            return "INT XVTR";
-        case 4: // RX ANT IN1
-            return QString("RX1:%1").arg(m_radioState->antennaName(4));
-        case 5: // ATU RX ANT1
-            return QString("1:%1").arg(m_radioState->antennaName(1));
-        case 6: // ATU RX ANT2
-            return QString("2:%1").arg(m_radioState->antennaName(2));
-        case 7: // ATU RX ANT3
-            return QString("3:%1").arg(m_radioState->antennaName(3));
-        default:
-            return QString("AR$%1").arg(arValue);
-        }
-    };
-
-    // TX antenna (AN command) - always 1-3, format as "N:name"
-    m_txAntennaLabel->setText(QString("%1:%2").arg(txAnt).arg(m_radioState->antennaName(txAnt)));
-
-    // RX antennas - Main (AR) and Sub (AR$) have different value mappings
-    m_rxAntALabel->setText(formatMainRxAntenna(rxAntMain));
-    m_rxAntBLabel->setText(formatSubRxAntenna(rxAntSub));
-}
-
-void MainWindow::onAntennaNameChanged(int index, const QString &name) {
-    Q_UNUSED(index)
-    Q_UNUSED(name)
-    // Refresh antenna displays when a name changes. Popup-name updates are
-    // handled internally by AntennaConfigController via its own observer.
-    onAntennaChanged(m_radioState->txAntenna(), m_radioState->rxAntennaMain(), m_radioState->rxAntennaSub());
 }
 
 void MainWindow::onVoxChanged(bool enabled) {

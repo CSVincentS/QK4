@@ -27,6 +27,7 @@ class ButtonRowDispatcher;
 class MacroController;
 class ProcessingDisplayController;
 class AntennaConfigController;
+class AntennaDisplayController;
 class TextDecodeController;
 class FilterIndicatorWidget;
 class FeatureMenuController;
@@ -68,8 +69,6 @@ private slots:
     void onSupplyCurrentChanged(double amps);
     void onSwrChanged(double swr);
     void onSplitChanged(bool enabled);
-    void onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub);
-    void onAntennaNameChanged(int index, const QString &name);
     void onVoxChanged(bool enabled);
     void onQskEnabledChanged(bool enabled);
     void onTestModeChanged(bool enabled);
@@ -198,6 +197,7 @@ private:
     ProcessingDisplayController *m_processingDisplayController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
+    AntennaDisplayController *m_antennaDisplayController;
     FeatureMenuController *m_featureMenuController;
     ModePopupController *m_modePopupController;
 
