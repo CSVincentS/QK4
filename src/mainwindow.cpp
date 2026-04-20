@@ -52,11 +52,38 @@ Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new RadioState(this)) {
     setupControllers();
 
+    // WHY: controllers referenced from setupUi() must exist at connect-time.
+    // setupUi() wires BottomMenuBar signals to MenuController::toggleOverlay
+    // (among others) — if m_menuController is uninitialized the connect() call
+    // segfaults inside QObjectPrivate::connectImpl. Create controllers first,
+    // then let setupUi() build widgets and wire them into the existing
+    // controllers. VFO widgets are late-injected into PopupManager via
+    // setVfos() after setupUi() creates them.
+    m_menuController = new MenuController(m_connectionController, m_spectrumController, this, this);
+    connect(m_menuController, &MenuController::overlayClosed, this, [this]() {
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setMenuActive(false);
+    });
+    m_popupManager =
+        new PopupManager(m_radioState, m_connectionController, m_spectrumController, nullptr, nullptr, this, this);
+    connect(m_popupManager, &PopupManager::bandSelected, this, &MainWindow::onBandSelected);
+    connect(m_popupManager, &PopupManager::macroFunctionTriggered, this, &MainWindow::onFnFunctionTriggered);
+    connect(m_popupManager, &PopupManager::mainRxButtonClicked, this, &MainWindow::onMainRxButtonClicked);
+    connect(m_popupManager, &PopupManager::mainRxButtonRightClicked, this, &MainWindow::onMainRxButtonRightClicked);
+    connect(m_popupManager, &PopupManager::subRxButtonClicked, this, &MainWindow::onSubRxButtonClicked);
+    connect(m_popupManager, &PopupManager::subRxButtonRightClicked, this, &MainWindow::onSubRxButtonRightClicked);
+    connect(m_popupManager, &PopupManager::txButtonClicked, this, &MainWindow::onTxButtonClicked);
+    connect(m_popupManager, &PopupManager::txButtonRightClicked, this, &MainWindow::onTxButtonRightClicked);
+    connect(m_popupManager, &PopupManager::modeLabelRefreshNeeded, this, &MainWindow::updateModeLabels);
+    m_antennaCfgController = new AntennaConfigController(m_radioState, m_connectionController, this, this);
+    m_textDecodeController = new TextDecodeController(m_radioState, m_connectionController, this, this);
+
     // IMPORTANT: setupUi() MUST be called BEFORE setupMenuBar()!
     // Qt 6.10.1 bug on macOS Tahoe: calling menuBar() before creating QRhiWidget
     // prevents the RHI backing store from being set up correctly, causing
     // "QRhiWidget: No QRhi" errors and blank panadapter display.
     setupUi();
+    m_popupManager->setVfos(m_vfoA, m_vfoB);
     setupMenuBar();
 
     // ESC — halt all transmission regardless of which child widget has focus.
@@ -70,24 +97,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
         m_bottomMenuBar->setPttActive(false);
     });
 
-    m_menuController = new MenuController(m_connectionController, m_spectrumController, this, this);
-    connect(m_menuController, &MenuController::overlayClosed, this, [this]() {
-        if (m_bottomMenuBar)
-            m_bottomMenuBar->setMenuActive(false);
-    });
-    m_popupManager =
-        new PopupManager(m_radioState, m_connectionController, m_spectrumController, m_vfoA, m_vfoB, this, this);
-    connect(m_popupManager, &PopupManager::bandSelected, this, &MainWindow::onBandSelected);
-    connect(m_popupManager, &PopupManager::macroFunctionTriggered, this, &MainWindow::onFnFunctionTriggered);
-    connect(m_popupManager, &PopupManager::mainRxButtonClicked, this, &MainWindow::onMainRxButtonClicked);
-    connect(m_popupManager, &PopupManager::mainRxButtonRightClicked, this, &MainWindow::onMainRxButtonRightClicked);
-    connect(m_popupManager, &PopupManager::subRxButtonClicked, this, &MainWindow::onSubRxButtonClicked);
-    connect(m_popupManager, &PopupManager::subRxButtonRightClicked, this, &MainWindow::onSubRxButtonRightClicked);
-    connect(m_popupManager, &PopupManager::txButtonClicked, this, &MainWindow::onTxButtonClicked);
-    connect(m_popupManager, &PopupManager::txButtonRightClicked, this, &MainWindow::onTxButtonRightClicked);
-    connect(m_popupManager, &PopupManager::modeLabelRefreshNeeded, this, &MainWindow::updateModeLabels);
-    m_antennaCfgController = new AntennaConfigController(m_radioState, m_connectionController, this, this);
-    m_textDecodeController = new TextDecodeController(m_radioState, m_connectionController, this, this);
     setupNotificationWidget();
     setupConnectionWiring();
 
@@ -2693,48 +2702,54 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     QMainWindow::keyPressEvent(event);
 }
 
-void MainWindow::toggleDisplayPopup() {
-    closeAllPopups();
-    m_popupManager->toggleDisplay();
-}
-
-void MainWindow::closeAllPopups() {
-    // Close menu overlay
+// WHY: toggle handlers close only popups NOT owned by PopupManager before
+// delegating to PopupManager::toggleX. PopupManager::toggleX captures the
+// target popup's visibility up-front, then calls its own closeOwnedPopups —
+// so if closeAllPopups ran first, toggleX would see the popup as already
+// hidden and always re-open it (i.e., the toggle would never close).
+void MainWindow::closeNonPopupManagerPopups() {
     if (m_menuController && m_menuController->isOverlayVisible()) {
         m_menuController->closeOverlay();
-        if (m_bottomMenuBar) {
+        if (m_bottomMenuBar)
             m_bottomMenuBar->setMenuActive(false);
-        }
     }
-
-    m_popupManager->closeOwnedPopups();
     m_antennaCfgController->closeAll();
     if (m_modePopup && m_modePopup->isVisible())
         m_modePopup->hidePopup();
 }
 
+void MainWindow::closeAllPopups() {
+    closeNonPopupManagerPopups();
+    m_popupManager->closeOwnedPopups();
+}
+
+void MainWindow::toggleDisplayPopup() {
+    closeNonPopupManagerPopups();
+    m_popupManager->toggleDisplay();
+}
+
 void MainWindow::toggleBandPopup() {
-    closeAllPopups();
+    closeNonPopupManagerPopups();
     m_popupManager->toggleBand();
 }
 
 void MainWindow::toggleFnPopup() {
-    closeAllPopups();
+    closeNonPopupManagerPopups();
     m_popupManager->toggleFn();
 }
 
 void MainWindow::toggleMainRxPopup() {
-    closeAllPopups();
+    closeNonPopupManagerPopups();
     m_popupManager->toggleMainRx();
 }
 
 void MainWindow::toggleSubRxPopup() {
-    closeAllPopups();
+    closeNonPopupManagerPopups();
     m_popupManager->toggleSubRx();
 }
 
 void MainWindow::toggleTxPopup() {
-    closeAllPopups();
+    closeNonPopupManagerPopups();
     m_popupManager->toggleTx();
 }
 

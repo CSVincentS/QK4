@@ -159,6 +159,11 @@ void PopupManager::setBottomMenuBar(BottomMenuBar *bottomMenuBar) {
     m_bottomMenuBar = bottomMenuBar;
 }
 
+void PopupManager::setVfos(VFOWidget *vfoA, VFOWidget *vfoB) {
+    m_vfoA = vfoA;
+    m_vfoB = vfoB;
+}
+
 void PopupManager::toggleBand() {
     if (!m_bottomMenuBar)
         return;

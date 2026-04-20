@@ -50,9 +50,12 @@ public:
                           VFOWidget *vfoA, VFOWidget *vfoB, QWidget *parentWidget, QObject *parent = nullptr);
     ~PopupManager() override;
 
-    // BottomMenuBar must be injected after construction because it's
-    // created by MainWindow::setupUi() AFTER controllers. Use setter.
+    // BottomMenuBar and VFO widgets must be injected after construction
+    // because they are created by MainWindow::setupUi() AFTER controllers.
+    // Use setters. setupUi wires BottomMenuBar signals to PopupManager at
+    // connect-time, so PopupManager must exist before setupUi() runs.
     void setBottomMenuBar(BottomMenuBar *bottomMenuBar);
+    void setVfos(VFOWidget *vfoA, VFOWidget *vfoB);
 
     // Task-level toggles (called from BottomMenuBar button clicks).
     void toggleBand();

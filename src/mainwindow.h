@@ -127,6 +127,12 @@ private:
     QString formatFrequency(quint64 freq);
     void updateModeLabels();
 
+    // Closes menu overlay, antenna-config popups, and mode popup — i.e.,
+    // every popup NOT owned by PopupManager. Used by the per-popup toggle
+    // handlers so PopupManager::toggleX can still see its target popup's
+    // current visibility state (toggle-close must work).
+    void closeNonPopupManagerPopups();
+
     ConnectionController *m_connectionController;
     RadioState *m_radioState;
 
