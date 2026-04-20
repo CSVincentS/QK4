@@ -389,6 +389,17 @@ All four must pass. No exceptions.
 
 Every controller and MainWindow calls `disconnect(this)` as the first statement in its destructor. This prevents queued signals from arriving during partial destruction. Thread shutdown follows the dependency chain: producers stop before consumers.
 
+### 12. New UI Concerns Belong in Controllers, Not MainWindow
+
+After the 2026-04 MainWindow decomposition, `MainWindow.cpp`'s scope is **window chrome, top-level layout, and controller coordination — nothing else**. New features that need a widget, a signal wiring, a CAT dispatch helper, or mode-dependent UI behavior go in a controller under `src/controllers/` (see `PATTERNS.md` → Controller Pattern). If the widget only consumes a single RadioState property, use Direct Observation instead of adding a controller.
+
+Regressing to "throw it on MainWindow" is the single biggest risk for re-drifting into a god object. The banned anti-patterns in `PATTERNS.md` are non-negotiable:
+
+- No new widget member pointers on `MainWindow`.
+- No slots on MainWindow that just forward a RadioState signal to a widget setter.
+- No inline lambdas over ~5 lines or ~5 connect() calls clustered at one site — extract to a helper, or if it grows past ~30 lines, promote to a controller.
+- No cross-controller reach-in (`controllerA->someGetter()->doThing()`) — communicate via signals.
+
 ---
 
 ## Comment Conventions
