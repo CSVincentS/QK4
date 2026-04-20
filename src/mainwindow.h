@@ -22,15 +22,7 @@ class RightSidePanel;
 class BottomMenuBar;
 class MenuController;
 class PopupManager;
-class RxEqPopupWidget;
 class AntennaConfigController;
-class LineOutPopupWidget;
-class LineInPopupWidget;
-class MicInputPopupWidget;
-class MicConfigPopupWidget;
-class VoxPopupWidget;
-class SsbBwPopupWidget;
-class KeyingWeightPopupWidget;
 class TextDecodeController;
 class FilterIndicatorWidget;
 class FeatureMenuController;
@@ -132,11 +124,6 @@ private:
     // no behavior change. Phase 3 lifts some of these seams into dedicated
     // controller classes under src/controllers/.
     void setupControllers();
-    void setupEqPopups();
-    void setupLinePopups();
-    void setupMicPopups();
-    void setupVoxAndSsbPopups();
-    void setupKeyingWeightPopup();
     void setupNotificationWidget();
     void setupConnectionWiring();
     void setupRadioStateWiring();
@@ -216,15 +203,6 @@ private:
     // Menu system — owned by MenuController (src/controllers/).
     MenuController *m_menuController;
     PopupManager *m_popupManager;
-    RxEqPopupWidget *m_rxEqPopup;
-    RxEqPopupWidget *m_txEqPopup;
-    LineOutPopupWidget *m_lineOutPopup;
-    LineInPopupWidget *m_lineInPopup;
-    MicInputPopupWidget *m_micInputPopup;
-    MicConfigPopupWidget *m_micConfigPopup;
-    VoxPopupWidget *m_voxPopup;
-    SsbBwPopupWidget *m_ssbBwPopup;
-    KeyingWeightPopupWidget *m_keyingWeightPopup;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     FeatureMenuController *m_featureMenuController;
@@ -250,12 +228,6 @@ private:
 
     // Notification popup for K4 error/status messages (ERxx:)
     NotificationWidget *m_notificationWidget;
-
-    // Debounce timer for RX EQ slider changes
-    QTimer *m_rxEqDebounceTimer;
-
-    // Debounce timer for TX EQ slider changes
-    QTimer *m_txEqDebounceTimer;
 
     WheelAccumulator m_ritWheelAccumulator;
 };

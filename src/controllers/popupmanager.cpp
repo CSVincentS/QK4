@@ -13,6 +13,20 @@
 #include "ui/vfowidget.h"
 #include "utils/radioutils.h"
 
+#include "settings/radiosettings.h"
+#include "ui/keyingweightpopup.h"
+#include "ui/lineinpopup.h"
+#include "ui/lineoutpopup.h"
+#include "ui/micconfigpopup.h"
+#include "ui/micinputpopup.h"
+#include "ui/rxeqpopupwidget.h"
+#include "ui/ssbbwpopup.h"
+#include "ui/voxpopup.h"
+#include "ui/k4styles.h"
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QTimer>
+#include <QVector>
 #include <QPoint>
 #include <QString>
 #include <QWidget>
@@ -23,7 +37,14 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
       m_vfoB(vfoB), m_parentWidget(parentWidget), m_bandPopup(new BandPopupWidget(parentWidget)),
       m_displayPopup(new DisplayPopupWidget(parentWidget)), m_fnPopup(new FnPopupWidget(parentWidget)),
       m_macroDialog(new MacroDialog(parentWidget)), m_mainRxRow(new ButtonRowPopup(parentWidget)),
-      m_subRxRow(new ButtonRowPopup(parentWidget)), m_txRow(new ButtonRowPopup(parentWidget)) {
+      m_subRxRow(new ButtonRowPopup(parentWidget)), m_txRow(new ButtonRowPopup(parentWidget)),
+      m_rxEqPopup(new RxEqPopupWidget("RX GRAPHIC EQUALIZER", K4Styles::Colors::VfoACyan, parentWidget)),
+      m_txEqPopup(new RxEqPopupWidget("TX GRAPHIC EQUALIZER", K4Styles::Colors::AccentAmber, parentWidget)),
+      m_rxEqDebounce(new QTimer(this)), m_txEqDebounce(new QTimer(this)),
+      m_lineOutPopup(new LineOutPopupWidget(parentWidget)), m_lineInPopup(new LineInPopupWidget(parentWidget)),
+      m_micInputPopup(new MicInputPopupWidget(parentWidget)), m_micConfigPopup(new MicConfigPopupWidget(parentWidget)),
+      m_voxPopup(new VoxPopupWidget(parentWidget)), m_ssbBwPopup(new SsbBwPopupWidget(parentWidget)),
+      m_keyingWeightPopup(new KeyingWeightPopupWidget(parentWidget)) {
 
     m_macroDialog->hide();
 
@@ -116,6 +137,18 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
             m_bottomMenuBar->setFnActive(false);
     });
     connect(m_fnPopup, &FnPopupWidget::functionTriggered, this, &PopupManager::macroFunctionTriggered);
+
+    wireEqPopups();
+    wireLinePopups();
+    wireMicPopups();
+    wireVoxAndSsbPopups();
+    wireKeyingWeightPopup();
+
+    // RadioState EQ echoes → refresh popup bands.
+    connect(m_radioState, &RadioState::rxEqChanged, this,
+            [this]() { m_rxEqPopup->setAllBands(m_radioState->rxEqBands()); });
+    connect(m_radioState, &RadioState::txEqChanged, this,
+            [this]() { m_txEqPopup->setAllBands(m_radioState->txEqBands()); });
 }
 
 PopupManager::~PopupManager() {
@@ -205,6 +238,24 @@ void PopupManager::closeOwnedPopups() {
         if (m_bottomMenuBar)
             m_bottomMenuBar->setTxActive(false);
     }
+    if (m_rxEqPopup->isVisible())
+        m_rxEqPopup->hidePopup();
+    if (m_txEqPopup->isVisible())
+        m_txEqPopup->hidePopup();
+    if (m_lineOutPopup->isVisible())
+        m_lineOutPopup->hidePopup();
+    if (m_lineInPopup->isVisible())
+        m_lineInPopup->hidePopup();
+    if (m_micInputPopup->isVisible())
+        m_micInputPopup->hidePopup();
+    if (m_micConfigPopup->isVisible())
+        m_micConfigPopup->hidePopup();
+    if (m_voxPopup->isVisible())
+        m_voxPopup->hidePopup();
+    if (m_ssbBwPopup->isVisible())
+        m_ssbBwPopup->hidePopup();
+    if (m_keyingWeightPopup->isVisible())
+        m_keyingWeightPopup->hidePopup();
 }
 
 void PopupManager::toggleMainRx() {
@@ -410,4 +461,520 @@ void PopupManager::wireDisplayPopup() {
             [adjustRefLevel]() { adjustRefLevel(+1); });
     connect(m_displayPopup, &DisplayPopupWidget::refLevelDecrementRequested, this,
             [adjustRefLevel]() { adjustRefLevel(-1); });
+}
+
+void PopupManager::wireEqPopups() {
+    // Create RX EQ popup (Main RX - cyan theme)
+    connect(m_rxEqPopup, &RxEqPopupWidget::closed, this, [this]() {
+        // Close the MAIN RX button row popup when EQ popup closes
+    });
+
+    // Debounce timer for RX EQ - sends command 100ms after last slider change
+    m_rxEqDebounce->setSingleShot(true);
+    m_rxEqDebounce->setInterval(100);
+    connect(m_rxEqDebounce, &QTimer::timeout, this,
+            [this]() { m_connection->sendCAT(RadioUtils::buildEqCommand("RE", m_radioState->rxEqBands())); });
+
+    connect(m_rxEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
+        // Update optimistic state immediately (UI stays responsive)
+        m_radioState->setRxEqBand(bandIndex, dB);
+        // Restart debounce timer - will send after 100ms of no changes
+        m_rxEqDebounce->start();
+    });
+    connect(m_rxEqPopup, &RxEqPopupWidget::flatRequested, this, [this]() {
+        // Reset all bands to 0 and send CAT command
+        QVector<int> flat(8, 0);
+        m_radioState->setRxEqBands(flat);
+        m_connection->sendCAT(RadioUtils::buildEqCommand("RE", flat));
+    });
+
+    // Preset load: get preset from RadioSettings, apply to sliders, send CAT
+    connect(m_rxEqPopup, &RxEqPopupWidget::presetLoadRequested, this, [this](int index) {
+        EqPreset preset = RadioSettings::instance()->rxEqPreset(index);
+        if (!preset.isEmpty() && preset.bands.size() == 8) {
+            m_rxEqPopup->setAllBands(preset.bands);
+            m_radioState->setRxEqBands(preset.bands);
+
+            m_connection->sendCAT(RadioUtils::buildEqCommand("RE", preset.bands));
+        }
+    });
+
+    // Preset save: show name dialog, save current EQ to preset
+    connect(m_rxEqPopup, &RxEqPopupWidget::presetSaveRequested, this, [this](int index) {
+        EqPreset existing = RadioSettings::instance()->rxEqPreset(index);
+        QString defaultName = existing.name.isEmpty() ? QString("Preset %1").arg(index + 1) : existing.name;
+
+        // Store current EQ bands before dialog (popup may close)
+        QVector<int> currentBands = m_radioState->rxEqBands();
+
+        bool ok;
+        QString name =
+            QInputDialog::getText(m_parentWidget, "Save Preset", "Preset name:", QLineEdit::Normal, defaultName, &ok);
+
+        // Re-show the EQ popup after dialog closes
+        if (m_bottomMenuBar) {
+            m_rxEqPopup->showAboveButton(m_bottomMenuBar->mainRxButton());
+        }
+
+        if (ok) {
+            // Use default name if user cleared it
+            if (name.isEmpty()) {
+                name = QString("Preset %1").arg(index + 1);
+            }
+            EqPreset preset;
+            preset.name = name;
+            preset.bands = currentBands;
+            RadioSettings::instance()->setRxEqPreset(index, preset);
+            m_rxEqPopup->updatePresetName(index, name);
+        }
+    });
+
+    // Preset clear: remove preset from RadioSettings
+    connect(m_rxEqPopup, &RxEqPopupWidget::presetClearRequested, this, [this](int index) {
+        RadioSettings::instance()->clearRxEqPreset(index);
+        m_rxEqPopup->updatePresetName(index, "");
+    });
+
+    // Load preset names on popup creation
+    for (int i = 0; i < 4; i++) {
+        EqPreset preset = RadioSettings::instance()->rxEqPreset(i);
+        m_rxEqPopup->updatePresetName(i, preset.name);
+    }
+
+    // Create TX EQ popup (amber theme)
+    connect(m_txEqPopup, &RxEqPopupWidget::closed, this, [this]() {
+        // Close the TX button row popup when EQ popup closes
+    });
+
+    // Debounce timer for TX EQ - sends command 100ms after last slider change
+    m_txEqDebounce->setSingleShot(true);
+    m_txEqDebounce->setInterval(100);
+    connect(m_txEqDebounce, &QTimer::timeout, this,
+            [this]() { m_connection->sendCAT(RadioUtils::buildEqCommand("TE", m_radioState->txEqBands())); });
+
+    connect(m_txEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
+        // Update optimistic state immediately (UI stays responsive)
+        m_radioState->setTxEqBand(bandIndex, dB);
+        // Restart debounce timer - will send after 100ms of no changes
+        m_txEqDebounce->start();
+    });
+    connect(m_txEqPopup, &RxEqPopupWidget::flatRequested, this, [this]() {
+        // Reset all bands to 0 and send CAT command
+        QVector<int> flat(8, 0);
+        m_radioState->setTxEqBands(flat);
+        m_connection->sendCAT(RadioUtils::buildEqCommand("TE", flat));
+    });
+
+    // TX EQ Preset load: get preset from RadioSettings, apply to sliders, send CAT
+    connect(m_txEqPopup, &RxEqPopupWidget::presetLoadRequested, this, [this](int index) {
+        EqPreset preset = RadioSettings::instance()->txEqPreset(index);
+        if (!preset.isEmpty() && preset.bands.size() == 8) {
+            m_txEqPopup->setAllBands(preset.bands);
+            m_radioState->setTxEqBands(preset.bands);
+
+            m_connection->sendCAT(RadioUtils::buildEqCommand("TE", preset.bands));
+        }
+    });
+
+    // TX EQ Preset save: show name dialog, save current EQ to preset
+    connect(m_txEqPopup, &RxEqPopupWidget::presetSaveRequested, this, [this](int index) {
+        EqPreset existing = RadioSettings::instance()->txEqPreset(index);
+        QString defaultName = existing.name.isEmpty() ? QString("Preset %1").arg(index + 1) : existing.name;
+
+        // Store current EQ bands before dialog (popup may close)
+        QVector<int> currentBands = m_radioState->txEqBands();
+
+        bool ok;
+        QString name = QInputDialog::getText(m_parentWidget, "Save TX Preset", "Preset name:", QLineEdit::Normal,
+                                             defaultName, &ok);
+
+        // Re-show the EQ popup after dialog closes
+        if (m_bottomMenuBar) {
+            m_txEqPopup->showAboveButton(m_bottomMenuBar->txButton());
+        }
+
+        if (ok) {
+            // Use default name if user cleared it
+            if (name.isEmpty()) {
+                name = QString("Preset %1").arg(index + 1);
+            }
+            EqPreset preset;
+            preset.name = name;
+            preset.bands = currentBands;
+            RadioSettings::instance()->setTxEqPreset(index, preset);
+            m_txEqPopup->updatePresetName(index, name);
+        }
+    });
+
+    // TX EQ Preset clear: remove preset from RadioSettings
+    connect(m_txEqPopup, &RxEqPopupWidget::presetClearRequested, this, [this](int index) {
+        RadioSettings::instance()->clearTxEqPreset(index);
+        m_txEqPopup->updatePresetName(index, "");
+    });
+
+    // Load TX EQ preset names on popup creation
+    for (int i = 0; i < 4; i++) {
+        EqPreset preset = RadioSettings::instance()->txEqPreset(i);
+        m_txEqPopup->updatePresetName(i, preset.name);
+    }
+}
+
+void PopupManager::wireLinePopups() {
+    // Create Line Out popup (shared by MAIN RX and SUB RX)
+    connect(m_lineOutPopup, &LineOutPopupWidget::leftLevelChanged, this, [this](int level) {
+        if (!m_connection->isConnected())
+            return;
+        // Send full LO command with current state
+        QString cmd = QString("LO%1%2%3;")
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineOutRight(), 3, 10, QChar('0'))
+                          .arg(m_radioState->lineOutRightEqualsLeft() ? 1 : 0);
+        m_connection->sendCAT(cmd);
+    });
+    connect(m_lineOutPopup, &LineOutPopupWidget::rightLevelChanged, this, [this](int level) {
+        if (!m_connection->isConnected())
+            return;
+        QString cmd = QString("LO%1%2%3;")
+                          .arg(m_radioState->lineOutLeft(), 3, 10, QChar('0'))
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineOutRightEqualsLeft() ? 1 : 0);
+        m_connection->sendCAT(cmd);
+    });
+    connect(m_lineOutPopup, &LineOutPopupWidget::rightEqualsLeftChanged, this, [this](bool enabled) {
+        if (!m_connection->isConnected())
+            return;
+        int left = m_radioState->lineOutLeft();
+        int right = enabled ? left : m_radioState->lineOutRight();
+        QString cmd =
+            QString("LO%1%2%3;").arg(left, 3, 10, QChar('0')).arg(right, 3, 10, QChar('0')).arg(enabled ? 1 : 0);
+        m_connection->sendCAT(cmd);
+    });
+    // Connect RadioState to update popup when K4 sends LO response
+    connect(m_radioState, &RadioState::lineOutChanged, this, [this]() {
+        if (m_lineOutPopup) {
+            m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
+            m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
+            m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
+        }
+    });
+
+    // Create Line In popup (TX menu button index 3)
+    connect(m_lineInPopup, &LineInPopupWidget::soundCardLevelChanged, this, [this](int level) {
+        if (!m_connection->isConnected())
+            return;
+        m_radioState->setLineInSoundCard(level);
+        QString cmd = QString("LI%1%2%3;")
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInJack(), 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInSource());
+        m_connection->sendCAT(cmd);
+    });
+    connect(m_lineInPopup, &LineInPopupWidget::lineInJackLevelChanged, this, [this](int level) {
+        if (!m_connection->isConnected())
+            return;
+        m_radioState->setLineInJack(level);
+        QString cmd = QString("LI%1%2%3;")
+                          .arg(m_radioState->lineInSoundCard(), 3, 10, QChar('0'))
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInSource());
+        m_connection->sendCAT(cmd);
+    });
+    connect(m_lineInPopup, &LineInPopupWidget::sourceChanged, this, [this](int source) {
+        if (!m_connection->isConnected())
+            return;
+        m_radioState->setLineInSource(source);
+        QString cmd = QString("LI%1%2%3;")
+                          .arg(m_radioState->lineInSoundCard(), 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInJack(), 3, 10, QChar('0'))
+                          .arg(source);
+        m_connection->sendCAT(cmd);
+    });
+    // Connect RadioState to update popup when K4 sends LI response
+    connect(m_radioState, &RadioState::lineInChanged, this, [this]() {
+        if (m_lineInPopup) {
+            m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
+            m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
+            m_lineInPopup->setSource(m_radioState->lineInSource());
+        }
+    });
+}
+
+void PopupManager::wireMicPopups() {
+    // Create Mic Input popup (TX menu button index 3, left-click)
+    connect(m_micInputPopup, &MicInputPopupWidget::inputChanged, this, [this](int input) {
+        if (!m_connection->isConnected())
+            return;
+        m_radioState->setMicInput(input);
+        m_connection->sendCAT(QString("MI%1;").arg(input));
+    });
+    // Connect RadioState to update popup when K4 sends MI response
+    connect(m_radioState, &RadioState::micInputChanged, this, [this](int input) {
+        if (m_micInputPopup) {
+            m_micInputPopup->setCurrentInput(input);
+        }
+    });
+
+    // Create Mic Config popup (TX menu button index 3, right-click)
+    connect(m_micConfigPopup, &MicConfigPopupWidget::biasChanged, this, [this](int bias) {
+        if (!m_connection->isConnected())
+            return;
+        // Use individual SET command based on mic type
+        if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
+            m_radioState->setMicFrontBias(bias);
+            m_connection->sendCAT(QString("MSB%1;").arg(bias));
+        } else {
+            m_radioState->setMicRearBias(bias);
+            m_connection->sendCAT(QString("MSE%1;").arg(bias));
+        }
+    });
+    connect(m_micConfigPopup, &MicConfigPopupWidget::preampChanged, this, [this](int preamp) {
+        if (!m_connection->isConnected())
+            return;
+        if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
+            m_radioState->setMicFrontPreamp(preamp);
+            m_connection->sendCAT(QString("MSA%1;").arg(preamp));
+        } else {
+            m_radioState->setMicRearPreamp(preamp);
+            m_connection->sendCAT(QString("MSD%1;").arg(preamp));
+        }
+    });
+    connect(m_micConfigPopup, &MicConfigPopupWidget::buttonsChanged, this, [this](int buttons) {
+        if (!m_connection->isConnected())
+            return;
+        // Buttons only applies to Front mic
+        m_radioState->setMicFrontButtons(buttons);
+        m_connection->sendCAT(QString("MSC%1;").arg(buttons));
+    });
+    // Connect RadioState to update popup when K4 sends MS response
+    connect(m_radioState, &RadioState::micSetupChanged, this, [this]() {
+        if (m_micConfigPopup) {
+            if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
+                m_micConfigPopup->setBias(m_radioState->micFrontBias());
+                m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
+                m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
+            } else {
+                m_micConfigPopup->setBias(m_radioState->micRearBias());
+                m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
+            }
+        }
+    });
+}
+
+void PopupManager::wireVoxAndSsbPopups() {
+    // Create VOX Gain / Anti-VOX popup (TX menu button index 4)
+    connect(m_voxPopup, &VoxPopupWidget::valueChanged, this, [this](int value) {
+        if (!m_connection->isConnected())
+            return;
+        if (m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
+            // VOX Gain: VGVnnn or VGDnnn depending on mode
+            bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
+            QString modeChar = isDataMode ? "D" : "V";
+            if (isDataMode) {
+                m_radioState->setVoxGainData(value);
+            } else {
+                m_radioState->setVoxGainVoice(value);
+            }
+            m_connection->sendCAT(QString("VG%1%2;").arg(modeChar).arg(value, 3, 10, QChar('0')));
+        } else {
+            // Anti-VOX: VInnn
+            m_radioState->setAntiVox(value);
+            m_connection->sendCAT(QString("VI%1;").arg(value, 3, 10, QChar('0')));
+        }
+    });
+    connect(m_voxPopup, &VoxPopupWidget::voxToggled, this, [this](bool enabled) {
+        if (!m_connection->isConnected())
+            return;
+        // VXmn where m=C/V/D, n=0/1
+        RadioState::Mode mode = m_radioState->mode();
+        QString modeChar;
+        if (mode == RadioState::CW || mode == RadioState::CW_R) {
+            modeChar = "C";
+        } else if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
+            modeChar = "D";
+        } else {
+            modeChar = "V";
+        }
+        m_connection->sendCAT(QString("VX%1%2;").arg(modeChar).arg(enabled ? 1 : 0));
+    });
+    // Connect RadioState to update popup when K4 sends VG/VI/VX response
+    connect(m_radioState, &RadioState::voxGainChanged, this, [this](int mode, int gain) {
+        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
+            bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
+            if ((mode == 1 && isDataMode) || (mode == 0 && !isDataMode)) {
+                m_voxPopup->setValue(gain);
+            }
+        }
+    });
+    connect(m_radioState, &RadioState::antiVoxChanged, this, [this](int level) {
+        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::AntiVox) {
+            m_voxPopup->setValue(level);
+        }
+    });
+    connect(m_radioState, &RadioState::voxChanged, this, [this](bool enabled) {
+        if (m_voxPopup) {
+            m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
+        }
+    });
+
+    // Create SSB TX Bandwidth popup (TX menu button index 5)
+    connect(m_ssbBwPopup, &SsbBwPopupWidget::bandwidthChanged, this, [this](int bw) {
+        if (!m_connection->isConnected())
+            return;
+        // ES command: ESnbb where n=essb mode, bb=bandwidth
+        int essbMode = m_radioState->essbEnabled() ? 1 : 0;
+        m_radioState->setSsbTxBw(bw);
+        m_connection->sendCAT(QString("ES%1%2;").arg(essbMode).arg(bw, 2, 10, QChar('0')));
+        // Update button label with new bandwidth (optimistic)
+        if (m_txRow) {
+            QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+            m_txRow->setButtonLabel(5, "SSB BW", bwStr, false);
+        }
+    });
+    // Connect RadioState to update popup and ESSB button when K4 sends ES response
+    // SSB: 24-28 (2.4-2.8 kHz), ESSB: 30-45 (3.0-4.5 kHz)
+    connect(m_radioState, &RadioState::essbChanged, this, [this](bool enabled, int bw) {
+        if (m_ssbBwPopup) {
+            m_ssbBwPopup->setEssbEnabled(enabled);
+            if (bw >= 24 && bw <= 45) {
+                m_ssbBwPopup->setBandwidth(bw);
+            }
+        }
+        // Update TX popup button labels (only in non-CW modes — CW uses paddle/weight buttons)
+        auto mode = m_radioState->mode();
+        if (m_txRow && mode != RadioState::CW && mode != RadioState::CW_R) {
+            // Button 5: SSB BW with current bandwidth value (e.g., "2.8k" or "3.0k")
+            if (bw >= 24 && bw <= 45) {
+                QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+                m_txRow->setButtonLabel(5, "SSB BW", bwStr, false);
+            }
+            // Button 6: ESSB toggle with ON/OFF state
+            m_txRow->setButtonLabel(6, "ESSB", enabled ? "ON" : "OFF", false);
+        }
+        // Update mode labels to show USB+/LSB+ when ESSB enabled
+        emit modeLabelRefreshNeeded();
+    });
+}
+
+void PopupManager::wireKeyingWeightPopup() {
+    // Create Keying Weight popup (TX menu button index 6 in CW mode)
+    connect(m_keyingWeightPopup, &KeyingWeightPopupWidget::weightChanged, this, [this](int weight) {
+        if (!m_connection->isConnected())
+            return;
+        QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
+        QChar paddle = m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
+        m_radioState->setKeyingWeight(weight);
+        m_connection->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+        // Update button label with new weight value (optimistic)
+        if (m_txRow) {
+            QString weightStr = QString::number(weight / 100.0, 'f', 2);
+            m_txRow->setButtonLabel(6, "WEIGHT", weightStr, false);
+        }
+    });
+
+    // Connect keyerPaddleChanged to update CW button labels and weight popup
+    connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int weight) {
+        auto mode = m_radioState->mode();
+        if (m_txRow && (mode == RadioState::CW || mode == RadioState::CW_R)) {
+            // Button 5: paddle orientation + iambic mode
+            QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
+            QString iambicStr = QString("IAMB %1").arg(iambic);
+            m_txRow->setButtonLabel(5, paddleStr, iambicStr, true);
+            // Button 6: keying weight ratio
+            if (weight >= 90 && weight <= 125) {
+                QString weightStr = QString::number(weight / 100.0, 'f', 2);
+                m_txRow->setButtonLabel(6, "WEIGHT", weightStr, false);
+            }
+        }
+        // Update weight popup if visible
+        if (m_keyingWeightPopup && m_keyingWeightPopup->isVisible() && weight >= 90 && weight <= 125) {
+            m_keyingWeightPopup->setWeight(weight);
+        }
+    });
+}
+
+void PopupManager::showRxEqAbove(QWidget *anchor) {
+    m_rxEqPopup->setAllBands(m_radioState->rxEqBands());
+    if (anchor)
+        m_rxEqPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showTxEqAbove(QWidget *anchor) {
+    m_txEqPopup->setAllBands(m_radioState->txEqBands());
+    if (anchor)
+        m_txEqPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showLineOutAbove(QWidget *anchor) {
+    m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
+    m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
+    m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
+    if (anchor)
+        m_lineOutPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showLineInAbove(QWidget *anchor) {
+    m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
+    m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
+    m_lineInPopup->setSource(m_radioState->lineInSource());
+    if (anchor)
+        m_lineInPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showMicInputAbove(QWidget *anchor) {
+    m_micInputPopup->setCurrentInput(m_radioState->micInput());
+    if (anchor)
+        m_micInputPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showMicConfigAbove(QWidget *anchor) {
+    const int input = m_radioState->micInput();
+    if (input == 2) // LINE IN only — no mic config
+        return;
+    const bool isFront = (input == 0 || input == 3); // 0=front, 3=front+line
+    m_micConfigPopup->setMicType(isFront ? MicConfigPopupWidget::Front : MicConfigPopupWidget::Rear);
+    if (isFront) {
+        m_micConfigPopup->setBias(m_radioState->micFrontBias());
+        m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
+        m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
+    } else {
+        m_micConfigPopup->setBias(m_radioState->micRearBias());
+        m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
+    }
+    if (anchor)
+        m_micConfigPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showVoxGainAbove(QWidget *anchor) {
+    const bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
+    m_voxPopup->setPopupMode(VoxPopupWidget::VoxGain);
+    m_voxPopup->setDataMode(isDataMode);
+    m_voxPopup->setValue(m_radioState->voxGainForCurrentMode());
+    m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
+    if (anchor)
+        m_voxPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showAntiVoxAbove(QWidget *anchor) {
+    m_voxPopup->setPopupMode(VoxPopupWidget::AntiVox);
+    m_voxPopup->setValue(m_radioState->antiVox());
+    m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
+    if (anchor)
+        m_voxPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showSsbBwAbove(QWidget *anchor) {
+    m_ssbBwPopup->setEssbEnabled(m_radioState->essbEnabled());
+    const int bw = m_radioState->ssbTxBw();
+    if (bw >= 24 && bw <= 45)
+        m_ssbBwPopup->setBandwidth(bw);
+    if (anchor)
+        m_ssbBwPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::showKeyingWeightAbove(QWidget *anchor) {
+    const int weight = m_radioState->keyingWeight();
+    if (weight >= 90 && weight <= 125)
+        m_keyingWeightPopup->setWeight(weight);
+    if (anchor)
+        m_keyingWeightPopup->showAboveWidget(anchor);
 }

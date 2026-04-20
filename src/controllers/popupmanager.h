@@ -13,6 +13,15 @@ class DisplayPopupWidget;
 class FnPopupWidget;
 class MacroDialog;
 class ButtonRowPopup;
+class RxEqPopupWidget;
+class LineOutPopupWidget;
+class LineInPopupWidget;
+class MicInputPopupWidget;
+class MicConfigPopupWidget;
+class VoxPopupWidget;
+class SsbBwPopupWidget;
+class KeyingWeightPopupWidget;
+class QTimer;
 class QWidget;
 
 // Owns MainWindow's primary popup family: band selector, display controls,
@@ -84,6 +93,21 @@ public:
     void setSubRxButtonLabel(int index, const QString &primary, const QString &alternate, bool alternateIsAmber = true);
     void setTxButtonLabel(int index, const QString &primary, const QString &alternate, bool alternateIsAmber = true);
 
+    // Secondary popups (RX/TX EQ, line in/out, mic input/config, VOX
+    // gain & anti-VOX, SSB TX bandwidth, CW keying weight). MainWindow's
+    // button-row click handlers call these. They internally know which
+    // trigger button to position above; the caller passes the anchor.
+    void showRxEqAbove(QWidget *anchor);
+    void showTxEqAbove(QWidget *anchor);
+    void showLineOutAbove(QWidget *anchor);
+    void showLineInAbove(QWidget *anchor);
+    void showMicInputAbove(QWidget *anchor);
+    void showMicConfigAbove(QWidget *anchor); // Mic type is inferred from RadioState.
+    void showVoxGainAbove(QWidget *anchor);   // configures popup for gain mode first
+    void showAntiVoxAbove(QWidget *anchor);   // configures popup for anti-vox mode first
+    void showSsbBwAbove(QWidget *anchor);
+    void showKeyingWeightAbove(QWidget *anchor);
+
 signals:
     // User picked a band from the band popup. MainWindow::onBandSelected
     // handles the band-switch logic (radio-state mutation + CAT commands).
@@ -103,6 +127,10 @@ signals:
     void txButtonClicked(int index);
     void txButtonRightClicked(int index);
 
+    // ESSB toggle affects the USB/LSB mode label suffix (USB+ / LSB+).
+    // PopupManager flags this so MainWindow's updateModeLabels() can run.
+    void modeLabelRefreshNeeded();
+
 private:
     RadioState *m_radioState;                 // injected, not owned
     ConnectionController *m_connection;       // injected, not owned
@@ -119,8 +147,24 @@ private:
     ButtonRowPopup *m_mainRxRow;
     ButtonRowPopup *m_subRxRow;
     ButtonRowPopup *m_txRow;
+    RxEqPopupWidget *m_rxEqPopup;
+    RxEqPopupWidget *m_txEqPopup;
+    QTimer *m_rxEqDebounce;
+    QTimer *m_txEqDebounce;
+    LineOutPopupWidget *m_lineOutPopup;
+    LineInPopupWidget *m_lineInPopup;
+    MicInputPopupWidget *m_micInputPopup;
+    MicConfigPopupWidget *m_micConfigPopup;
+    VoxPopupWidget *m_voxPopup;
+    SsbBwPopupWidget *m_ssbBwPopup;
+    KeyingWeightPopupWidget *m_keyingWeightPopup;
 
     void wireDisplayPopup();
+    void wireEqPopups();
+    void wireLinePopups();
+    void wireMicPopups();
+    void wireVoxAndSsbPopups();
+    void wireKeyingWeightPopup();
 };
 
 #endif // POPUPMANAGER_H
