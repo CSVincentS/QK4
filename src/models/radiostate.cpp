@@ -1669,6 +1669,12 @@ void RadioState::handleRX(const QString &cmd) {
 // Individual Command Handlers - Processing (NB, NR, PA, RA, GT, NA, NM)
 // =============================================================================
 
+// WHY: Handlers in this block (NB/NB$, NR/NR$, PA/PA$, RA/RA$, GT/GT$)
+// all emit the cross-cutting `processingChanged()` / `processingChangedB()`
+// rollup signal. Compute proposed values first, short-circuit if nothing
+// differs, and only then mutate + emit — keeps the rollup idempotent so
+// redundant CAT echoes don't trigger spurious UI repaints.
+
 void RadioState::handleNB(const QString &cmd) {
     // NB - Noise Blanker Main: NBnnm or NBnnmf where nn=level, m=on/off, f=filter
     if (cmd.length() < 4)
@@ -1683,16 +1689,23 @@ void RadioState::handleNB(const QString &cmd) {
     if (!ok1 || !ok2)
         return;
 
-    m_noiseBlankerLevel = qMin(level, 15);
-    m_noiseBlankerEnabled = (enabled == 1);
-
+    int newLevel = qMin(level, 15);
+    bool newEnabled = (enabled == 1);
+    int newFilter = m_noiseBlankerFilterWidth;
     if (nbStr.length() >= 4) {
         bool ok3;
         int filter = nbStr.mid(3, 1).toInt(&ok3);
-        if (ok3) {
-            m_noiseBlankerFilterWidth = qMin(filter, 2);
-        }
+        if (ok3)
+            newFilter = qMin(filter, 2);
     }
+
+    if (newLevel == m_noiseBlankerLevel && newEnabled == m_noiseBlankerEnabled &&
+        newFilter == m_noiseBlankerFilterWidth)
+        return;
+
+    m_noiseBlankerLevel = newLevel;
+    m_noiseBlankerEnabled = newEnabled;
+    m_noiseBlankerFilterWidth = newFilter;
     emit processingChanged();
 }
 
@@ -1710,16 +1723,23 @@ void RadioState::handleNBSub(const QString &cmd) {
     if (!ok1 || !ok2)
         return;
 
-    m_noiseBlankerLevelB = qMin(level, 15);
-    m_noiseBlankerEnabledB = (enabled == 1);
-
+    int newLevel = qMin(level, 15);
+    bool newEnabled = (enabled == 1);
+    int newFilter = m_noiseBlankerFilterWidthB;
     if (nbStr.length() >= 4) {
         bool ok3;
         int filter = nbStr.mid(3, 1).toInt(&ok3);
-        if (ok3) {
-            m_noiseBlankerFilterWidthB = qMin(filter, 2);
-        }
+        if (ok3)
+            newFilter = qMin(filter, 2);
     }
+
+    if (newLevel == m_noiseBlankerLevelB && newEnabled == m_noiseBlankerEnabledB &&
+        newFilter == m_noiseBlankerFilterWidthB)
+        return;
+
+    m_noiseBlankerLevelB = newLevel;
+    m_noiseBlankerEnabledB = newEnabled;
+    m_noiseBlankerFilterWidthB = newFilter;
     emit processingChangedB();
 }
 
@@ -1734,11 +1754,16 @@ void RadioState::handleNR(const QString &cmd) {
     bool ok1, ok2;
     int level = nrStr.left(2).toInt(&ok1);
     int enabled = nrStr.right(1).toInt(&ok2);
-    if (ok1 && ok2) {
-        m_noiseReductionLevel = level;
-        m_noiseReductionEnabled = (enabled == 1);
-        emit processingChanged();
-    }
+    if (!ok1 || !ok2)
+        return;
+
+    bool newEnabled = (enabled == 1);
+    if (level == m_noiseReductionLevel && newEnabled == m_noiseReductionEnabled)
+        return;
+
+    m_noiseReductionLevel = level;
+    m_noiseReductionEnabled = newEnabled;
+    emit processingChanged();
 }
 
 void RadioState::handleNRSub(const QString &cmd) {
@@ -1752,11 +1777,16 @@ void RadioState::handleNRSub(const QString &cmd) {
     bool ok1, ok2;
     int level = nrStr.left(2).toInt(&ok1);
     int enabled = nrStr.right(1).toInt(&ok2);
-    if (ok1 && ok2) {
-        m_noiseReductionLevelB = level;
-        m_noiseReductionEnabledB = (enabled == 1);
-        emit processingChangedB();
-    }
+    if (!ok1 || !ok2)
+        return;
+
+    bool newEnabled = (enabled == 1);
+    if (level == m_noiseReductionLevelB && newEnabled == m_noiseReductionEnabledB)
+        return;
+
+    m_noiseReductionLevelB = level;
+    m_noiseReductionEnabledB = newEnabled;
+    emit processingChangedB();
 }
 
 void RadioState::handlePA(const QString &cmd) {
@@ -1770,11 +1800,16 @@ void RadioState::handlePA(const QString &cmd) {
     bool ok1, ok2;
     int level = paStr.left(1).toInt(&ok1);
     int enabled = paStr.mid(1, 1).toInt(&ok2);
-    if (ok1 && ok2) {
-        m_preamp = level;
-        m_preampEnabled = (enabled == 1);
-        emit processingChanged();
-    }
+    if (!ok1 || !ok2)
+        return;
+
+    bool newEnabled = (enabled == 1);
+    if (level == m_preamp && newEnabled == m_preampEnabled)
+        return;
+
+    m_preamp = level;
+    m_preampEnabled = newEnabled;
+    emit processingChanged();
 }
 
 void RadioState::handlePASub(const QString &cmd) {
@@ -1788,11 +1823,16 @@ void RadioState::handlePASub(const QString &cmd) {
     bool ok1, ok2;
     int level = paStr.left(1).toInt(&ok1);
     int enabled = paStr.mid(1, 1).toInt(&ok2);
-    if (ok1 && ok2) {
-        m_preampB = level;
-        m_preampEnabledB = (enabled == 1);
-        emit processingChangedB();
-    }
+    if (!ok1 || !ok2)
+        return;
+
+    bool newEnabled = (enabled == 1);
+    if (level == m_preampB && newEnabled == m_preampEnabledB)
+        return;
+
+    m_preampB = level;
+    m_preampEnabledB = newEnabled;
+    emit processingChangedB();
 }
 
 void RadioState::handleRA(const QString &cmd) {
@@ -1806,11 +1846,16 @@ void RadioState::handleRA(const QString &cmd) {
     bool ok1, ok2;
     int level = raStr.left(2).toInt(&ok1);
     int enabled = raStr.mid(2, 1).toInt(&ok2);
-    if (ok1 && ok2) {
-        m_attenuatorLevel = level;
-        m_attenuatorEnabled = (enabled == 1);
-        emit processingChanged();
-    }
+    if (!ok1 || !ok2)
+        return;
+
+    bool newEnabled = (enabled == 1);
+    if (level == m_attenuatorLevel && newEnabled == m_attenuatorEnabled)
+        return;
+
+    m_attenuatorLevel = level;
+    m_attenuatorEnabled = newEnabled;
+    emit processingChanged();
 }
 
 void RadioState::handleRASub(const QString &cmd) {
@@ -1824,28 +1869,41 @@ void RadioState::handleRASub(const QString &cmd) {
     bool ok1, ok2;
     int level = raStr.left(2).toInt(&ok1);
     int enabled = raStr.mid(2, 1).toInt(&ok2);
-    if (ok1 && ok2) {
-        m_attenuatorLevelB = level;
-        m_attenuatorEnabledB = (enabled == 1);
-        emit processingChangedB();
-    }
+    if (!ok1 || !ok2)
+        return;
+
+    bool newEnabled = (enabled == 1);
+    if (level == m_attenuatorLevelB && newEnabled == m_attenuatorEnabledB)
+        return;
+
+    m_attenuatorLevelB = level;
+    m_attenuatorEnabledB = newEnabled;
+    emit processingChangedB();
 }
 
 void RadioState::handleGT(const QString &cmd) {
-    // GT - AGC Speed Main: GTn where n=0(off)/1(slow)/2(fast)
+    // GT - AGC Speed Main: GTn where n=0(off)/1(slow)/2(fast). Values outside 0-2 are ignored.
     if (cmd.length() <= 2)
         return;
     bool ok;
     int gt = cmd.mid(2).toInt(&ok);
-    if (ok) {
-        if (gt == 0)
-            m_agcSpeed = AGC_Off;
-        else if (gt == 1)
-            m_agcSpeed = AGC_Slow;
-        else if (gt == 2)
-            m_agcSpeed = AGC_Fast;
-        emit processingChanged();
-    }
+    if (!ok)
+        return;
+
+    AGCSpeed newSpeed;
+    if (gt == 0)
+        newSpeed = AGC_Off;
+    else if (gt == 1)
+        newSpeed = AGC_Slow;
+    else if (gt == 2)
+        newSpeed = AGC_Fast;
+    else
+        return;
+
+    if (newSpeed == m_agcSpeed)
+        return;
+    m_agcSpeed = newSpeed;
+    emit processingChanged();
 }
 
 void RadioState::handleGTSub(const QString &cmd) {
@@ -1854,15 +1912,23 @@ void RadioState::handleGTSub(const QString &cmd) {
         return;
     bool ok;
     int gt = cmd.mid(3).toInt(&ok);
-    if (ok) {
-        if (gt == 0)
-            m_agcSpeedB = AGC_Off;
-        else if (gt == 1)
-            m_agcSpeedB = AGC_Slow;
-        else if (gt == 2)
-            m_agcSpeedB = AGC_Fast;
-        emit processingChangedB();
-    }
+    if (!ok)
+        return;
+
+    AGCSpeed newSpeed;
+    if (gt == 0)
+        newSpeed = AGC_Off;
+    else if (gt == 1)
+        newSpeed = AGC_Slow;
+    else if (gt == 2)
+        newSpeed = AGC_Fast;
+    else
+        return;
+
+    if (newSpeed == m_agcSpeedB)
+        return;
+    m_agcSpeedB = newSpeed;
+    emit processingChangedB();
 }
 
 void RadioState::handleNM(const QString &cmd) {

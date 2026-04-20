@@ -496,6 +496,359 @@ private slots:
         rs.parseCATCommand("FP$9;");       // out of range (1-3)
         QCOMPARE(rs.filterPositionB(), 2); // unchanged
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — ProcessingState subsystem
+    // Handlers: NB/NB$, NR/NR$, PA/PA$, RA/RA$, GT/GT$, NM/NM$, AP/AP$
+    // All of NB/NR/PA/RA/GT fire the rollup signal processingChanged() /
+    // processingChangedB(). Tests assert idempotent emission (same input →
+    // no duplicate rollup).
+    // =========================================================================
+
+    // --- NB / NB$ (Noise Blanker: NBnnmf; nn=level 0-15, m=on/off, f=filter 0-2) ---
+    void testNbParsesLevelEnabledFilter() {
+        RadioState rs;
+        rs.parseCATCommand("NB0512;"); // level=5, enabled=1, filter=2
+        QCOMPARE(rs.noiseBlankerLevel(), 5);
+        QCOMPARE(rs.noiseBlankerEnabled(), true);
+        QCOMPARE(rs.noiseBlankerFilterWidth(), 2);
+    }
+
+    void testNbLevelClampedTo15() {
+        RadioState rs;
+        rs.parseCATCommand("NB9912;");
+        QCOMPARE(rs.noiseBlankerLevel(), 15);
+    }
+
+    void testNbFilterClampedTo2() {
+        RadioState rs;
+        rs.parseCATCommand("NB0519;"); // filter=9 → clamped to 2
+        QCOMPARE(rs.noiseBlankerFilterWidth(), 2);
+    }
+
+    void testNbDisable() {
+        RadioState rs;
+        rs.parseCATCommand("NB0511;");
+        rs.parseCATCommand("NB0501;");
+        QCOMPARE(rs.noiseBlankerEnabled(), false);
+    }
+
+    void testNbSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("NB0512;");
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNbNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("NB0512;");
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("NB0512;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testNbBNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("NB$0512;");
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("NB$0512;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testNbBParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("NB$0712;");
+        QCOMPARE(rs.noiseBlankerLevelB(), 7);
+        QCOMPARE(rs.noiseBlankerEnabledB(), true);
+        QCOMPARE(rs.noiseBlankerFilterWidthB(), 2);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNbShortCommandIgnored() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("NB;");   // way too short
+        rs.parseCATCommand("NB01;"); // missing enable/filter
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testNbPartialWithoutFilterPreservesCurrent() {
+        // NB with only 3 chars after prefix (NBnnm) leaves filter untouched
+        RadioState rs;
+        rs.parseCATCommand("NB0512;"); // filter set to 2
+        rs.parseCATCommand("NB071;");  // only level+enabled (3 chars) — filter stays 2
+        QCOMPARE(rs.noiseBlankerLevel(), 7);
+        QCOMPARE(rs.noiseBlankerFilterWidth(), 2);
+    }
+
+    // --- NR / NR$ (Noise Reduction: NRnnm; nn=level, m=on/off) ---
+    void testNrParsesLevelEnabled() {
+        RadioState rs;
+        rs.parseCATCommand("NR051;");
+        QCOMPARE(rs.noiseReductionLevel(), 5);
+        QCOMPARE(rs.noiseReductionEnabled(), true);
+    }
+
+    void testNrDisable() {
+        RadioState rs;
+        rs.parseCATCommand("NR051;");
+        rs.parseCATCommand("NR050;");
+        QCOMPARE(rs.noiseReductionEnabled(), false);
+    }
+
+    void testNrSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("NR051;");
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNrNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("NR051;");
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("NR051;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testNrBParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("NR$071;");
+        QCOMPARE(rs.noiseReductionLevelB(), 7);
+        QCOMPARE(rs.noiseReductionEnabledB(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNrBNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("NR$071;");
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("NR$071;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- PA / PA$ (Preamp: PAnm; n=level, m=on/off) ---
+    void testPaParsesLevelEnabled() {
+        RadioState rs;
+        rs.parseCATCommand("PA21;");
+        QCOMPARE(rs.preamp(), 2);
+        QCOMPARE(rs.preampEnabled(), true);
+    }
+
+    void testPaDisable() {
+        RadioState rs;
+        rs.parseCATCommand("PA21;");
+        rs.parseCATCommand("PA20;");
+        QCOMPARE(rs.preampEnabled(), false);
+    }
+
+    void testPaSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("PA21;");
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testPaNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("PA21;");
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("PA21;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testPaBParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("PA$11;");
+        QCOMPARE(rs.preampB(), 1);
+        QCOMPARE(rs.preampEnabledB(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- RA / RA$ (Attenuator: RAnnm; nn=level, m=on/off) ---
+    void testRaParsesLevelEnabled() {
+        RadioState rs;
+        rs.parseCATCommand("RA051;");
+        QCOMPARE(rs.attenuatorLevel(), 5);
+        QCOMPARE(rs.attenuatorEnabled(), true);
+    }
+
+    void testRaSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("RA051;");
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testRaNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("RA051;");
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("RA051;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testRaBParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("RA$101;");
+        QCOMPARE(rs.attenuatorLevelB(), 10);
+        QCOMPARE(rs.attenuatorEnabledB(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- GT / GT$ (AGC Speed: GTn; 0=Off, 1=Slow, 2=Fast) ---
+    void testGtOff() {
+        RadioState rs;
+        rs.parseCATCommand("GT0;");
+        QCOMPARE(rs.agcSpeed(), RadioState::AGC_Off);
+    }
+
+    void testGtSlow() {
+        // WHY: default m_agcSpeed is AGC_Slow; setting it to AGC_Slow emits
+        // nothing. Change state first so we observe the transition.
+        RadioState rs;
+        rs.parseCATCommand("GT0;"); // now Off
+        rs.parseCATCommand("GT1;"); // → Slow
+        QCOMPARE(rs.agcSpeed(), RadioState::AGC_Slow);
+    }
+
+    void testGtFast() {
+        RadioState rs;
+        rs.parseCATCommand("GT2;");
+        QCOMPARE(rs.agcSpeed(), RadioState::AGC_Fast);
+    }
+
+    void testGtInvalidValueIgnored() {
+        // Values outside 0-2 are silently ignored.
+        RadioState rs;
+        rs.parseCATCommand("GT2;"); // Fast
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("GT5;"); // invalid → no change
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.agcSpeed(), RadioState::AGC_Fast);
+    }
+
+    void testGtSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("GT2;"); // Slow (default) → Fast
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testGtNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("GT2;");
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("GT2;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testGtBParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("GT$0;");
+        QCOMPARE(rs.agcSpeedB(), RadioState::AGC_Off);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- NM / NM$ (Manual Notch: NMnnnnm long form, or NMm short enable-only) ---
+    void testNmParsesPitchAndEnabled() {
+        RadioState rs;
+        rs.parseCATCommand("NM10001;"); // pitch=1000, enabled=1
+        QCOMPARE(rs.manualNotchPitch(), 1000);
+        QCOMPARE(rs.manualNotchEnabled(), true);
+    }
+
+    void testNmShortFormTogglesEnableOnly() {
+        RadioState rs;
+        rs.parseCATCommand("NM10001;"); // establish pitch=1000
+        rs.parseCATCommand("NM0;");     // enable only → disable
+        QCOMPARE(rs.manualNotchEnabled(), false);
+        QCOMPARE(rs.manualNotchPitch(), 1000); // pitch preserved
+    }
+
+    void testNmPitchBelowRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("NM10001;"); // pitch=1000
+        rs.parseCATCommand("NM01001;"); // pitch=100 (< 150) — rejected
+        QCOMPARE(rs.manualNotchPitch(), 1000);
+    }
+
+    void testNmPitchAboveRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("NM10001;");
+        rs.parseCATCommand("NM60001;"); // pitch=6000 (> 5000) — rejected
+        QCOMPARE(rs.manualNotchPitch(), 1000);
+    }
+
+    void testNmSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::notchChanged);
+        rs.parseCATCommand("NM10001;");
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNmNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("NM10001;");
+        QSignalSpy spy(&rs, &RadioState::notchChanged);
+        rs.parseCATCommand("NM10001;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testNmBParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::notchBChanged);
+        rs.parseCATCommand("NM$10001;");
+        QCOMPARE(rs.manualNotchPitchB(), 1000);
+        QCOMPARE(rs.manualNotchEnabledB(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- AP / AP$ (Audio Peak Filter: APmb; m=on/off, b=bandwidth 0-2) ---
+    void testApParsesEnabledBandwidth() {
+        RadioState rs;
+        rs.parseCATCommand("AP11;");
+        QCOMPARE(rs.apfEnabled(), true);
+        QCOMPARE(rs.apfBandwidth(), 1);
+    }
+
+    void testApBandwidthClampedTo2() {
+        RadioState rs;
+        rs.parseCATCommand("AP19;"); // bandwidth=9 → clamped to 2
+        QCOMPARE(rs.apfBandwidth(), 2);
+    }
+
+    void testApSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::apfChanged);
+        rs.parseCATCommand("AP11;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true); // enabled
+        QCOMPARE(spy.at(0).at(1).toInt(), 1);     // bandwidth
+    }
+
+    void testApNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("AP11;");
+        QSignalSpy spy(&rs, &RadioState::apfChanged);
+        rs.parseCATCommand("AP11;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testApBParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::apfBChanged);
+        rs.parseCATCommand("AP$11;");
+        QCOMPARE(rs.apfEnabledB(), true);
+        QCOMPARE(rs.apfBandwidthB(), 1);
+        QCOMPARE(spy.count(), 1);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
