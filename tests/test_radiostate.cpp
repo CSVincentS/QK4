@@ -2046,6 +2046,166 @@ private slots:
         rs.parseCATCommand("MXA.B;");
         QCOMPARE(spy.count(), 0);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — VoxEssb subsystem
+    // Handlers: VX (VOX on/off per mode C/V/D), VG (VOX gain per V/D),
+    // VI (Anti-VOX 0-60), ES (ESSB enable + TX bandwidth 24-45).
+    // =========================================================================
+
+    // --- VX (VOX enable, per-mode VXmn; m='C'/'V'/'D', n='0'/'1') ---
+    void testVoxCwEnable() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::voxChanged);
+        rs.parseCATCommand("VXC1;");
+        QCOMPARE(rs.voxCW(), true);
+        QCOMPARE(rs.voxEnabled(), true); // rollup accessor
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testVoxVoiceEnable() {
+        RadioState rs;
+        rs.parseCATCommand("VXV1;");
+        QCOMPARE(rs.voxVoice(), true);
+    }
+
+    void testVoxDataEnable() {
+        RadioState rs;
+        rs.parseCATCommand("VXD1;");
+        QCOMPARE(rs.voxData(), true);
+    }
+
+    void testVoxEnabledRollupAcrossModes() {
+        // voxEnabled() is any-of across the three per-mode flags.
+        RadioState rs;
+        QCOMPARE(rs.voxEnabled(), false);
+        rs.parseCATCommand("VXC1;");
+        QCOMPARE(rs.voxEnabled(), true);
+        rs.parseCATCommand("VXC0;");
+        rs.parseCATCommand("VXV1;");
+        QCOMPARE(rs.voxEnabled(), true);
+        rs.parseCATCommand("VXV0;");
+        QCOMPARE(rs.voxEnabled(), false);
+    }
+
+    void testVoxNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("VXC1;");
+        QSignalSpy spy(&rs, &RadioState::voxChanged);
+        rs.parseCATCommand("VXC1;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testVoxInvalidModeCharRejected() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::voxChanged);
+        rs.parseCATCommand("VXX1;"); // 'X' — not C/V/D
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- VG (VOX gain: VGmnnn; m='V' or 'D', nnn=000-060) ---
+    void testVoxGainVoiceParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::voxGainChanged);
+        rs.parseCATCommand("VGV030;");
+        QCOMPARE(rs.voxGainVoice(), 30);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 0); // mode index 0 = Voice
+        QCOMPARE(spy.at(0).at(1).toInt(), 30);
+    }
+
+    void testVoxGainDataParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::voxGainChanged);
+        rs.parseCATCommand("VGD045;");
+        QCOMPARE(rs.voxGainData(), 45);
+        QCOMPARE(spy.at(0).at(0).toInt(), 1); // mode index 1 = Data
+    }
+
+    void testVoxGainOutOfRangeRejected() {
+        RadioState rs;
+        rs.parseCATCommand("VGV030;");
+        QSignalSpy spy(&rs, &RadioState::voxGainChanged);
+        rs.parseCATCommand("VGV099;"); // above 60
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.voxGainVoice(), 30);
+    }
+
+    // --- VI (Anti-VOX, VInnn 0-60) ---
+    void testAntiVoxParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antiVoxChanged);
+        rs.parseCATCommand("VI020;");
+        QCOMPARE(rs.antiVox(), 20);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 20);
+    }
+
+    void testAntiVoxOutOfRangeRejected() {
+        RadioState rs;
+        rs.parseCATCommand("VI020;");
+        rs.parseCATCommand("VI099;"); // > 60
+        QCOMPARE(rs.antiVox(), 20);
+    }
+
+    void testAntiVoxNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("VI020;");
+        QSignalSpy spy(&rs, &RadioState::antiVoxChanged);
+        rs.parseCATCommand("VI020;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- ES (ESSB: ESnbb; n=0/1, bb=24..45 bandwidth) ---
+    void testEssbDisabledWithoutBandwidth() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::essbChanged);
+        rs.parseCATCommand("ES0;"); // disable, no BW
+        QCOMPARE(rs.essbEnabled(), false);
+        // Signal only fires if something changed — default m_essbEnabled is false,
+        // so no change ⇒ no emit. This encodes the current semantics.
+        Q_UNUSED(spy);
+    }
+
+    void testEssbEnabledWithBandwidth() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::essbChanged);
+        rs.parseCATCommand("ES130;"); // enable, BW=30
+        QCOMPARE(rs.essbEnabled(), true);
+        QCOMPARE(rs.ssbTxBw(), 30);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testEssbBandwidthChangeOnly() {
+        RadioState rs;
+        rs.parseCATCommand("ES130;");
+        QSignalSpy spy(&rs, &RadioState::essbChanged);
+        rs.parseCATCommand("ES140;"); // enabled still true, BW 30→40
+        QCOMPARE(rs.ssbTxBw(), 40);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testEssbBandwidthOutOfRangePreservesCurrent() {
+        RadioState rs;
+        rs.parseCATCommand("ES130;");
+        rs.parseCATCommand("ES199;"); // BW=99, outside 24-45 → preserves 30
+        QCOMPARE(rs.ssbTxBw(), 30);
+    }
+
+    void testEssbInvalidModeRejected() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::essbChanged);
+        rs.parseCATCommand("ES530;"); // mode=5, invalid
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testEssbNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("ES130;");
+        QSignalSpy spy(&rs, &RadioState::essbChanged);
+        rs.parseCATCommand("ES130;");
+        QCOMPARE(spy.count(), 0);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
