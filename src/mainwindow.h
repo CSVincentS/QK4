@@ -26,7 +26,7 @@ class ButtonRowPopup;
 class DisplayPopupWidget;
 class FnPopupWidget;
 class RxEqPopupWidget;
-class AntennaCfgPopupWidget;
+class AntennaConfigController;
 class LineOutPopupWidget;
 class LineInPopupWidget;
 class MicInputPopupWidget;
@@ -139,7 +139,6 @@ private:
     void setupFnPopup();
     void setupButtonRowPopups();
     void setupEqPopups();
-    void setupAntennaPopups();
     void setupLinePopups();
     void setupMicPopups();
     void setupVoxAndSsbPopups();
@@ -239,9 +238,7 @@ private:
     SsbBwPopupWidget *m_ssbBwPopup;
     KeyingWeightPopupWidget *m_keyingWeightPopup;
     TextDecodeController *m_textDecodeController;
-    AntennaCfgPopupWidget *m_mainRxAntCfgPopup;
-    AntennaCfgPopupWidget *m_subRxAntCfgPopup;
-    AntennaCfgPopupWidget *m_txAntCfgPopup;
+    AntennaConfigController *m_antennaCfgController;
     FeatureMenuBar *m_featureMenuBar;
     ModePopupWidget *m_modePopup;
 

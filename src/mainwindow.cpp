@@ -19,7 +19,7 @@
 #include "ui/vforowwidget.h"
 #include "ui/filterindicatorwidget.h"
 #include "ui/k4styles.h"
-#include "ui/antennacfgpopup.h"
+#include "controllers/antennaconfigcontroller.h"
 #include "ui/lineoutpopup.h"
 #include "ui/lineinpopup.h"
 #include "ui/micinputpopup.h"
@@ -92,7 +92,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     setupFnPopup();
     setupButtonRowPopups();
     setupEqPopups();
-    setupAntennaPopups();
+    m_antennaCfgController = new AntennaConfigController(m_radioState, m_connectionController, this, this);
     setupLinePopups();
     setupMicPopups();
     setupVoxAndSsbPopups();
@@ -447,9 +447,7 @@ void MainWindow::setupButtonRowPopups() {
             return;
         switch (index) {
         case 0: // ANT CFG - show TX antenna config popup
-            if (m_txAntCfgPopup && m_txPopup) {
-                m_txAntCfgPopup->showAboveWidget(m_txPopup);
-            }
+            m_antennaCfgController->showTxPopupAbove(m_txPopup);
             break;
         case 1: // TX EQ - show TX graphic equalizer popup
             if (m_txEqPopup && m_txPopup) {
@@ -748,47 +746,6 @@ void MainWindow::setupEqPopups() {
         EqPreset preset = RadioSettings::instance()->txEqPreset(i);
         m_txEqPopup->updatePresetName(i, preset.name);
     }
-}
-
-void MainWindow::setupAntennaPopups() {
-    // Create antenna configuration popups (MAIN RX, SUB RX, TX)
-    m_mainRxAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::MainRx, this);
-    connect(m_mainRxAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this,
-            [this](bool displayAll, QVector<bool> mask) {
-                if (!m_connectionController->isConnected())
-                    return;
-                // Build ACM command: ACMzabcdefg where z=displayAll, a-g=antenna enables
-                QString cmd = QString("ACM%1").arg(displayAll ? '1' : '0');
-                for (int i = 0; i < 7; i++) {
-                    cmd += (i < mask.size() && mask[i]) ? '1' : '0';
-                }
-                m_connectionController->sendCAT(cmd);
-            });
-
-    m_subRxAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::SubRx, this);
-    connect(m_subRxAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this,
-            [this](bool displayAll, QVector<bool> mask) {
-                if (!m_connectionController->isConnected())
-                    return;
-                // Build ACS command: ACSzabcdefg where z=displayAll, a-g=antenna enables
-                QString cmd = QString("ACS%1").arg(displayAll ? '1' : '0');
-                for (int i = 0; i < 7; i++) {
-                    cmd += (i < mask.size() && mask[i]) ? '1' : '0';
-                }
-                m_connectionController->sendCAT(cmd);
-            });
-
-    m_txAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::Tx, this);
-    connect(m_txAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this, [this](bool displayAll, QVector<bool> mask) {
-        if (!m_connectionController->isConnected())
-            return;
-        // Build ACT command: ACTzabc where z=displayAll, a-c=antenna enables
-        QString cmd = QString("ACT%1").arg(displayAll ? '1' : '0');
-        for (int i = 0; i < 3; i++) {
-            cmd += (i < mask.size() && mask[i]) ? '1' : '0';
-        }
-        m_connectionController->sendCAT(cmd);
-    });
 }
 
 void MainWindow::setupLinePopups() {
@@ -1108,26 +1065,6 @@ void MainWindow::setupRadioStateWiring() {
     connect(m_radioState, &RadioState::txEqChanged, this, [this]() {
         if (m_txEqPopup) {
             m_txEqPopup->setAllBands(m_radioState->txEqBands());
-        }
-    });
-
-    // Antenna configuration signals - update popups when state changes
-    connect(m_radioState, &RadioState::mainRxAntCfgChanged, this, [this]() {
-        if (m_mainRxAntCfgPopup) {
-            m_mainRxAntCfgPopup->setDisplayAll(m_radioState->mainRxDisplayAll());
-            m_mainRxAntCfgPopup->setAntennaMask(m_radioState->mainRxAntMask());
-        }
-    });
-    connect(m_radioState, &RadioState::subRxAntCfgChanged, this, [this]() {
-        if (m_subRxAntCfgPopup) {
-            m_subRxAntCfgPopup->setDisplayAll(m_radioState->subRxDisplayAll());
-            m_subRxAntCfgPopup->setAntennaMask(m_radioState->subRxAntMask());
-        }
-    });
-    connect(m_radioState, &RadioState::txAntCfgChanged, this, [this]() {
-        if (m_txAntCfgPopup) {
-            m_txAntCfgPopup->setDisplayAll(m_radioState->txDisplayAll());
-            m_txAntCfgPopup->setAntennaMask(m_radioState->txAntMask());
         }
     });
 
@@ -3749,21 +3686,11 @@ void MainWindow::onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub) {
 }
 
 void MainWindow::onAntennaNameChanged(int index, const QString &name) {
-    // Refresh antenna displays when a name changes
+    Q_UNUSED(index)
+    Q_UNUSED(name)
+    // Refresh antenna displays when a name changes. Popup-name updates are
+    // handled internally by AntennaConfigController via its own observer.
     onAntennaChanged(m_radioState->txAntenna(), m_radioState->rxAntennaMain(), m_radioState->rxAntennaSub());
-
-    // Update antenna config popups with custom names (ANT1-3 only)
-    // Note: index is 1-based from ACN command (ACN1, ACN2, ACN3)
-    // Popup labels are 0-based (0=ANT1, 1=ANT2, 2=ANT3)
-    if (index >= 1 && index <= 3) {
-        int popupIndex = index - 1; // Convert to 0-based
-        if (m_mainRxAntCfgPopup)
-            m_mainRxAntCfgPopup->setAntennaName(popupIndex, name);
-        if (m_subRxAntCfgPopup)
-            m_subRxAntCfgPopup->setAntennaName(popupIndex, name);
-        if (m_txAntCfgPopup)
-            m_txAntCfgPopup->setAntennaName(popupIndex, name);
-    }
 }
 
 void MainWindow::onVoxChanged(bool enabled) {
@@ -4111,12 +4038,7 @@ void MainWindow::closeAllPopups() {
         m_rxEqPopup->hidePopup();
     if (m_txEqPopup && m_txEqPopup->isVisible())
         m_txEqPopup->hidePopup();
-    if (m_mainRxAntCfgPopup && m_mainRxAntCfgPopup->isVisible())
-        m_mainRxAntCfgPopup->hidePopup();
-    if (m_subRxAntCfgPopup && m_subRxAntCfgPopup->isVisible())
-        m_subRxAntCfgPopup->hidePopup();
-    if (m_txAntCfgPopup && m_txAntCfgPopup->isVisible())
-        m_txAntCfgPopup->hidePopup();
+    m_antennaCfgController->closeAll();
     if (m_modePopup && m_modePopup->isVisible())
         m_modePopup->hidePopup();
 }
@@ -4374,9 +4296,7 @@ void MainWindow::onMainRxButtonClicked(int index) {
 
     switch (index) {
     case 0: // ANT CFG - show Main RX antenna config popup
-        if (m_mainRxAntCfgPopup && m_mainRxPopup) {
-            m_mainRxAntCfgPopup->showAboveWidget(m_mainRxPopup);
-        }
+        m_antennaCfgController->showMainRxPopupAbove(m_mainRxPopup);
         break;
     case 1: // RX EQ - show graphic equalizer popup
         if (m_rxEqPopup && m_mainRxPopup) {
@@ -4452,9 +4372,7 @@ void MainWindow::onSubRxButtonClicked(int index) {
 
     switch (index) {
     case 0: // ANT CFG - show Sub RX antenna config popup
-        if (m_subRxAntCfgPopup && m_subRxPopup) {
-            m_subRxAntCfgPopup->showAboveWidget(m_subRxPopup);
-        }
+        m_antennaCfgController->showSubRxPopupAbove(m_subRxPopup);
         break;
     case 1: // RX EQ - show graphic equalizer popup (shares same EQ as Main RX)
         if (m_rxEqPopup && m_subRxPopup) {
