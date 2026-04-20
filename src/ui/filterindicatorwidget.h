@@ -3,6 +3,7 @@
 
 #include <QColor>
 #include <QWidget>
+#include "k4styles.h"
 
 // Compact filter indicator widget showing filter position,
 // bandwidth shape, and shift position above a horizontal line
@@ -54,10 +55,16 @@ private:
     int m_minBandwidthHz = 50;   // Minimum bandwidth (triangle)
     int m_maxBandwidthHz = 5000; // Maximum bandwidth (full trapezoid)
 
-    QColor m_lineColor{0xFF, 0xD0, 0x40};       // Gold #FFD040
-    QColor m_textColor{0xFF, 0xD0, 0x40};       // Gold #FFD040
-    QColor m_shapeColor{0xFF, 0xD0, 0x40, 128}; // Gold with 50% alpha
-    QColor m_shapeOutline{0xFF, 0xD0, 0x40};    // Gold outline
+    // Gold palette — pulled from K4Styles::Colors::FilterIndicatorGold so a future palette tweak
+    // propagates here. Shape fill uses 50% alpha so the passband shape shows through.
+    QColor m_lineColor{QColor(K4Styles::Colors::FilterIndicatorGold)};
+    QColor m_textColor{QColor(K4Styles::Colors::FilterIndicatorGold)};
+    QColor m_shapeColor{[] {
+        QColor c(K4Styles::Colors::FilterIndicatorGold);
+        c.setAlpha(128);
+        return c;
+    }()};
+    QColor m_shapeOutline{QColor(K4Styles::Colors::FilterIndicatorGold)};
 };
 
 #endif // FILTERINDICATORWIDGET_H

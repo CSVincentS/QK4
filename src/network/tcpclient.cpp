@@ -337,12 +337,15 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
     // syscall fails synchronously instead of waiting for ARP resolution. The ARP request
     // IS sent, so a brief retry after 500ms succeeds once the ARP reply populates the cache.
     // This is not a workaround — it's correct handling of a real network transient.
-    bool arpTransient = (error == QAbstractSocket::NetworkError && m_state == Connecting && m_retryCount < 2);
+    constexpr int kArpRetryIntervalMs = 500;
+    constexpr int kArpMaxRetries = 2;
+    bool arpTransient =
+        (error == QAbstractSocket::NetworkError && m_state == Connecting && m_retryCount < kArpMaxRetries);
     if (arpTransient) {
         m_retryCount++;
-        qCDebug(netTcp) << "ARP-cold retry" << m_retryCount << "in 500ms";
+        qCDebug(netTcp) << "ARP-cold retry" << m_retryCount << "in" << kArpRetryIntervalMs << "ms";
         m_socket->abort();
-        m_retryTimer->start(500);
+        m_retryTimer->start(kArpRetryIntervalMs);
         return;
     }
 

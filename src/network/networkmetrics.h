@@ -5,6 +5,11 @@
 #include <QTimer>
 #include <deque>
 
+/**
+ * @brief Rolling-window TCP health metrics: RTT (mean + jitter over RTT_WINDOW samples), audio
+ *        packet loss (by sequence-gap detection), underrun count, buffer-fill snapshots, and a
+ *        derived Green/Yellow/Orange/Red `HealthTier`. Drives `NetHealthWidget`.
+ */
 class NetworkMetrics : public QObject {
     Q_OBJECT
 public:
@@ -55,9 +60,12 @@ private:
     int m_lostPacketsTotal = 0;
     int m_totalPacketsTotal = 0;
 
-    // Audio buffer depth (latest snapshot)
+    // Audio buffer depth (latest snapshot).
+    // 96000 bytes = 1.0 s at 12 kHz stereo Float32 (12000 × 2 × 4 = 96000). The 1 s ceiling
+    // matches AudioEngine::MAX_QUEUE_BYTES so the health meter's denominator is meaningful.
+    static constexpr int kDefaultBufferMaxBytes = 96000;
     int m_bufferBytes = 0;
-    int m_bufferMaxBytes = 96000;
+    int m_bufferMaxBytes = kDefaultBufferMaxBytes;
     bool m_prebuffering = true;
 
     // Underrun counter

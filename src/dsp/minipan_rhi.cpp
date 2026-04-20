@@ -77,8 +77,13 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
                                       QRhiSampler::ClampToEdge, QRhiSampler::Repeat));
     m_sampler->create();
 
-    // Create vertex buffers (dynamic)
-    m_spectrumVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 2048 * 6 * sizeof(float)));
+    // Create vertex buffers (dynamic).
+    // Spectrum VBO holds up to 2048 triangles × 6 vertices per triangle (two per column, filled
+    // top + outline top). Sized for the widest panadapter layout and never resized thereafter.
+    constexpr int kSpectrumMaxTriangles = 2048;
+    constexpr int kVertsPerTriangle = 6;
+    m_spectrumVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                         kSpectrumMaxTriangles * kVertsPerTriangle * sizeof(float)));
     m_spectrumVbo->create();
 
     // Waterfall quad (static)
@@ -96,11 +101,19 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_waterfallVbo->create();
     rub->uploadStaticBuffer(m_waterfallVbo.get(), waterfallQuad);
 
-    m_overlayVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1024 * 2 * sizeof(float)));
+    // Overlay VBO: up to 1024 line segments × 2 (x,y) = 2048 floats. Holds tuning markers,
+    // noise-floor line, and related thin overlays that draw above the spectrum trace.
+    constexpr int kOverlayMaxSegments = 1024;
+    constexpr int kFloatsPerVertex = 2;
+    m_overlayVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                        kOverlayMaxSegments * kFloatsPerVertex * sizeof(float)));
     m_overlayVbo->create();
 
-    // Dedicated passband buffers (QRhi requires separate buffers to avoid GPU conflicts)
-    m_passbandVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 256 * sizeof(float)));
+    // Dedicated passband buffers (QRhi requires separate buffers to avoid GPU conflicts).
+    // 256 floats = 128 vertices = 32 rectangles; ample for the pair of passband fills we draw.
+    constexpr int kPassbandFloatCount = 256;
+    m_passbandVbo.reset(
+        m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, kPassbandFloatCount * sizeof(float)));
     m_passbandVbo->create();
 
     // Dedicated passband edge buffers (12 vertices = 24 floats for 2 rectangles)
@@ -115,9 +128,12 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_notchVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 64 * sizeof(float)));
     m_notchVbo->create();
 
-    // Dedicated RTTY space tone dashed line buffers
-    // 30 dash segments max (300px Retina / 10px stride) × 6 verts × 2 floats = 360; use 512 for headroom
-    m_rttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 512 * sizeof(float)));
+    // Dedicated RTTY space-tone dashed-line buffers.
+    // 30 dash segments max (300 px Retina / 10 px stride) × 6 verts × 2 floats = 360; 512 adds
+    // headroom for wider canvases without reallocating at runtime.
+    constexpr int kRttyDashFloatCount = 512;
+    m_rttySpaceVbo.reset(
+        m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, kRttyDashFloatCount * sizeof(float)));
     m_rttySpaceVbo->create();
 
     // Create uniform buffers
@@ -828,13 +844,13 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
             }
         }
 
-        // Draw separator line
+        // Draw separator line — DialogBorder (#333333) keeps minor dividers consistent across UI.
         QVector<float> separatorLine = {0, spectrumHeight, w, spectrumHeight};
-        drawLines(separatorLine, QColor(51, 51, 51)); // #333333
+        drawLines(separatorLine, QColor(K4Styles::Colors::DialogBorder));
 
         // Draw border
         QVector<float> border = {0, 0, w - 1, 0, w - 1, 0, w - 1, h - 1, w - 1, h - 1, 0, h - 1, 0, h - 1, 0, 0};
-        drawLines(border, QColor(68, 68, 68)); // #444444
+        drawLines(border, QColor(K4Styles::Colors::PanelBorder)); // Frame border — matches VFO panels.
     }
 
     cb->endPass();
@@ -1005,15 +1021,18 @@ void MiniPanRhiWidget::resizeEvent(QResizeEvent *event) {
 }
 
 void MiniPanRhiWidget::createFrequencyLabels() {
-    // Style for the frequency labels - small, semi-transparent background
+    // Small frequency annotations over the mini-pan waterfall. TextGray (#999999) is slightly
+    // darker than the legacy `#CCCCCC`, but matches the rest of the UI's secondary text and is
+    // the single source of truth for label color.
     QString labelStyle = QString("QLabel {"
-                                 "  color: #CCCCCC;"
+                                 "  color: %1;"
                                  "  background-color: rgba(0, 0, 0, 160);"
                                  "  padding: 1px 3px;"
-                                 "  font-size: %1px;"
+                                 "  font-size: %2px;"
                                  "  font-weight: bold;"
                                  "  border-radius: 2px;"
                                  "}")
+                             .arg(K4Styles::Colors::TextGray)
                              .arg(K4Styles::Dimensions::FontSizeNormal);
 
     // Left label (negative frequency offset)

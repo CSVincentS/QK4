@@ -5,6 +5,10 @@
 #include <QPushButton>
 #include "wheelaccumulator.h"
 
+/**
+ * @brief Floating popup for VOX gain / Anti-VOX (mode selected via `PopupMode`). Value range
+ *        0-60; title text adapts to voice vs data mode. Emits valueChanged / voxToggled.
+ */
 class VoxPopupWidget : public QWidget {
     Q_OBJECT
 public:

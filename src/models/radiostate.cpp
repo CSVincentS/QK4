@@ -945,6 +945,23 @@ void RadioState::handleBoolPairVal(const QString &cmd, int charPos, bool &member
 // =============================================================================
 // Command Handler Registry
 // =============================================================================
+//
+// WHY a registry and not a giant switch:
+//   1. K4 CAT prefixes are variable-length (2–5 chars: `FA`, `MD$`, `#REF$`). A switch on the
+//      leading two characters would mis-route `MD$` into the `MD` branch — `$`-suffixed sub-RX
+//      variants are indistinguishable from the base command at the first two bytes.
+//   2. Prefix matching lets us keep the sub-RX variant (`$` suffix) alongside its base command
+//      in code, which makes it obvious they share parsing logic (many use `handleIntPair()`).
+//   3. The list is sorted longest-first so the dispatcher's first-match-wins rule correctly
+//      prefers `RO$` over `RO` and `#REF$` over `#REF`.
+//
+// Dispatch is O(handlers) linear scan — with ~200 handlers and a single CAT stream, this has
+// never been the bottleneck and keeping the list readable (grouped by subsystem) matters more
+// than O(log n) matching.
+//
+// Pure-data and state fields that use `handleIntPair` consolidate the base and sub-RX variants
+// into one call site; handlers that differ between main/sub (e.g., `MD` vs `MD$` often need to
+// emit different signals) stay as separate lambdas.
 
 void RadioState::registerCommandHandlers() {
     // Register handlers in order - will be sorted by prefix length (longest first)
@@ -1074,7 +1091,13 @@ void RadioState::registerCommandHandlers() {
                                       emit antennaChanged(m_selectedAntenna, m_receiveAntenna, m_receiveAntennaSub);
                                   }
                               }});
-    // RO$ — inline (custom multi-arg signal)
+    // RO$ — inline (custom multi-arg signal).
+    // WHY a separate RO$ handler (RIT/XIT offset routing on the K4):
+    //   - No split, RIT or XIT active  → offset lives in `RO`  (VFO A, handled below)
+    //   - Split + XIT                  → offset lives in `RO$` (VFO B, the TX VFO when split)
+    //   - BSET + RIT                   → offset lives in `RO$` (VFO B)
+    // We update `m_ritXitOffsetB` and emit the `B`-variant signal so the VFO B display tracks.
+    // See `~/.claude/projects/.../memory/MEMORY.md` → "K4 RIT/XIT Offset Registers".
     m_commandHandlers.append({"RO$", [this](const QString &c) {
                                   if (c.length() < 4)
                                       return;

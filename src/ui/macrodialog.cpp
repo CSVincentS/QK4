@@ -670,8 +670,12 @@ void MacroDialog::onCommandChanged(const QString &functionId, const QString &com
             }
             // Notify user
             auto *notification = new QLabel(QString("Forbidden command in Startup macro: %1").arg(forbidden), this);
-            notification->setStyleSheet("QLabel { color: #ff4444; background: #331111; padding: 8px; "
-                                        "border-radius: 4px; font-size: 13px; }");
+            // Error toast: bright red text on a dark-red background (dark-red has no named
+            // K4Styles constant because it's used only here; use a local literal tied to ErrorRed).
+            notification->setStyleSheet(QString("QLabel { color: %1; background: #331111; padding: 8px; "
+                                                "border-radius: 4px; font-size: %2px; }")
+                                            .arg(K4Styles::Colors::ErrorRed)
+                                            .arg(K4Styles::Dimensions::FontSizeNotification));
             notification->setAlignment(Qt::AlignCenter);
             notification->move((width() - 350) / 2, 50);
             notification->setFixedWidth(350);

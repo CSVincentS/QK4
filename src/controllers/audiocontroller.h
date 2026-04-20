@@ -10,6 +10,14 @@ class OpusEncoder;
 class ConnectionController;
 class RadioState;
 
+/**
+ * @brief Owns the audio thread + AudioEngine + Opus codecs. Task-level API over the RX/TX paths:
+ *        startAudio/stopAudio, PTT toggle, atomic volume/mix/balance setters. Connects to
+ *        RadioState.streamingLatencyChanged to resize TX Opus frames in step with the K4's SL tier.
+ *
+ * Threading: AudioEngine and both codecs live on `m_audioThread`; public methods are safe to call
+ * from the main thread (they dispatch via QMetaObject::invokeMethod / atomics).
+ */
 class AudioController : public QObject {
     Q_OBJECT
 

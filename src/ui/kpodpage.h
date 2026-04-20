@@ -7,6 +7,10 @@
 
 class KpodDevice;
 
+/**
+ * @brief OptionsDialog "KPOD" tab. Toggles KPOD USB tuning-knob integration and shows
+ *        probe/descriptor info (vendor id, product id, firmware) from the connected device.
+ */
 class KpodPage : public QWidget {
     Q_OBJECT
 

@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <QVector>
 #include <memory>
+#include "ui/k4styles.h"
 
 // Compact Mini-Pan widget for VFO area using Qt RHI
 // GPU-accelerated via Metal (macOS), DirectX (Windows), Vulkan (Linux)
@@ -144,8 +145,8 @@ private:
     float m_heightBoost = 1.0f;
     float m_spectrumRatio = 0.40f; // 40% spectrum, 60% waterfall
 
-    // Spectrum line color
-    QColor m_spectrumColor{0, 191, 255}; // Cyan #00BFFF
+    // Spectrum line color — default to the VFO A cyan theme; caller may override.
+    QColor m_spectrumColor{QColor(K4Styles::Colors::VfoACyan)};
 
     // Passband color
     QColor m_passbandColor{0, 128, 255, 64}; // Blue with 25% alpha

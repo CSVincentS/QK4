@@ -23,6 +23,11 @@ class KpodPage;
 class Kpa1500Page;
 class DxClusterPage;
 
+/**
+ * @brief Tabbed Options dialog. Left QListWidget drives a QStackedWidget holding the 8 option
+ *        pages (About, Audio Input/Output, Rig Control, CW Keyer, KPOD, KPA1500, DX Cluster).
+ *        Pages are lazy-constructed on first tab activation via @c ensurePageCreated.
+ */
 class OptionsDialog : public QDialog {
     Q_OBJECT
 

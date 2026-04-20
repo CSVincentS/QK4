@@ -238,6 +238,10 @@ constexpr const char *BorderLight = "#909090";
 constexpr const char *DialogBorder = "#333333"; // Dialog borders and separators
 constexpr const char *PanelBorder = "#444444";  // Subtle frame border for panadapter/VFO panels
 constexpr const char *ErrorRed = "#FF6666";     // Error/not connected status indicators
+
+// Filter-edge indicator gold. Distinct from AccentAmber (#FFB000): brighter/yellower so it reads
+// clearly against the panadapter's amber passband fill. Used by FilterIndicatorWidget only.
+constexpr const char *FilterIndicatorGold = "#FFD040";
 } // namespace Colors
 
 namespace Dimensions {
@@ -297,16 +301,17 @@ constexpr int MemoryButtonWidth = 42;    // M1-M4, REC, STORE, RCL buttons
 // =============================================================================
 // Font Sizes (in pixels) - use with QFont::setPixelSize() or paintFont()
 // =============================================================================
-constexpr int FontSizeTiny = 7;       // Sub-labels (BANK, AF REC, MESSAGE)
-constexpr int FontSizeSmall = 8;      // Scale fonts, secondary text
-constexpr int FontSizeNormal = 9;     // Alt/secondary button text
-constexpr int FontSizeMedium = 10;    // Labels, descriptions
-constexpr int FontSizeLarge = 11;     // Feature labels, primary labels
-constexpr int FontSizeButton = 12;    // Button text, value displays
-constexpr int FontSizePopup = 14;     // Notifications, popup titles
-constexpr int FontSizeTitle = 16;     // Large control buttons (+/-)
-constexpr int FontSizeIndicator = 18; // TX/RX/SPLIT indicator labels
-constexpr int FontSizeFrequency = 32; // VFO frequency displays (FrequencyDisplayWidget, VfoWidget)
+constexpr int FontSizeTiny = 7;          // Sub-labels (BANK, AF REC, MESSAGE)
+constexpr int FontSizeSmall = 8;         // Scale fonts, secondary text
+constexpr int FontSizeNormal = 9;        // Alt/secondary button text
+constexpr int FontSizeMedium = 10;       // Labels, descriptions
+constexpr int FontSizeLarge = 11;        // Feature labels, primary labels
+constexpr int FontSizeButton = 12;       // Button text, value displays
+constexpr int FontSizeNotification = 13; // Toast / macro-dialog notifications (between Button and Popup)
+constexpr int FontSizePopup = 14;        // Notifications, popup titles
+constexpr int FontSizeTitle = 16;        // Large control buttons (+/-)
+constexpr int FontSizeIndicator = 18;    // TX/RX/SPLIT indicator labels
+constexpr int FontSizeFrequency = 32;    // VFO frequency displays (FrequencyDisplayWidget, VfoWidget)
 
 // =============================================================================
 // Popup Menu Font Sizes (standardized for horizontal control bar popups)
@@ -469,6 +474,14 @@ const QString &sectionHeader();
 
 /// Dynamic-color status label (bold, FontSizePopup)
 const QString &statusLabel(const QString &color);
+
+/// Generic `color: <c>; font-size: <n>px;` label style. Builds a fresh QString each call (dynamic
+/// color/size, so not cached). Use this instead of inlining `QString("color: %1; font-size: %2px;")`
+/// across widgets — single source of truth keeps styling consistent and makes global tweaks cheap.
+QString labelText(const QString &color, int sizePx);
+
+/// Bold variant of `labelText()`.
+QString labelTextBold(const QString &color, int sizePx);
 
 /// Full combo box styling (dark bg, arrow, item view)
 const QString &comboBox();

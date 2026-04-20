@@ -1165,7 +1165,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
 
         // TX indicator and triangles turn red when transmitting
-        QString color = transmitting ? "#FF0000" : K4Styles::Colors::AccentAmber;
+        QString color = transmitting ? K4Styles::Colors::TxRed : K4Styles::Colors::AccentAmber;
         m_txIndicator->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                          .arg(color)
                                          .arg(K4Styles::Dimensions::FontSizeIndicator));
@@ -1267,8 +1267,6 @@ MainWindow::MainWindow(QWidget *parent)
     // VFO Lock indicators - show lock arc on VFO A/B squares when locked
     connect(m_radioState, &RadioState::lockAChanged, this, [this](bool locked) { m_vfoRow->setLockA(locked); });
     connect(m_radioState, &RadioState::lockBChanged, this, [this](bool locked) { m_vfoRow->setLockB(locked); });
-
-    // NOTE: KPA1500 amplifier integration groundwork is in the KPA1500 section (after m_kpa1500Client creation)
 
     // RadioState signals -> Side control panel updates (BW/SHFT/HI/LO)
     // Helper to update all 4 filter display values (called on BW or SHFT change)
@@ -1697,9 +1695,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connectionController, &ConnectionController::miniSpectrumDataReceived, m_spectrumController,
             &SpectrumController::onMiniSpectrumData);
 
-    // Clock timer for date/time display
+    // Clock timer for date/time display — 1 Hz tick is fine; sub-second drift on a clock label
+    // is imperceptible and saves 50× timer overhead vs 50 ms updates.
+    constexpr int kClockUpdateIntervalMs = 1000;
     connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);
-    m_clockTimer->start(1000);
+    m_clockTimer->start(kClockUpdateIntervalMs);
     updateDateTime();
 
     // Hardware controller owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads
@@ -1821,9 +1821,6 @@ MainWindow::MainWindow(QWidget *parent)
     if (RadioSettings::instance()->catServerEnabled()) {
         m_catServer->start(RadioSettings::instance()->catServerPort());
     }
-
-    // resize directly instead of deferring - testing if deferred resize affects QRhi
-    // QTimer::singleShot(0, this, [this]() { resize(1340, 800); });
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -3120,13 +3117,15 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     filterRitXitRow->setContentsMargins(0, 0, 0, 0);
     filterRitXitRow->setSpacing(0);
 
-    // VFO A filter indicator (cyan #00BFFF to match VFO A square/slider)
+    // VFO A filter indicator (cyan — matches VFO A square/slider theme)
     m_filterAWidget = new FilterIndicatorWidget(centerWidget);
-    m_filterAWidget->setShapeColor(QColor(0x00, 0xBF, 0xFF), QColor(0x00, 0xBF, 0xFF)); // Cyan solid
+    const QColor vfoACyan(K4Styles::Colors::VfoACyan);
+    m_filterAWidget->setShapeColor(vfoACyan, vfoACyan);
 
-    // VFO B filter indicator (green #00FF00 to match VFO B square/slider)
+    // VFO B filter indicator (green — matches VFO B square/slider theme)
     m_filterBWidget = new FilterIndicatorWidget(centerWidget);
-    m_filterBWidget->setShapeColor(QColor(0x00, 0xFF, 0x00), QColor(0x00, 0xFF, 0x00)); // Green solid
+    const QColor vfoBGreen(K4Styles::Colors::VfoBGreen);
+    m_filterBWidget->setShapeColor(vfoBGreen, vfoBGreen);
 
     // Layout: [stretch] [FIL_A] [spacer] [RIT/XIT] [spacer] [FIL_B] [stretch]
     // Spacers push filters outward to align under VFO A/B squares above
@@ -3468,8 +3467,15 @@ void MainWindow::onConnectionError(const QString &error) {
 void MainWindow::onRadioReady() {
     qCDebug(qk4Main) << "Successfully authenticated with K4 radio";
 
-    // Set streaming latency AFTER the RDY dump so it overrides the K4's stale state.
-    // The K4 does NOT echo SL commands, so we must also update RadioState optimistically.
+    // WHY we send SL here and also call parseCATCommand optimistically:
+    // The K4 does NOT echo `SL` (streaming latency) responses — it silently applies the new tier
+    // without ever sending back `SL<n>;`. Two consequences:
+    //   (1) We must send `SL<n>;` AFTER the `RDY;` dump so our choice overrides whatever tier
+    //       the radio booted with; sending before RDY would be trampled by the dump's playback.
+    //   (2) Because no echo ever arrives, RadioState would never learn the new value from the
+    //       normal parse path. We update it optimistically so AudioEngine frame sizing and the
+    //       UI display tier match what we just requested. Tier→packet-size map verified in
+    //       `memory/k4-streaming-latency.md`.
     int sl = m_connectionController->currentRadio().streamingLatency;
     m_connectionController->sendCAT(QString("SL%1;").arg(sl));
     m_radioState->parseCATCommand(QString("SL%1;").arg(sl));

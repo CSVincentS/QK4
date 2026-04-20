@@ -8,6 +8,12 @@
 #include <QList>
 #include <QStackedWidget>
 
+/**
+ * @brief DISPLAY bottom-bar popup. Hosts the full panadapter/waterfall control set: REF LEVEL,
+ *        SPAN, TUNE-mode, CURSOR A/B, averaging, DDC NB, peak, freeze, waterfall color. Driven
+ *        by RadioState setters; emits granular `*Changed` signals for MainWindow to send CAT.
+ *        Inherits K4PopupBase for shadow/close/positioning.
+ */
 class DisplayPopupWidget : public K4PopupBase {
     Q_OBJECT
 

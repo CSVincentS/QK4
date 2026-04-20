@@ -11,6 +11,12 @@ class SidetoneGenerator;
 class RadioState;
 class ConnectionController;
 
+/**
+ * @brief Owns hardware-side workers: KPOD USB knob (main thread), HaliKey CW paddle
+ *        (HalikeyDevice — holds its own worker thread), IambicKeyer (HighPriority keyer thread),
+ *        SidetoneGenerator (sidetone thread). Translates KPOD button presses → macroRequested
+ *        and HaliKey PTT footswitch → pttRequested for MainWindow dispatch.
+ */
 class HardwareController : public QObject {
     Q_OBJECT
 

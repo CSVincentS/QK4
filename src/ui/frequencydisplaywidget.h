@@ -19,7 +19,7 @@
  *
  * Usage:
  *   auto *freq = new FrequencyDisplayWidget(parent);
- *   freq->setEditModeColor(QColor("#00BFFF")); // Cyan for VFO A
+ *   freq->setEditModeColor(QColor(K4Styles::Colors::VfoACyan));
  *   freq->setFrequency("7.024.980");
  *   connect(freq, &FrequencyDisplayWidget::frequencyEntered, ...);
  */

@@ -6,6 +6,12 @@
 #include <QTimer>
 #include <QMap>
 
+/**
+ * @brief TCP client for a KPA1500 linear amplifier's remote head server. Polls the amp with
+ *        `POLL_COMMANDS` on a user-configurable interval, parses the pipelined responses, and
+ *        exposes cached state (power, SWR, voltage/current, temperature, band, ATU mode +
+ *        inline state, operating state, faults, firmware). Drives Kpa1500MiniPanel + Kpa1500Page.
+ */
 class KPA1500Client : public QObject {
     Q_OBJECT
 

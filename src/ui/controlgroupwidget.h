@@ -4,6 +4,11 @@
 #include "wheelaccumulator.h"
 #include <QWidget>
 
+/**
+ * @brief Labelled +/- control with an optional AUTO toggle. Used inside FeatureMenuBar for
+ *        ATTN / NB / NR / NOTCH groups. Emits incrementClicked / decrementClicked / autoClicked;
+ *        wheel events are debounced via WheelAccumulator.
+ */
 class ControlGroupWidget : public QWidget {
     Q_OBJECT
 

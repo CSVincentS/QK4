@@ -6,6 +6,12 @@
 
 #include "network/dxclusterclient.h"
 
+/**
+ * @brief Transparent overlay drawn on top of the panadapter that plots DX-cluster spots by
+ *        frequency. Lays out callsign labels in up to MAX_DISPLAY_ROWS rows (stacking same-freq
+ *        clusters), caps per-frequency at MAX_PER_FREQUENCY. Clicking a label emits
+ *        `spotClicked(frequencyHz)` for click-to-tune.
+ */
 class DxSpotOverlay : public QWidget {
     Q_OBJECT
 

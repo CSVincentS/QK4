@@ -5,12 +5,13 @@
 #include <QEvent>
 
 namespace {
-const QString BackgroundColor = "#2a2a2a";
-const QString BorderColor = "#FFB000";
-const QString TextColor = "#FFFFFF";
-const int Padding = 20;
-const int BorderRadius = 8;
-const int BorderWidth = 2;
+// Notification theme — pulled from K4Styles so color/dimension changes propagate globally.
+const QString BackgroundColor = K4Styles::Colors::GradientBottom; // #2a2a2a
+const QString BorderColor = K4Styles::Colors::AccentAmber;        // #FFB000
+const QString TextColor = K4Styles::Colors::TextWhite;            // #FFFFFF
+constexpr int Padding = 20;
+constexpr int BorderRadius = K4Styles::Dimensions::BorderRadiusLarge; // 8
+constexpr int BorderWidth = K4Styles::Dimensions::BorderWidth;        // 2
 } // namespace
 
 NotificationWidget::NotificationWidget(QWidget *parent) : QWidget(parent), m_timer(new QTimer(this)) {

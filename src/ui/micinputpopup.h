@@ -4,6 +4,10 @@
 #include <QWidget>
 #include <QPushButton>
 
+/**
+ * @brief Floating popup for choosing the mic input source (Front / Rear / LINE IN / Front+Line /
+ *        Rear+Line). Mirrors the K4's MC command options; emits inputChanged(0-4).
+ */
 class MicInputPopupWidget : public QWidget {
     Q_OBJECT
 public:

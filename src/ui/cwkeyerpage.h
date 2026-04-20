@@ -9,6 +9,11 @@
 
 class HalikeyDevice;
 
+/**
+ * @brief OptionsDialog "CW Keyer" tab. Chooses the HaliKey device type (V1.4 / MIDI / etc.) and
+ *        serial port, tests connection, and tunes the sidetone volume. Forwards configuration to
+ *        HalikeyDevice via HardwareController.
+ */
 class CwKeyerPage : public QWidget {
     Q_OBJECT
 

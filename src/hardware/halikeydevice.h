@@ -15,6 +15,15 @@ struct HaliKeyPortInfo {
     QString portName;
 };
 
+/**
+ * @brief Owner of the HaliKey CW paddle device. Creates a worker (V1.4 / MIDI / Linux TIOCMIWAIT
+ *        variant — see HaliKeyWorkerBase) on `m_workerThread` and exposes debounced paddle +
+ *        PTT-footswitch signals. Debounce policy: ON emitted immediately, OFF delayed by
+ *        DEBOUNCE_MS (3 ms) to absorb contact bounce without clipping short taps.
+ *
+ * Thread note: raw atomics are written from the worker/OS callback thread, confirmed state is
+ * emitted from the main thread after debounce timers fire.
+ */
 class HalikeyDevice : public QObject {
     Q_OBJECT
 

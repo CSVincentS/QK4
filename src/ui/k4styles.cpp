@@ -317,7 +317,10 @@ QString checkboxButton(int size) {
 }
 
 QString radioButton() {
-    return R"(
+    // Font size templated so the helper stays consistent with Dimensions::PopupButtonSize (the
+    // same 11 px baseline popup-selection buttons use). Color literals here are being migrated
+    // away from hex soup as part of a later cleanup; kept inline for now to avoid a full rewrite.
+    return QString(R"(
         QPushButton {
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                 stop:0 #4a4a4a,
@@ -328,7 +331,7 @@ QString radioButton() {
             border: 2px solid #606060;
             border-radius: 6px;
             padding: 6px 12px;
-            font-size: 11px;
+            font-size: %1px;
             font-weight: bold;
             text-align: left;
         }
@@ -349,7 +352,8 @@ QString radioButton() {
             color: #333333;
             border: 2px solid #AAAAAA;
         }
-    )";
+    )")
+        .arg(Dimensions::PopupButtonSize);
 }
 
 QString compactButton() {
@@ -661,6 +665,14 @@ const QString &statusLabel(const QString &color) {
     static thread_local QString s;
     s = QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(Dimensions::FontSizePopup);
     return s;
+}
+
+QString labelText(const QString &color, int sizePx) {
+    return QString("color: %1; font-size: %2px;").arg(color).arg(sizePx);
+}
+
+QString labelTextBold(const QString &color, int sizePx) {
+    return QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(sizePx);
 }
 
 const QString &comboBox() {

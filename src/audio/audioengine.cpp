@@ -28,8 +28,14 @@ AudioEngine::AudioEngine(QObject *parent)
     m_feedTimer->setInterval(FEED_INTERVAL_MS);
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
-    // Note: setupAudioInput() is deferred to first setMicEnabled(true) call
-    // to avoid macOS mic permission deadlock during connection
+    // WHY setupAudioInput() is deferred until the first setMicEnabled(true):
+    // Qt's mic-permission callback on macOS runs on the main-thread runloop. During connection
+    // startup, AudioController calls into the AudioEngine from the IO thread via
+    // BlockingQueuedConnection; if we opened the input here we would block the IO thread waiting
+    // for the main thread to deliver the permission result, while the main thread would be
+    // blocked on the `RDY;` round-trip waiting on the same IO thread. Deferring to the first PTT
+    // / mic-enable request breaks the cycle: by that point the connection is fully up and the
+    // main thread is free to process the permission dialog.
 }
 
 AudioEngine::~AudioEngine() {

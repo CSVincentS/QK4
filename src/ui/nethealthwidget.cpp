@@ -89,8 +89,9 @@ void NetHealthWidget::showMetricsPopup() {
 
     m_popup = new QWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint);
     m_popup->setAttribute(Qt::WA_ShowWithoutActivating);
-    m_popup->setStyleSheet(
-        QString("background-color: %1; border: 1px solid #444444;").arg(K4Styles::Colors::PopupBackground));
+    m_popup->setStyleSheet(QString("background-color: %1; border: 1px solid %2;")
+                               .arg(K4Styles::Colors::PopupBackground)
+                               .arg(K4Styles::Colors::PanelBorder));
 
     auto *layout = new QVBoxLayout(m_popup);
     layout->setContentsMargins(8, 6, 8, 6);

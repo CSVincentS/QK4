@@ -11,6 +11,20 @@
 #include <QMutex>
 #include <atomic>
 
+/**
+ * @brief Qt audio I/O + Opus pipeline for both RX (speaker) and TX (microphone) paths.
+ *
+ * Lives on @c AudioController::m_audioThread (see `controllers/audiocontroller.cpp`).
+ * RX:  decoded 12 kHz stereo Float32 PCM is enqueued from the IO thread via
+ *      `enqueueAudio()`, consumed by `feedAudioDevice()` on a 10 ms timer, with MX
+ *      routing + volume + balance applied per packet.
+ * TX:  48 kHz mono Float32 captured on a 10 ms poll, resampled 4:1 to 12 kHz,
+ *      framed to the SL-tier sample count, emitted via `microphoneFrame` for the
+ *      Opus encoder.
+ *
+ * Thread-safety: all public setters mutate @c std::atomic members or take
+ * @c m_queueMutex / @c m_mixMutex; no other cross-thread contract.
+ */
 class AudioEngine : public QObject {
     Q_OBJECT
 
@@ -151,10 +165,11 @@ private:
     // Audio-thread-only (no mutex needed) — safety net for partial QIODevice::write()
     QByteArray m_writeBuffer;
 
-    // Jitter buffer constants (adapt to any SL level automatically)
-    // Prebuffer: start playback as soon as the first packet arrives.
-    // The SL level already provides jitter tolerance (larger packets = more runway),
-    // so additional prebuffering just adds latency without benefit.
+    // Jitter buffer constants (adapt to any SL level automatically).
+    // WHY PREBUFFER_PACKETS = 1: SL-tier packets already encode the jitter runway (SL7 carries
+    // ~120 ms of audio per packet). Waiting for a second packet would double the startup latency
+    // without improving tolerance — the runway is already inside the single packet. See
+    // `memory/k4-streaming-latency.md` for the verified SL0–7 frame-bundling map.
     static constexpr int PREBUFFER_PACKETS = 1;
     static constexpr int MAX_QUEUE_BYTES = 1000 * BYTES_PER_MS; // 96,000 bytes (1s cap)
     static constexpr int FEED_INTERVAL_MS = 10;

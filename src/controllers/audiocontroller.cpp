@@ -188,8 +188,10 @@ void AudioController::onMicrophoneFrame(const QByteArray &s16leData) {
         audioData.resize(sampleCount * 2 * sizeof(float)); // Stereo output
         float *output = reinterpret_cast<float *>(audioData.data());
 
+        // Matches OpusDecoder::NORMALIZE_16BIT (private there — kept in sync by value).
+        constexpr float kS16ToFloatScale = 1.0f / 32768.0f;
         for (int i = 0; i < sampleCount; i++) {
-            float normalized = static_cast<float>(samples[i]) / 32768.0f;
+            float normalized = static_cast<float>(samples[i]) * kS16ToFloatScale;
             output[i * 2] = normalized;     // Left channel
             output[i * 2 + 1] = normalized; // Right channel (duplicate)
         }

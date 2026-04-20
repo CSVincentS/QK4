@@ -3,6 +3,11 @@
 
 #include <QWidget>
 
+/**
+ * @brief Pair-toggle widget (e.g., APF on/off + bandwidth). Renders two mutually-exclusive
+ *        buttons with an "&" glyph between them; third signal `bothClicked` fires when the
+ *        region between buttons is clicked.
+ */
 class ToggleGroupWidget : public QWidget {
     Q_OBJECT
 

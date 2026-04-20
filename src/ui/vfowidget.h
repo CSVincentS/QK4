@@ -12,6 +12,13 @@ class MiniPanRhiWidget;
 class TxMeterWidget;
 class FrequencyDisplayWidget;
 
+/**
+ * @brief Per-VFO (A or B) panel: frequency display, mode/AGC/pre/att/NB/NR/notch/APF labels,
+ *        multifunction S/Po/ALC/COMP/SWR/Id meter, and a stacked mini-panadapter toggle. The
+ *        stacked widget swaps index 0 (normal label column) ↔ index 1 (MiniPan) on click. The
+ *        `m_pending*` fields cache mini-pan configuration applied from RadioState before the
+ *        mini-pan is lazy-constructed.
+ */
 class VFOWidget : public QWidget {
     Q_OBJECT
 

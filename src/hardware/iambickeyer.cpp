@@ -93,9 +93,11 @@ void IambicKeyer::enterElement(bool isDit) {
     m_state = isDit ? PlayingDit : PlayingDah;
     m_squeezed = false;
 
-    // Clear only the same-element latch (consumed by this transition).
-    // The opposite latch preserves any cross-paddle press that occurred during
-    // the previous element — without this, brief taps are lost.
+    // WHY only the same-element latch clears here: the latch we consume represents the
+    // just-played element's paddle; leaving the opposite latch alone preserves any
+    // cross-paddle press that happened during the previous element. Without this, brief
+    // Iambic-A taps would be dropped — the paddle released before the element timer fired
+    // but the opposite-paddle latch is what lets the keyer still emit the character.
     if (isDit != m_reversed)
         m_ditLatch.store(false, std::memory_order_relaxed);
     else

@@ -4,7 +4,15 @@
 #include <QObject>
 #include <QByteArray>
 
-// K4 Protocol Constants
+// K4 Protocol Constants.
+//
+// WHY the binary framing exists:
+// Every byte the K4/0 server emits — CAT ASCII, Opus audio, PAN spectrum, MiniPAN — is wrapped in
+// a fixed frame so a single TCP read can contain any mix of payload types. Layout:
+//   [4-byte START_MARKER][4-byte big-endian payload length][payload...][4-byte END_MARKER]
+// Total header/trailer is 12 bytes. The payload's first byte is the PayloadType enum below; the
+// parser (`Protocol::parse`) re-assembles frames across TCP read boundaries. The markers are
+// mirror-imaged (FE FD FC FB vs FB FC FD FE) so a corrupted stream cannot confuse one for the other.
 namespace K4Protocol {
 
 // Packet markers (inline to avoid ODR violations - single definition across all TUs)

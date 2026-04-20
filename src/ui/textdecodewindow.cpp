@@ -73,8 +73,9 @@ void TextDecodeWindow::setupUi() {
     m_thresholdValueLabel = new QLabel("5", titleBar);
     m_thresholdValueLabel->setFixedSize(20, ControlButtonHeight);
     m_thresholdValueLabel->setAlignment(Qt::AlignCenter);
-    m_thresholdValueLabel->setStyleSheet(
-        QString("QLabel { color: %1; font-size: 9px; font-weight: bold; }").arg(K4Styles::Colors::DarkBackground));
+    m_thresholdValueLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
+                                             .arg(K4Styles::Colors::DarkBackground)
+                                             .arg(K4Styles::Dimensions::FontSizeNormal));
 
     m_thresholdPlusBtn = new QPushButton("+", titleBar);
     m_thresholdPlusBtn->setFixedSize(ControlButtonHeight, ControlButtonHeight);

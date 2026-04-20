@@ -10,6 +10,12 @@
 
 class QTimer;
 
+/**
+ * @brief Local CW sidetone synth. Lives on its own thread (HardwareController's m_sidetoneThread)
+ *        so audio output never blocks the keyer or UI. `playSingleDit/Dah` are used when HaliKey
+ *        runs the keyer itself (MIDI hardware); otherwise the IambicKeyer drives element timing.
+ *        All public slots are Q_INVOKABLE and expected to be posted via QueuedConnection.
+ */
 class SidetoneGenerator : public QObject {
     Q_OBJECT
 public:

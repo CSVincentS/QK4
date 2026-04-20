@@ -7,6 +7,12 @@
 #include <QLabel>
 #include "wheelaccumulator.h"
 
+/**
+ * @brief Standalone floating window for the K4's on-radio decoder output (CW / AFSK / FSK / PSK /
+ *        DATA / SSB). One instance per receiver (Main/Sub). Owns its title-bar controls
+ *        (on/off, WPM range, threshold, data rate) and emits state-change signals for MainWindow
+ *        to forward as CAT. Resizable + draggable.
+ */
 class TextDecodeWindow : public QWidget {
     Q_OBJECT
 

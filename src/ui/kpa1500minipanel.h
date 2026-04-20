@@ -5,6 +5,11 @@
 #include <QPushButton>
 #include <QTimer>
 
+/**
+ * @brief Compact KPA1500 amplifier panel docked in the right-side panel. Shows forward/reflected
+ *        power + SWR + temp meters (with peak hold + decay animation), the OPERATE / ATU / ANT /
+ *        TUNE buttons, and fault/disconnect state. Driven by KPA1500Client meter and state signals.
+ */
 class Kpa1500MiniPanel : public QWidget {
     Q_OBJECT
 

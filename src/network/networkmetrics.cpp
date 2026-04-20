@@ -1,9 +1,22 @@
 #include "networkmetrics.h"
 #include <cmath>
 
+namespace {
+// Summary interval: how often we re-derive `HealthTier` and fire `healthTierChanged`. 2 s keeps
+// the NetHealth LED responsive without thrashing consumers; must be ≥ ping interval so at least
+// one RTT sample can land per interval (otherwise `m_stalePingCount` falsely trips Red).
+constexpr int kSummaryIntervalMs = 2000;
+
+// Buffer-fill thresholds for HealthTier, expressed in milliseconds of decoded audio (bytes / 96).
+// Normal steady-state is 1-3 packets (20-60 ms depending on SL). Over 500 ms means packets queued
+// during a network event and never flushed.
+constexpr double kBufferMsWarnYellow = 200.0;
+constexpr double kBufferMsWarnOrange = 500.0;
+} // namespace
+
 NetworkMetrics::NetworkMetrics(QObject *parent) : QObject(parent) {
     m_summaryTimer = new QTimer(this);
-    m_summaryTimer->setInterval(2000);
+    m_summaryTimer->setInterval(kSummaryIntervalMs);
     connect(m_summaryTimer, &QTimer::timeout, this, &NetworkMetrics::onSummaryTimer);
 }
 
@@ -115,13 +128,12 @@ void NetworkMetrics::computeHealthTier() {
     else if (m_rttJitter > 20.0)
         tier = std::max(tier, Yellow);
 
-    // Buffer depth: high buffer = playing stale audio (latency accumulation)
-    // Normal steady-state is 1-3 packets (20-60ms depending on SL).
-    // Over 500ms means packets queued during a network event and never flushed.
+    // Buffer depth: high buffer = playing stale audio (latency accumulation).
+    // Thresholds live in the anonymous namespace at file top.
     double bufferMs = m_bufferBytes / 96.0;
-    if (bufferMs > 500.0)
+    if (bufferMs > kBufferMsWarnOrange)
         tier = std::max(tier, Orange);
-    else if (bufferMs > 200.0)
+    else if (bufferMs > kBufferMsWarnYellow)
         tier = std::max(tier, Yellow);
 
     // Audio dropout: was receiving packets but stopped

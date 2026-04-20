@@ -23,8 +23,10 @@ void Protocol::parse(const QByteArray &data) {
         // Look for start marker
         int startPos = m_buffer.indexOf(K4Protocol::START_MARKER);
         if (startPos == -1) {
-            // No start marker found, clear buffer up to last 3 bytes
-            // (in case partial marker is at the end)
+            // WHY keep the last 3 bytes: START_MARKER is 4 bytes (FE FD FC FB). A TCP read can
+            // split the marker across two reads (1–3 bytes now, final byte(s) in the next read).
+            // Dropping those trailing bytes would lose sync; retaining 3 guarantees we still find
+            // the marker when the remainder arrives.
             if (m_buffer.size() > 3) {
                 m_buffer = m_buffer.right(3);
             }

@@ -159,12 +159,10 @@ private:
     NetHealthWidget *m_netHealthWidget;
     QLabel *m_kpa1500StatusLabel;
 
-    // VFO widgets (modular, reusable components)
+    // VFO widgets (modular, reusable components). Each owns its own multifunction S/Po/ALC/COMP/
+    // SWR/Id meter (VFOWidget::m_txMeter) so there is no standalone TX meter member here.
     VFOWidget *m_vfoA;
     VFOWidget *m_vfoB;
-
-    // NOTE: TX meters are now integrated into VFOWidgets as multifunction S/Po meters
-    // (see VFOWidget::m_txMeter - displays S-meter when RX, Po when TX)
 
     // Mode labels (in center section, not in VFOWidget)
     QLabel *m_modeALabel;

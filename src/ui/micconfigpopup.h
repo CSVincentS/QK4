@@ -4,6 +4,10 @@
 #include <QWidget>
 #include <QPushButton>
 
+/**
+ * @brief Floating popup for per-mic (Front/Rear) bias, pre-amp, and extra buttons configuration.
+ *        Layout adapts to mic type: Front exposes an extra "Buttons" control that Rear does not.
+ */
 class MicConfigPopupWidget : public QWidget {
     Q_OBJECT
 public:

@@ -4,6 +4,10 @@
 #include <QWidget>
 #include "../network/networkmetrics.h"
 
+/**
+ * @brief Small LED in the status bar that reflects NetworkMetrics::HealthTier (green/yellow/red)
+ *        based on buffer fill and jitter. Hover pops a detail panel with live metrics.
+ */
 class NetHealthWidget : public QWidget {
     Q_OBJECT
 public:

@@ -8,6 +8,11 @@
 
 class CatServer;
 
+/**
+ * @brief OptionsDialog "Rig Control" tab. Enables/disables the embedded CAT server (used by
+ *        WSJT-X / MacLoggerDX), configures its listen port, and shows client-count status from
+ *        the CatServer instance.
+ */
 class RigControlPage : public QWidget {
     Q_OBJECT
 

@@ -5,6 +5,11 @@
 #include <QPushButton>
 #include <QWidget>
 
+/**
+ * @brief Floating popup for CW keying-weight adjustment. Wraps the raw KP3 value (range 090-125,
+ *        representing dit/dah ratio × 100) in a +/- interface. Emits `weightChanged(raw)` back to
+ *        MainWindow which sends the `KP3` CAT command.
+ */
 class KeyingWeightPopupWidget : public QWidget {
     Q_OBJECT
 public:

@@ -558,12 +558,13 @@ void RadioManagerDialog::startDiscovery() {
     connect(m_discovery, &K4Discovery::discoveryFinished, this, &RadioManagerDialog::onDiscoveryFinished);
     m_scanButton->setEnabled(false);
 
-    // Start countdown display on the button
-    m_scanSecondsLeft = K4Discovery::TIMEOUT_MS / 1000;
+    // Start countdown display on the button — 1 Hz tick drives the "(Ns)" label.
+    constexpr int kScanTickMs = 1000;
+    m_scanSecondsLeft = K4Discovery::TIMEOUT_MS / kScanTickMs;
     m_scanButton->setText(QString("Scanning (%1s)").arg(m_scanSecondsLeft));
     if (!m_scanCountdown) {
         m_scanCountdown = new QTimer(this);
-        m_scanCountdown->setInterval(1000);
+        m_scanCountdown->setInterval(kScanTickMs);
         connect(m_scanCountdown, &QTimer::timeout, this, [this]() {
             if (--m_scanSecondsLeft > 0) {
                 m_scanButton->setText(QString("Scanning (%1s)").arg(m_scanSecondsLeft));

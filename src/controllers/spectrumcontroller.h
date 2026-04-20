@@ -15,6 +15,12 @@ class QFrame;
 class QPushButton;
 class QLabel;
 
+/**
+ * @brief Orchestrates the panadapter/waterfall UI: owns PanadapterRhiWidget A/B, the span +/-
+ *        buttons, center buttons, VFO indicator labels, and the DxSpotOverlays. Routes inbound
+ *        spectrum/mini-spectrum payloads to the right receiver, handles click-to-tune with
+ *        mode-aware offset correction, and installs a custom mouse-QSY overlay.
+ */
 class SpectrumController : public QObject {
     Q_OBJECT
 

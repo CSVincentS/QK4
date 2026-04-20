@@ -7,6 +7,10 @@
 #include <QString>
 #include <QTcpSocket>
 
+/**
+ * @brief Parsed representation of a single DX cluster spot (spotter, spotted, frequency, mode,
+ *        comment, UTC time). Consumed by DxSpotOverlay for panadapter rendering.
+ */
 struct DxSpot {
     QString spotterCall;
     QString spottedCall;
@@ -17,6 +21,11 @@ struct DxSpot {
     QDateTime timestamp;
 };
 
+/**
+ * @brief TCP client for a single DX cluster node. Owned by DxClusterController (one instance per
+ *        cluster, each on its own thread). `parseSpotLine()` is static for unit-testability.
+ *        Emits typed DxSpot objects plus raw text lines for the console view.
+ */
 class DxClusterClient : public QObject {
     Q_OBJECT
 

@@ -19,6 +19,24 @@ public:
     explicit TcpClient(QObject *parent = nullptr);
     ~TcpClient();
 
+    /**
+     * @brief Connect to a K4/0 server, authenticate, and enter the streaming state.
+     *
+     * @param host    IPv4 or IPv6 address / hostname of the K4/0 server.
+     * @param port    TCP port. 9205 = unencrypted (SHA-384 auth); 9204 = TLS/PSK.
+     * @param password Account password. Used as the PSK when @p useTls is true.
+     * @param useTls  Select the encrypted transport (TLS + PSK on port 9204).
+     * @param identity PSK identity. Only used in TLS mode; empty is accepted.
+     * @param encodeMode Opus encode profile sent to the K4 in the startup macro.
+     *                   Valid range: 0 = RAW32, 1 = RAW16, 2 = Opus Int, 3 = Opus Float (default).
+     *                   Values outside 0-3 are undefined.
+     * @param streamingLatency SL tier (audio packet bundling). Valid range 0–7; there are four
+     *                   distinct tiers — 20/40/60/120 ms per packet, verified in
+     *                   `memory/k4-streaming-latency.md`. Default 3 ≈ 40 ms.
+     *
+     * Must be called on the IO thread (or via `QMetaObject::invokeMethod`); annotated Q_INVOKABLE
+     * so callers on the main thread can queue it.
+     */
     Q_INVOKABLE void connectToHost(const QString &host, quint16 port, const QString &password, bool useTls = false,
                                    const QString &identity = QString(), int encodeMode = 3, int streamingLatency = 3);
     Q_INVOKABLE void disconnectFromHost();

@@ -5,6 +5,11 @@
 #include <QPushButton>
 #include "wheelaccumulator.h"
 
+/**
+ * @brief Popup control bar for the ATTN / NB / NR / MANUAL NOTCH features. Shows a toggle, +/-
+ *        buttons, value readout, and an extra feature-specific button (e.g., NB filter cycle).
+ *        Works in BSET mode by routing CAT with `$` suffix for Sub RX.
+ */
 class FeatureMenuBar : public QWidget {
     Q_OBJECT
 

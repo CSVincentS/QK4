@@ -14,6 +14,10 @@
 #include "../models/menumodel.h"
 #include "wheelaccumulator.h"
 
+/**
+ * @brief Single row inside MenuOverlayWidget — name, current value, optional lock icon. Paints
+ *        its own K4-style dual-panel selection highlight (light column + dark value column).
+ */
 class MenuItemWidget : public QWidget {
     Q_OBJECT
 
@@ -45,6 +49,11 @@ private:
     bool m_editing = false;
 };
 
+/**
+ * @brief Full-screen MENU overlay backing the K4's MN menu system. Driven by MenuModel; emits
+ *        `menuValueChangeRequested(menuId, "+"/"-"/"/")` back to MainWindow for CAT dispatch.
+ *        Implements scroll, search, and the dual-panel K4 highlight style.
+ */
 class MenuOverlayWidget : public QWidget {
     Q_OBJECT
 

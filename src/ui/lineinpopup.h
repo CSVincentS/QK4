@@ -5,6 +5,10 @@
 #include <QPushButton>
 #include "wheelaccumulator.h"
 
+/**
+ * @brief Floating popup for LINE IN source + level (SoundCard vs LineInJack). Sends back level
+ *        (0-250) and source (0/1) changes for MainWindow to emit as K4 LMC / MIC-related CAT.
+ */
 class LineInPopupWidget : public QWidget {
     Q_OBJECT
 public:

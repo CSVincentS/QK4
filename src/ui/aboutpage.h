@@ -6,6 +6,10 @@
 
 class RadioState;
 
+/**
+ * @brief OptionsDialog "About" tab. Shows the K4's callsign, model, installed option modules,
+ *        and firmware versions, decoded from RadioState (OM string, ID, firmware fields).
+ */
 class AboutPage : public QWidget {
     Q_OBJECT
 

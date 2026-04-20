@@ -654,7 +654,9 @@ QWidget *SideControlPanel::createTxFunctionButton(const QString &mainText, const
 
     // Sub-text label (orange) - add top margin to prevent overlap with button
     auto *subLabel = new QLabel(subText, container);
-    subLabel->setStyleSheet(QString("color: %1; font-size: 8px; margin-top: 4px;").arg(K4Styles::Colors::AccentAmber));
+    subLabel->setStyleSheet(QString("color: %1; font-size: %2px; margin-top: 4px;")
+                                .arg(K4Styles::Colors::AccentAmber)
+                                .arg(K4Styles::Dimensions::FontSizeSmall));
     subLabel->setAlignment(Qt::AlignCenter);
     subLabel->setFixedHeight(K4Styles::Dimensions::PopupContentMargin);
     layout->addWidget(subLabel);

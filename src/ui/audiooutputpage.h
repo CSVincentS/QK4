@@ -6,6 +6,10 @@
 
 class AudioEngine;
 
+/**
+ * @brief OptionsDialog "Audio Output" tab. Selects the system speaker device; writes selection
+ *        back to AudioEngine via the AudioController.
+ */
 class AudioOutputPage : public QWidget {
     Q_OBJECT
 

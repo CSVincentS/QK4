@@ -415,7 +415,13 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_waterfallVbo->create();
     rub->uploadStaticBuffer(m_waterfallVbo.get(), waterfallQuad);
 
-    m_overlayVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 4096 * 2 * sizeof(float)));
+    // Overlay VBO: up to 4096 segments × 2 (x,y) floats. Covers the main panadapter overlays
+    // (passband edges, markers, mouse QSY, span cursor). Wider than MiniPan because the full
+    // panadapter shows more simultaneous overlays.
+    constexpr int kOverlayMaxSegments = 4096;
+    constexpr int kFloatsPerVertex = 2;
+    m_overlayVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                        kOverlayMaxSegments * kFloatsPerVertex * sizeof(float)));
     m_overlayVbo->create();
 
     // Create uniform buffers

@@ -5,6 +5,10 @@
 #include <QPushButton>
 #include "wheelaccumulator.h"
 
+/**
+ * @brief Floating popup for LINE OUT L/R levels (0-40) with optional "R = L" link. Emits
+ *        leftLevelChanged / rightLevelChanged / rightEqualsLeftChanged for MainWindow → CAT.
+ */
 class LineOutPopupWidget : public QWidget {
     Q_OBJECT
 

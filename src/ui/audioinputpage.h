@@ -8,6 +8,10 @@
 
 class AudioEngine;
 
+/**
+ * @brief OptionsDialog "Audio Input" tab. Selects the system microphone device and tunes mic
+ *        gain. Writes selections back to AudioEngine via the AudioController.
+ */
 class AudioInputPage : public QWidget {
     Q_OBJECT
 

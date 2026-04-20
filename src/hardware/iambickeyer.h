@@ -6,6 +6,16 @@
 #include <QTimer>
 #include <atomic>
 
+/**
+ * @brief Iambic A/B CW keyer state machine. Lives on `HardwareController::m_keyerThread`
+ *        (HighPriority). Accepts physical paddle state from HaliKey via atomics
+ *        (DirectConnection-safe from any thread), emits `elementStarted(isDit)` /
+ *        `characterSpace()` / `restartAfterPause(ms)` / `keyingFinished()` for MainWindow to
+ *        dispatch K4 KZ commands (see `memory/kz-protocol.md`).
+ *
+ * Latch semantics (see `iambickeyer.cpp::enterElement`): opposite-paddle latch preserves
+ * brief taps that ended before the element timer fired — required for Iambic-A correctness.
+ */
 class IambicKeyer : public QObject {
     Q_OBJECT
 

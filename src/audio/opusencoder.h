@@ -4,6 +4,11 @@
 #include <QObject>
 #include <opus/opus.h>
 
+/**
+ * @brief Opus encoder wrapper for outbound TX mic audio. Frame size is dynamic: 240 / 480 / 720 /
+ *        1440 samples at 12 kHz, matching the current K4 SL tier. AudioController swaps frame
+ *        size in response to `streamingLatencyChanged`.
+ */
 class OpusEncoder : public QObject {
     Q_OBJECT
 

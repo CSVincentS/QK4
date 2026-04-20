@@ -2,6 +2,7 @@
 #define RXEQPOPUPWIDGET_H
 
 #include "k4popupbase.h"
+#include "k4styles.h"
 #include "wheelaccumulator.h"
 #include <QLabel>
 #include <QMenu>
@@ -90,8 +91,8 @@ public:
      * @param accentColor Slider accent color (e.g., K4Styles::Colors::VfoACyan)
      * @param parent Parent widget
      */
-    explicit RxEqPopupWidget(const QString &title = "RX GRAPHIC EQUALIZER", const QString &accentColor = "#00BFFF",
-                             QWidget *parent = nullptr);
+    explicit RxEqPopupWidget(const QString &title = "RX GRAPHIC EQUALIZER",
+                             const QString &accentColor = K4Styles::Colors::VfoACyan, QWidget *parent = nullptr);
 
     /**
      * @brief Set a band's dB value.

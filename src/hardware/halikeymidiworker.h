@@ -6,6 +6,13 @@
 
 class RtMidiIn;
 
+/**
+ * @brief HaliKey worker for the MIDI variant of the paddle device. Uses RtMidi with a callback
+ *        thread (separate from QThread's event loop) that writes raw atomic state into
+ *        HalikeyDevice. Implements the MoMIDI extended protocol for time-stamped paddle events.
+ *        `prepareShutdown()` synchronously closes the MIDI port so RtMidi's callback thread
+ *        quits before QThread tears down.
+ */
 class HaliKeyMidiWorker : public HaliKeyWorkerBase {
     Q_OBJECT
 

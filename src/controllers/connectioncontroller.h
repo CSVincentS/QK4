@@ -9,6 +9,14 @@
 class NetworkMetrics;
 class RadioState;
 
+/**
+ * @brief Owns the IO thread + TcpClient + NetworkMetrics. Exposes connection lifecycle and a
+ *        thread-safe `sendCAT()` / `sendRawPacket()` interface. Re-emits Protocol's inbound
+ *        signals so callers never reach into `tcpClient()->protocol()`.
+ *
+ * Rule 2 exception: `tcpClient()` is exposed only for AudioController (TX audio bypass) and
+ * CatServer (direct CAT forwarding). See CONVENTIONS.md rule 2 for the rationale.
+ */
 class ConnectionController : public QObject {
     Q_OBJECT
 

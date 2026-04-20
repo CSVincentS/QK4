@@ -4,6 +4,12 @@
 #include <QObject>
 #include <opus/opus.h>
 
+/**
+ * @brief Opus decoder wrapper for inbound K4 audio packets. Handles K4's audio-packet framing
+ *        (EM0..EM3), applies the K4_GAIN_BOOST to quiet Opus/S32LE modes (EM1/S16LE already at
+ *        full scale), and emits stereo Float32 PCM. Volume/mix/balance is applied later in
+ *        AudioEngine at playback time, not here.
+ */
 class OpusDecoder : public QObject {
     Q_OBJECT
 

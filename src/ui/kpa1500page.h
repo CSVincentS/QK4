@@ -9,6 +9,10 @@
 
 class KPA1500Client;
 
+/**
+ * @brief OptionsDialog "KPA1500" tab. Enables/disables the amplifier integration, captures the
+ *        IP/port of the KPA1500 server, shows band/firmware/serial/poll status from KPA1500Client.
+ */
 class Kpa1500Page : public QWidget {
     Q_OBJECT
 

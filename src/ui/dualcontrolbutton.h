@@ -28,6 +28,11 @@
  *   wpmBtn->setContext(DualControlButton::Global);
  *   wpmBtn->setShowIndicator(true);  // Only one per group
  */
+/**
+ * @brief Side-panel dual-function control button (see docstring above for behavior). Carries a
+ *        Context-colored indicator bar (Global/MainRx/SubRx) so users can see which receiver the
+ *        button's active function targets.
+ */
 class DualControlButton : public QWidget {
     Q_OBJECT
 

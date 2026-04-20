@@ -7,6 +7,27 @@
 #include <QVector>
 #include <functional>
 
+/**
+ * @brief Central K4 state hub. Parses inbound CAT responses, stores every visible radio property,
+ *        and emits fine-grained `*Changed` signals for the UI.
+ *
+ * Threading contract:
+ * - `parseCATCommand()` is main-thread-only; this is enforced by `Q_ASSERT` in the implementation.
+ *   Callers on other threads must marshal via `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`.
+ *
+ * `$` suffix convention (K4 protocol):
+ * - Commands ending in `$` apply to VFO B / sub-receiver (e.g., `MD$`, `BW$`, `RO$`, `RT$`).
+ * - Parsed-prefix order in the handler registry puts `$` variants before the base prefix so that
+ *   `RO$` is not mis-matched as `RO`. See the handler-registration site in radiostate.cpp.
+ *
+ * `RO` vs `RO$` routing (see `memory/MEMORY.md` → "K4 RIT/XIT Offset Registers"):
+ * - No split, RIT or XIT: offset lives in `RO` (VFO A).
+ * - Split + XIT: offset lives in `RO$` (VFO B — the TX VFO when split).
+ * - BSET + RIT: offset lives in `RO$`.
+ *
+ * New state fields: add a member + signal here, parse in `parseCATCommand()`, then add a test in
+ * `tests/test_radiostate.cpp` (CONVENTIONS.md rule 6).
+ */
 class RadioState : public QObject {
     Q_OBJECT
 
@@ -22,7 +43,14 @@ public:
     // Reset all state to initial values (used on disconnect for clean reconnect)
     void reset();
 
-    // Parse a CAT command response and update state
+    /**
+     * @brief Parse a single CAT response from the K4 and emit `*Changed` signals for any fields
+     *        whose value actually transitioned.
+     *
+     * Must be called on the main (GUI) thread — enforced by `Q_ASSERT(QThread::currentThread() ==
+     * thread())`. Dispatches through the handler registry; the first prefix match wins. Idempotent
+     * for unchanged values (no signal emitted if the new value equals the current one).
+     */
     void parseCATCommand(const QString &command);
 
     // Frequency and VFO

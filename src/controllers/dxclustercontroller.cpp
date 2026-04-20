@@ -5,11 +5,17 @@
 #include <QMetaObject>
 #include <algorithm>
 
+namespace {
+// Spot aging cadence. 30 s matches typical cluster post rate; shorter churns the overlay,
+// longer lets stale spots linger after the spotter gives up.
+constexpr int kSpotAgingIntervalMs = 30000;
+} // namespace
+
 DxClusterController::DxClusterController(RadioState *radioState, QObject *parent)
     : QObject(parent), m_radioState(radioState) {
     // Aging timer runs on UI thread — prunes expired spots every 30s
     m_agingTimer = new QTimer(this);
-    m_agingTimer->setInterval(30000);
+    m_agingTimer->setInterval(kSpotAgingIntervalMs);
     connect(m_agingTimer, &QTimer::timeout, this, &DxClusterController::onAgingTimer);
     m_agingTimer->start();
 }

@@ -5,6 +5,11 @@
 #include <QPushButton>
 #include "wheelaccumulator.h"
 
+/**
+ * @brief Floating popup for SSB / ESSB TX bandwidth. The valid range and title switch based on
+ *        ESSB enabled (24-28 → 2.4-2.8 kHz in SSB, 30-45 → 3.0-4.5 kHz in ESSB). Emits raw
+ *        bandwidth value for CAT translation.
+ */
 class SsbBwPopupWidget : public QWidget {
     Q_OBJECT
 public:
