@@ -101,174 +101,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     setupRadioStateWiring();
 
-    // Averaging control +/- -> local only (not sent to K4 — our smoothing differs from K4's)
-    connect(m_displayPopup, &DisplayPopupWidget::averagingIncrementRequested, this, [this]() {
-        int current = m_radioState->averaging();
-        int next = qMin(current + 1, 20);
-        m_radioState->setAveraging(next);
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::averagingDecrementRequested, this, [this]() {
-        int current = m_radioState->averaging();
-        int next = qMax(current - 1, 1);
-        m_radioState->setAveraging(next);
-    });
-
-    // DDC NB level control +/- -> CAT commands
-    connect(m_displayPopup, &DisplayPopupWidget::nbLevelIncrementRequested, this, [this]() {
-        int current = m_radioState->ddcNbLevel();
-        int next = qMin(current + 1, 14);
-        m_connectionController->sendCAT(QString("#NBL$%1;").arg(next, 2, 10, QChar('0')));
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::nbLevelDecrementRequested, this, [this]() {
-        int current = m_radioState->ddcNbLevel();
-        int next = qMax(current - 1, 0);
-        m_connectionController->sendCAT(QString("#NBL$%1;").arg(next, 2, 10, QChar('0')));
-    });
-
-    // Waterfall height control +/- -> CAT commands (respects LCD/EXT selection)
-    // LCD controls our app's panadapter, EXT is just for external HDMI display
-    connect(m_displayPopup, &DisplayPopupWidget::waterfallHeightIncrementRequested, this, [this]() {
-        bool isExt = m_displayPopup->isExtEnabled() && !m_displayPopup->isLcdEnabled();
-        int current = isExt ? m_radioState->waterfallHeightExt() : m_radioState->waterfallHeight();
-        int next = qMin(current + 1, 90); // 1% steps, max 90%
-        QString cmd =
-            isExt ? QString("#HWFH%1;").arg(next, 2, 10, QChar('0')) : QString("#WFH%1;").arg(next, 2, 10, QChar('0'));
-        m_connectionController->sendCAT(cmd);
-        // Optimistically update RadioState and UI (K4 may not echo this command)
-        if (!isExt) {
-            m_radioState->setWaterfallHeight(next);
-            m_spectrumController->panadapterA()->setWaterfallHeight(next);
-            m_spectrumController->panadapterB()->setWaterfallHeight(next);
-            m_displayPopup->setWaterfallHeight(next);
-            m_vfoA->setMiniPanWaterfallHeight(next);
-            m_vfoB->setMiniPanWaterfallHeight(next);
-        } else {
-            m_radioState->setWaterfallHeightExt(next);
-            m_displayPopup->setWaterfallHeightExt(next);
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::waterfallHeightDecrementRequested, this, [this]() {
-        bool isExt = m_displayPopup->isExtEnabled() && !m_displayPopup->isLcdEnabled();
-        int current = isExt ? m_radioState->waterfallHeightExt() : m_radioState->waterfallHeight();
-        int next = qMax(current - 1, 10); // 1% steps, min 10%
-        QString cmd =
-            isExt ? QString("#HWFH%1;").arg(next, 2, 10, QChar('0')) : QString("#WFH%1;").arg(next, 2, 10, QChar('0'));
-        m_connectionController->sendCAT(cmd);
-        // Optimistically update RadioState and UI (K4 may not echo this command)
-        if (!isExt) {
-            m_radioState->setWaterfallHeight(next);
-            m_spectrumController->panadapterA()->setWaterfallHeight(next);
-            m_spectrumController->panadapterB()->setWaterfallHeight(next);
-            m_displayPopup->setWaterfallHeight(next);
-            m_vfoA->setMiniPanWaterfallHeight(next);
-            m_vfoB->setMiniPanWaterfallHeight(next);
-        } else {
-            m_radioState->setWaterfallHeightExt(next);
-            m_displayPopup->setWaterfallHeightExt(next);
-        }
-    });
-
-    // Span control from display popup -> CAT commands (respects A/B selection)
-    connect(m_displayPopup, &DisplayPopupWidget::spanIncrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
-        if (newSpan != currentSpan) {
-            if (vfoA) {
-                m_radioState->setSpanHz(newSpan);
-                m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
-            }
-            if (vfoB) {
-                m_radioState->setSpanHzB(newSpan);
-                m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
-            }
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::spanDecrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
-        if (newSpan != currentSpan) {
-            if (vfoA) {
-                m_radioState->setSpanHz(newSpan);
-                m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
-            }
-            if (vfoB) {
-                m_radioState->setSpanHzB(newSpan);
-                m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
-            }
-        }
-    });
-
-    // Scale control (GLOBAL - affects both panadapters, no A/B variants)
-    connect(m_displayPopup, &DisplayPopupWidget::scaleIncrementRequested, this, [this]() {
-        int currentScale = m_radioState->scale();
-        if (currentScale < 0)
-            currentScale = 75;                      // Default if not yet received
-        int newScale = qMin(currentScale + 1, 150); // Increment by 1, max 150
-        if (newScale != currentScale) {
-            m_connectionController->sendCAT(QString("#SCL%1;").arg(newScale));
-            // Optimistic update (scale is global, may not echo back)
-            m_radioState->setScale(newScale); // Also updates panadapters via signal
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::scaleDecrementRequested, this, [this]() {
-        int currentScale = m_radioState->scale();
-        if (currentScale < 0)
-            currentScale = 75;                     // Default if not yet received
-        int newScale = qMax(currentScale - 1, 10); // Decrement by 1, min 10
-        if (newScale != currentScale) {
-            m_connectionController->sendCAT(QString("#SCL%1;").arg(newScale));
-            // Optimistic update (scale is global, may not echo back)
-            m_radioState->setScale(newScale); // Also updates panadapters via signal
-        }
-    });
-
-    // Ref level control (LCD only for now, respects A/B selection)
-    // #REF for Main RX, #REF$ for Sub RX - absolute values from -200 to 60
-    connect(m_displayPopup, &DisplayPopupWidget::refLevelIncrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        if (vfoA) {
-            int currentLevel = m_radioState->refLevel();
-            int newLevel = qMin(currentLevel + 1, 60); // Increment by 1 dB, max 60
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevel(newLevel);
-                m_connectionController->sendCAT(QString("#REF%1;").arg(newLevel));
-            }
-        }
-        if (vfoB) {
-            int currentLevel = m_radioState->refLevelB();
-            int newLevel = qMin(currentLevel + 1, 60);
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevelB(newLevel);
-                m_connectionController->sendCAT(QString("#REF$%1;").arg(newLevel));
-            }
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::refLevelDecrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        if (vfoA) {
-            int currentLevel = m_radioState->refLevel();
-            int newLevel = qMax(currentLevel - 1, -200); // Decrement by 1 dB, min -200
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevel(newLevel);
-                m_connectionController->sendCAT(QString("#REF%1;").arg(newLevel));
-            }
-        }
-        if (vfoB) {
-            int currentLevel = m_radioState->refLevelB();
-            int newLevel = qMax(currentLevel - 1, -200);
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevelB(newLevel);
-                m_connectionController->sendCAT(QString("#REF$%1;").arg(newLevel));
-            }
-        }
-    });
-
     // Protocol spectrum data -> SpectrumController (via ConnectionController re-emitted signals)
     connect(m_connectionController, &ConnectionController::spectrumDataReceived, m_spectrumController,
             &SpectrumController::onSpectrumData);
@@ -548,6 +380,174 @@ void MainWindow::setupDisplayPopup() {
     // DisplayPopup CAT commands -> TcpClient
     connect(m_displayPopup, &DisplayPopupWidget::catCommandRequested, this,
             [this](const QString &cmd) { m_connectionController->sendCAT(cmd); });
+
+    // Averaging control +/- -> local only (not sent to K4 — our smoothing differs from K4's)
+    connect(m_displayPopup, &DisplayPopupWidget::averagingIncrementRequested, this, [this]() {
+        int current = m_radioState->averaging();
+        int next = qMin(current + 1, 20);
+        m_radioState->setAveraging(next);
+    });
+    connect(m_displayPopup, &DisplayPopupWidget::averagingDecrementRequested, this, [this]() {
+        int current = m_radioState->averaging();
+        int next = qMax(current - 1, 1);
+        m_radioState->setAveraging(next);
+    });
+
+    // DDC NB level control +/- -> CAT commands
+    connect(m_displayPopup, &DisplayPopupWidget::nbLevelIncrementRequested, this, [this]() {
+        int current = m_radioState->ddcNbLevel();
+        int next = qMin(current + 1, 14);
+        m_connectionController->sendCAT(QString("#NBL$%1;").arg(next, 2, 10, QChar('0')));
+    });
+    connect(m_displayPopup, &DisplayPopupWidget::nbLevelDecrementRequested, this, [this]() {
+        int current = m_radioState->ddcNbLevel();
+        int next = qMax(current - 1, 0);
+        m_connectionController->sendCAT(QString("#NBL$%1;").arg(next, 2, 10, QChar('0')));
+    });
+
+    // Waterfall height control +/- -> CAT commands (respects LCD/EXT selection)
+    // LCD controls our app's panadapter, EXT is just for external HDMI display
+    connect(m_displayPopup, &DisplayPopupWidget::waterfallHeightIncrementRequested, this, [this]() {
+        bool isExt = m_displayPopup->isExtEnabled() && !m_displayPopup->isLcdEnabled();
+        int current = isExt ? m_radioState->waterfallHeightExt() : m_radioState->waterfallHeight();
+        int next = qMin(current + 1, 90); // 1% steps, max 90%
+        QString cmd =
+            isExt ? QString("#HWFH%1;").arg(next, 2, 10, QChar('0')) : QString("#WFH%1;").arg(next, 2, 10, QChar('0'));
+        m_connectionController->sendCAT(cmd);
+        // Optimistically update RadioState and UI (K4 may not echo this command)
+        if (!isExt) {
+            m_radioState->setWaterfallHeight(next);
+            m_spectrumController->panadapterA()->setWaterfallHeight(next);
+            m_spectrumController->panadapterB()->setWaterfallHeight(next);
+            m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
+        } else {
+            m_radioState->setWaterfallHeightExt(next);
+            m_displayPopup->setWaterfallHeightExt(next);
+        }
+    });
+    connect(m_displayPopup, &DisplayPopupWidget::waterfallHeightDecrementRequested, this, [this]() {
+        bool isExt = m_displayPopup->isExtEnabled() && !m_displayPopup->isLcdEnabled();
+        int current = isExt ? m_radioState->waterfallHeightExt() : m_radioState->waterfallHeight();
+        int next = qMax(current - 1, 10); // 1% steps, min 10%
+        QString cmd =
+            isExt ? QString("#HWFH%1;").arg(next, 2, 10, QChar('0')) : QString("#WFH%1;").arg(next, 2, 10, QChar('0'));
+        m_connectionController->sendCAT(cmd);
+        // Optimistically update RadioState and UI (K4 may not echo this command)
+        if (!isExt) {
+            m_radioState->setWaterfallHeight(next);
+            m_spectrumController->panadapterA()->setWaterfallHeight(next);
+            m_spectrumController->panadapterB()->setWaterfallHeight(next);
+            m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
+        } else {
+            m_radioState->setWaterfallHeightExt(next);
+            m_displayPopup->setWaterfallHeightExt(next);
+        }
+    });
+
+    // Span control from display popup -> CAT commands (respects A/B selection)
+    connect(m_displayPopup, &DisplayPopupWidget::spanIncrementRequested, this, [this]() {
+        bool vfoA = m_displayPopup->isVfoAEnabled();
+        bool vfoB = m_displayPopup->isVfoBEnabled();
+        int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
+        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
+        if (newSpan != currentSpan) {
+            if (vfoA) {
+                m_radioState->setSpanHz(newSpan);
+                m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
+            }
+            if (vfoB) {
+                m_radioState->setSpanHzB(newSpan);
+                m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
+            }
+        }
+    });
+    connect(m_displayPopup, &DisplayPopupWidget::spanDecrementRequested, this, [this]() {
+        bool vfoA = m_displayPopup->isVfoAEnabled();
+        bool vfoB = m_displayPopup->isVfoBEnabled();
+        int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
+        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
+        if (newSpan != currentSpan) {
+            if (vfoA) {
+                m_radioState->setSpanHz(newSpan);
+                m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
+            }
+            if (vfoB) {
+                m_radioState->setSpanHzB(newSpan);
+                m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
+            }
+        }
+    });
+
+    // Scale control (GLOBAL - affects both panadapters, no A/B variants)
+    connect(m_displayPopup, &DisplayPopupWidget::scaleIncrementRequested, this, [this]() {
+        int currentScale = m_radioState->scale();
+        if (currentScale < 0)
+            currentScale = 75;                      // Default if not yet received
+        int newScale = qMin(currentScale + 1, 150); // Increment by 1, max 150
+        if (newScale != currentScale) {
+            m_connectionController->sendCAT(QString("#SCL%1;").arg(newScale));
+            // Optimistic update (scale is global, may not echo back)
+            m_radioState->setScale(newScale); // Also updates panadapters via signal
+        }
+    });
+    connect(m_displayPopup, &DisplayPopupWidget::scaleDecrementRequested, this, [this]() {
+        int currentScale = m_radioState->scale();
+        if (currentScale < 0)
+            currentScale = 75;                     // Default if not yet received
+        int newScale = qMax(currentScale - 1, 10); // Decrement by 1, min 10
+        if (newScale != currentScale) {
+            m_connectionController->sendCAT(QString("#SCL%1;").arg(newScale));
+            // Optimistic update (scale is global, may not echo back)
+            m_radioState->setScale(newScale); // Also updates panadapters via signal
+        }
+    });
+
+    // Ref level control (LCD only for now, respects A/B selection)
+    // #REF for Main RX, #REF$ for Sub RX - absolute values from -200 to 60
+    connect(m_displayPopup, &DisplayPopupWidget::refLevelIncrementRequested, this, [this]() {
+        bool vfoA = m_displayPopup->isVfoAEnabled();
+        bool vfoB = m_displayPopup->isVfoBEnabled();
+        if (vfoA) {
+            int currentLevel = m_radioState->refLevel();
+            int newLevel = qMin(currentLevel + 1, 60); // Increment by 1 dB, max 60
+            if (newLevel != currentLevel) {
+                m_radioState->setRefLevel(newLevel);
+                m_connectionController->sendCAT(QString("#REF%1;").arg(newLevel));
+            }
+        }
+        if (vfoB) {
+            int currentLevel = m_radioState->refLevelB();
+            int newLevel = qMin(currentLevel + 1, 60);
+            if (newLevel != currentLevel) {
+                m_radioState->setRefLevelB(newLevel);
+                m_connectionController->sendCAT(QString("#REF$%1;").arg(newLevel));
+            }
+        }
+    });
+    connect(m_displayPopup, &DisplayPopupWidget::refLevelDecrementRequested, this, [this]() {
+        bool vfoA = m_displayPopup->isVfoAEnabled();
+        bool vfoB = m_displayPopup->isVfoBEnabled();
+        if (vfoA) {
+            int currentLevel = m_radioState->refLevel();
+            int newLevel = qMax(currentLevel - 1, -200); // Decrement by 1 dB, min -200
+            if (newLevel != currentLevel) {
+                m_radioState->setRefLevel(newLevel);
+                m_connectionController->sendCAT(QString("#REF%1;").arg(newLevel));
+            }
+        }
+        if (vfoB) {
+            int currentLevel = m_radioState->refLevelB();
+            int newLevel = qMax(currentLevel - 1, -200);
+            if (newLevel != currentLevel) {
+                m_radioState->setRefLevelB(newLevel);
+                m_connectionController->sendCAT(QString("#REF$%1;").arg(newLevel));
+            }
+        }
+    });
 }
 
 void MainWindow::setupFnPopup() {
