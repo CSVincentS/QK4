@@ -81,6 +81,7 @@ set(SOURCES
     src/controllers/statusbarcontroller.cpp
     src/controllers/menucontroller.cpp
     src/controllers/antennaconfigcontroller.cpp
+    src/controllers/featuremenucontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -169,6 +170,7 @@ set(HEADERS
     src/controllers/statusbarcontroller.h
     src/controllers/menucontroller.h
     src/controllers/antennaconfigcontroller.h
+    src/controllers/featuremenucontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

@@ -37,7 +37,7 @@ class KeyingWeightPopupWidget;
 class TextDecodeController;
 class MacroDialog;
 class FilterIndicatorWidget;
-class FeatureMenuBar;
+class FeatureMenuController;
 class ModePopupWidget;
 class HardwareController;
 class DxClusterController;
@@ -239,7 +239,7 @@ private:
     KeyingWeightPopupWidget *m_keyingWeightPopup;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
-    FeatureMenuBar *m_featureMenuBar;
+    FeatureMenuController *m_featureMenuController;
     ModePopupWidget *m_modePopup;
 
     int m_currentBandNum = -1;  // Current band number for VFO A (BN command)
