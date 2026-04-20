@@ -849,6 +849,271 @@ private slots:
         QCOMPARE(rs.apfBandwidthB(), 1);
         QCOMPARE(spy.count(), 1);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — Antenna subsystem
+    // Handlers: AN, AT, ACN, ACM, ACS, ACT, AR, AR$
+    // AN/AR/AR$ all emit the rollup signal antennaChanged(tx, rxMain, rxSub).
+    // ACM/ACS/ACT emit their own *AntCfgChanged signals.
+    // ATU mode has its own atuModeChanged signal.
+    // =========================================================================
+
+    // --- AN (TX antenna select, 1-6) ---
+    void testAntennaSelectParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AN3;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 3); // tx
+    }
+
+    void testAntennaSelectOutOfRangeLow() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AN0;"); // below 1
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testAntennaSelectOutOfRangeHigh() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AN7;"); // above 6
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testAntennaSelectNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("AN3;");
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AN3;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // Rollup semantics: antennaChanged must carry current tx/rxMain/rxSub, not
+    // just the changed one. A Phase 1 split that loses any of those args
+    // would be caught by this test.
+    void testAntennaRollupCarriesAllThree() {
+        RadioState rs;
+        rs.parseCATCommand("AR2;");  // set rxMain = 2
+        rs.parseCATCommand("AR$3;"); // set rxSub = 3
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AN4;"); // now change tx — rollup must include all three
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 4); // tx
+        QCOMPARE(spy.at(0).at(1).toInt(), 2); // rxMain still 2
+        QCOMPARE(spy.at(0).at(2).toInt(), 3); // rxSub still 3
+    }
+
+    // --- AR / AR$ (RX antenna main / sub, 0-7) ---
+    void testArParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AR5;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(1).toInt(), 5); // rxMain
+    }
+
+    void testArOutOfRangeHigh() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AR9;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testArNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("AR5;");
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AR5;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testArBParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AR$4;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(2).toInt(), 4); // rxSub
+    }
+
+    void testArBOutOfRangeHigh() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AR$9;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testArBNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("AR$4;");
+        QSignalSpy spy(&rs, &RadioState::antennaChanged);
+        rs.parseCATCommand("AR$4;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- AT (ATU mode, 0-2) ---
+    void testAtuModeBypass() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::atuModeChanged);
+        rs.parseCATCommand("AT0;");
+        QCOMPARE(rs.atuMode(), 0);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 0);
+    }
+
+    void testAtuModeAuto() {
+        RadioState rs;
+        rs.parseCATCommand("AT2;");
+        QCOMPARE(rs.atuMode(), 2);
+    }
+
+    void testAtuModeOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("AT1;");
+        QSignalSpy spy(&rs, &RadioState::atuModeChanged);
+        rs.parseCATCommand("AT5;"); // above 2
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.atuMode(), 1); // unchanged
+    }
+
+    void testAtuModeNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("AT1;");
+        QSignalSpy spy(&rs, &RadioState::atuModeChanged);
+        rs.parseCATCommand("AT1;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- ACN (Antenna name, ACN<i><name>; where i=1-7) ---
+    void testAntennaNameParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaNameChanged);
+        rs.parseCATCommand("ACN3BEAM;");
+        QCOMPARE(rs.antennaName(3), QString("BEAM"));
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 3);
+        QCOMPARE(spy.at(0).at(1).toString(), QString("BEAM"));
+    }
+
+    void testAntennaNameEmptyRejected() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaNameChanged);
+        rs.parseCATCommand("ACN3;"); // no name text
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testAntennaNameOutOfRangeIndex() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::antennaNameChanged);
+        rs.parseCATCommand("ACN8BEAM;"); // index 8 > 7
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testAntennaNameNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("ACN3BEAM;");
+        QSignalSpy spy(&rs, &RadioState::antennaNameChanged);
+        rs.parseCATCommand("ACN3BEAM;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- ACM / ACS / ACT (antenna config bitmasks) ---
+    // Format: ACM<displayAll><7 mask bits>; ACT has 3 mask bits.
+    void testAcmParsesMask() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::mainRxAntCfgChanged);
+        rs.parseCATCommand("ACM11010010;"); // displayAll=1, mask=1010010
+        QCOMPARE(rs.mainRxDisplayAll(), true);
+        QCOMPARE(spy.count(), 1);
+        auto mask = rs.mainRxAntMask();
+        QCOMPARE(mask.size(), 7);
+        QCOMPARE(mask.at(0), true);
+        QCOMPARE(mask.at(1), false);
+        QCOMPARE(mask.at(2), true);
+        QCOMPARE(mask.at(3), false);
+        QCOMPARE(mask.at(4), false);
+        QCOMPARE(mask.at(5), true);
+        QCOMPARE(mask.at(6), false);
+    }
+
+    void testAcmNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("ACM11010010;");
+        QSignalSpy spy(&rs, &RadioState::mainRxAntCfgChanged);
+        rs.parseCATCommand("ACM11010010;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testAcmSingleBitFlipEmits() {
+        RadioState rs;
+        rs.parseCATCommand("ACM11010010;");
+        QSignalSpy spy(&rs, &RadioState::mainRxAntCfgChanged);
+        rs.parseCATCommand("ACM11010011;"); // bit 6 flipped
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testAcmDisplayAllFlipEmits() {
+        RadioState rs;
+        rs.parseCATCommand("ACM11010010;");
+        QSignalSpy spy(&rs, &RadioState::mainRxAntCfgChanged);
+        rs.parseCATCommand("ACM01010010;"); // displayAll flipped
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(rs.mainRxDisplayAll(), false);
+    }
+
+    void testAcsParsesMask() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::subRxAntCfgChanged);
+        rs.parseCATCommand("ACS11100001;");
+        QCOMPARE(rs.subRxDisplayAll(), true);
+        QCOMPARE(spy.count(), 1);
+        auto mask = rs.subRxAntMask();
+        QCOMPARE(mask.at(0), true);
+        QCOMPARE(mask.at(6), true);
+    }
+
+    void testAcsNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("ACS11100001;");
+        QSignalSpy spy(&rs, &RadioState::subRxAntCfgChanged);
+        rs.parseCATCommand("ACS11100001;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testActParsesMask() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::txAntCfgChanged);
+        rs.parseCATCommand("ACT1101;"); // displayAll=1, TX mask = 101
+        QCOMPARE(rs.txDisplayAll(), true);
+        QCOMPARE(spy.count(), 1);
+        auto mask = rs.txAntMask();
+        QCOMPARE(mask.size(), 3);
+        QCOMPARE(mask.at(0), true);
+        QCOMPARE(mask.at(1), false);
+        QCOMPARE(mask.at(2), true);
+    }
+
+    void testActNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("ACT1101;");
+        QSignalSpy spy(&rs, &RadioState::txAntCfgChanged);
+        rs.parseCATCommand("ACT1101;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testAcmShortCommandIgnored() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::mainRxAntCfgChanged);
+        rs.parseCATCommand("ACM1101;"); // too short (need 11 chars)
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testActShortCommandIgnored() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::txAntCfgChanged);
+        rs.parseCATCommand("ACT11;"); // too short (need 7 chars)
+        QCOMPARE(spy.count(), 0);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
