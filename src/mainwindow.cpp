@@ -89,163 +89,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupDisplayPopup();
     setupFnPopup();
     setupButtonRowPopups();
-
-    // Create RX EQ popup (Main RX - cyan theme)
-    m_rxEqPopup = new RxEqPopupWidget("RX GRAPHIC EQUALIZER", K4Styles::Colors::VfoACyan, this);
-    connect(m_rxEqPopup, &RxEqPopupWidget::closed, this, [this]() {
-        // Close the MAIN RX button row popup when EQ popup closes
-    });
-
-    // Debounce timer for RX EQ - sends command 100ms after last slider change
-    m_rxEqDebounceTimer = new QTimer(this);
-    m_rxEqDebounceTimer->setSingleShot(true);
-    m_rxEqDebounceTimer->setInterval(100);
-    connect(m_rxEqDebounceTimer, &QTimer::timeout, this,
-            [this]() { m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", m_radioState->rxEqBands())); });
-
-    connect(m_rxEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
-        // Update optimistic state immediately (UI stays responsive)
-        m_radioState->setRxEqBand(bandIndex, dB);
-        // Restart debounce timer - will send after 100ms of no changes
-        m_rxEqDebounceTimer->start();
-    });
-    connect(m_rxEqPopup, &RxEqPopupWidget::flatRequested, this, [this]() {
-        // Reset all bands to 0 and send CAT command
-        QVector<int> flat(8, 0);
-        m_radioState->setRxEqBands(flat);
-        m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", flat));
-    });
-
-    // Preset load: get preset from RadioSettings, apply to sliders, send CAT
-    connect(m_rxEqPopup, &RxEqPopupWidget::presetLoadRequested, this, [this](int index) {
-        EqPreset preset = RadioSettings::instance()->rxEqPreset(index);
-        if (!preset.isEmpty() && preset.bands.size() == 8) {
-            m_rxEqPopup->setAllBands(preset.bands);
-            m_radioState->setRxEqBands(preset.bands);
-
-            m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", preset.bands));
-        }
-    });
-
-    // Preset save: show name dialog, save current EQ to preset
-    connect(m_rxEqPopup, &RxEqPopupWidget::presetSaveRequested, this, [this](int index) {
-        EqPreset existing = RadioSettings::instance()->rxEqPreset(index);
-        QString defaultName = existing.name.isEmpty() ? QString("Preset %1").arg(index + 1) : existing.name;
-
-        // Store current EQ bands before dialog (popup may close)
-        QVector<int> currentBands = m_radioState->rxEqBands();
-
-        bool ok;
-        QString name = QInputDialog::getText(this, "Save Preset", "Preset name:", QLineEdit::Normal, defaultName, &ok);
-
-        // Re-show the EQ popup after dialog closes
-        if (m_bottomMenuBar) {
-            m_rxEqPopup->showAboveButton(m_bottomMenuBar->mainRxButton());
-        }
-
-        if (ok) {
-            // Use default name if user cleared it
-            if (name.isEmpty()) {
-                name = QString("Preset %1").arg(index + 1);
-            }
-            EqPreset preset;
-            preset.name = name;
-            preset.bands = currentBands;
-            RadioSettings::instance()->setRxEqPreset(index, preset);
-            m_rxEqPopup->updatePresetName(index, name);
-        }
-    });
-
-    // Preset clear: remove preset from RadioSettings
-    connect(m_rxEqPopup, &RxEqPopupWidget::presetClearRequested, this, [this](int index) {
-        RadioSettings::instance()->clearRxEqPreset(index);
-        m_rxEqPopup->updatePresetName(index, "");
-    });
-
-    // Load preset names on popup creation
-    for (int i = 0; i < 4; i++) {
-        EqPreset preset = RadioSettings::instance()->rxEqPreset(i);
-        m_rxEqPopup->updatePresetName(i, preset.name);
-    }
-
-    // Create TX EQ popup (amber theme)
-    m_txEqPopup = new RxEqPopupWidget("TX GRAPHIC EQUALIZER", K4Styles::Colors::AccentAmber, this);
-    connect(m_txEqPopup, &RxEqPopupWidget::closed, this, [this]() {
-        // Close the TX button row popup when EQ popup closes
-    });
-
-    // Debounce timer for TX EQ - sends command 100ms after last slider change
-    m_txEqDebounceTimer = new QTimer(this);
-    m_txEqDebounceTimer->setSingleShot(true);
-    m_txEqDebounceTimer->setInterval(100);
-    connect(m_txEqDebounceTimer, &QTimer::timeout, this,
-            [this]() { m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", m_radioState->txEqBands())); });
-
-    connect(m_txEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
-        // Update optimistic state immediately (UI stays responsive)
-        m_radioState->setTxEqBand(bandIndex, dB);
-        // Restart debounce timer - will send after 100ms of no changes
-        m_txEqDebounceTimer->start();
-    });
-    connect(m_txEqPopup, &RxEqPopupWidget::flatRequested, this, [this]() {
-        // Reset all bands to 0 and send CAT command
-        QVector<int> flat(8, 0);
-        m_radioState->setTxEqBands(flat);
-        m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", flat));
-    });
-
-    // TX EQ Preset load: get preset from RadioSettings, apply to sliders, send CAT
-    connect(m_txEqPopup, &RxEqPopupWidget::presetLoadRequested, this, [this](int index) {
-        EqPreset preset = RadioSettings::instance()->txEqPreset(index);
-        if (!preset.isEmpty() && preset.bands.size() == 8) {
-            m_txEqPopup->setAllBands(preset.bands);
-            m_radioState->setTxEqBands(preset.bands);
-
-            m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", preset.bands));
-        }
-    });
-
-    // TX EQ Preset save: show name dialog, save current EQ to preset
-    connect(m_txEqPopup, &RxEqPopupWidget::presetSaveRequested, this, [this](int index) {
-        EqPreset existing = RadioSettings::instance()->txEqPreset(index);
-        QString defaultName = existing.name.isEmpty() ? QString("Preset %1").arg(index + 1) : existing.name;
-
-        // Store current EQ bands before dialog (popup may close)
-        QVector<int> currentBands = m_radioState->txEqBands();
-
-        bool ok;
-        QString name =
-            QInputDialog::getText(this, "Save TX Preset", "Preset name:", QLineEdit::Normal, defaultName, &ok);
-
-        // Re-show the EQ popup after dialog closes
-        if (m_bottomMenuBar) {
-            m_txEqPopup->showAboveButton(m_bottomMenuBar->txButton());
-        }
-
-        if (ok) {
-            // Use default name if user cleared it
-            if (name.isEmpty()) {
-                name = QString("Preset %1").arg(index + 1);
-            }
-            EqPreset preset;
-            preset.name = name;
-            preset.bands = currentBands;
-            RadioSettings::instance()->setTxEqPreset(index, preset);
-            m_txEqPopup->updatePresetName(index, name);
-        }
-    });
-
-    // TX EQ Preset clear: remove preset from RadioSettings
-    connect(m_txEqPopup, &RxEqPopupWidget::presetClearRequested, this, [this](int index) {
-        RadioSettings::instance()->clearTxEqPreset(index);
-        m_txEqPopup->updatePresetName(index, "");
-    });
-
-    // Load TX EQ preset names on popup creation
-    for (int i = 0; i < 4; i++) {
-        EqPreset preset = RadioSettings::instance()->txEqPreset(i);
-        m_txEqPopup->updatePresetName(i, preset.name);
-    }
+    setupEqPopups();
 
     // Create antenna configuration popups (MAIN RX, SUB RX, TX)
     m_mainRxAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::MainRx, this);
@@ -1883,6 +1727,165 @@ void MainWindow::setupButtonRowPopups() {
             }
         }
     });
+}
+
+void MainWindow::setupEqPopups() {
+    // Create RX EQ popup (Main RX - cyan theme)
+    m_rxEqPopup = new RxEqPopupWidget("RX GRAPHIC EQUALIZER", K4Styles::Colors::VfoACyan, this);
+    connect(m_rxEqPopup, &RxEqPopupWidget::closed, this, [this]() {
+        // Close the MAIN RX button row popup when EQ popup closes
+    });
+
+    // Debounce timer for RX EQ - sends command 100ms after last slider change
+    m_rxEqDebounceTimer = new QTimer(this);
+    m_rxEqDebounceTimer->setSingleShot(true);
+    m_rxEqDebounceTimer->setInterval(100);
+    connect(m_rxEqDebounceTimer, &QTimer::timeout, this,
+            [this]() { m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", m_radioState->rxEqBands())); });
+
+    connect(m_rxEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
+        // Update optimistic state immediately (UI stays responsive)
+        m_radioState->setRxEqBand(bandIndex, dB);
+        // Restart debounce timer - will send after 100ms of no changes
+        m_rxEqDebounceTimer->start();
+    });
+    connect(m_rxEqPopup, &RxEqPopupWidget::flatRequested, this, [this]() {
+        // Reset all bands to 0 and send CAT command
+        QVector<int> flat(8, 0);
+        m_radioState->setRxEqBands(flat);
+        m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", flat));
+    });
+
+    // Preset load: get preset from RadioSettings, apply to sliders, send CAT
+    connect(m_rxEqPopup, &RxEqPopupWidget::presetLoadRequested, this, [this](int index) {
+        EqPreset preset = RadioSettings::instance()->rxEqPreset(index);
+        if (!preset.isEmpty() && preset.bands.size() == 8) {
+            m_rxEqPopup->setAllBands(preset.bands);
+            m_radioState->setRxEqBands(preset.bands);
+
+            m_connectionController->sendCAT(RadioUtils::buildEqCommand("RE", preset.bands));
+        }
+    });
+
+    // Preset save: show name dialog, save current EQ to preset
+    connect(m_rxEqPopup, &RxEqPopupWidget::presetSaveRequested, this, [this](int index) {
+        EqPreset existing = RadioSettings::instance()->rxEqPreset(index);
+        QString defaultName = existing.name.isEmpty() ? QString("Preset %1").arg(index + 1) : existing.name;
+
+        // Store current EQ bands before dialog (popup may close)
+        QVector<int> currentBands = m_radioState->rxEqBands();
+
+        bool ok;
+        QString name = QInputDialog::getText(this, "Save Preset", "Preset name:", QLineEdit::Normal, defaultName, &ok);
+
+        // Re-show the EQ popup after dialog closes
+        if (m_bottomMenuBar) {
+            m_rxEqPopup->showAboveButton(m_bottomMenuBar->mainRxButton());
+        }
+
+        if (ok) {
+            // Use default name if user cleared it
+            if (name.isEmpty()) {
+                name = QString("Preset %1").arg(index + 1);
+            }
+            EqPreset preset;
+            preset.name = name;
+            preset.bands = currentBands;
+            RadioSettings::instance()->setRxEqPreset(index, preset);
+            m_rxEqPopup->updatePresetName(index, name);
+        }
+    });
+
+    // Preset clear: remove preset from RadioSettings
+    connect(m_rxEqPopup, &RxEqPopupWidget::presetClearRequested, this, [this](int index) {
+        RadioSettings::instance()->clearRxEqPreset(index);
+        m_rxEqPopup->updatePresetName(index, "");
+    });
+
+    // Load preset names on popup creation
+    for (int i = 0; i < 4; i++) {
+        EqPreset preset = RadioSettings::instance()->rxEqPreset(i);
+        m_rxEqPopup->updatePresetName(i, preset.name);
+    }
+
+    // Create TX EQ popup (amber theme)
+    m_txEqPopup = new RxEqPopupWidget("TX GRAPHIC EQUALIZER", K4Styles::Colors::AccentAmber, this);
+    connect(m_txEqPopup, &RxEqPopupWidget::closed, this, [this]() {
+        // Close the TX button row popup when EQ popup closes
+    });
+
+    // Debounce timer for TX EQ - sends command 100ms after last slider change
+    m_txEqDebounceTimer = new QTimer(this);
+    m_txEqDebounceTimer->setSingleShot(true);
+    m_txEqDebounceTimer->setInterval(100);
+    connect(m_txEqDebounceTimer, &QTimer::timeout, this,
+            [this]() { m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", m_radioState->txEqBands())); });
+
+    connect(m_txEqPopup, &RxEqPopupWidget::bandValueChanged, this, [this](int bandIndex, int dB) {
+        // Update optimistic state immediately (UI stays responsive)
+        m_radioState->setTxEqBand(bandIndex, dB);
+        // Restart debounce timer - will send after 100ms of no changes
+        m_txEqDebounceTimer->start();
+    });
+    connect(m_txEqPopup, &RxEqPopupWidget::flatRequested, this, [this]() {
+        // Reset all bands to 0 and send CAT command
+        QVector<int> flat(8, 0);
+        m_radioState->setTxEqBands(flat);
+        m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", flat));
+    });
+
+    // TX EQ Preset load: get preset from RadioSettings, apply to sliders, send CAT
+    connect(m_txEqPopup, &RxEqPopupWidget::presetLoadRequested, this, [this](int index) {
+        EqPreset preset = RadioSettings::instance()->txEqPreset(index);
+        if (!preset.isEmpty() && preset.bands.size() == 8) {
+            m_txEqPopup->setAllBands(preset.bands);
+            m_radioState->setTxEqBands(preset.bands);
+
+            m_connectionController->sendCAT(RadioUtils::buildEqCommand("TE", preset.bands));
+        }
+    });
+
+    // TX EQ Preset save: show name dialog, save current EQ to preset
+    connect(m_txEqPopup, &RxEqPopupWidget::presetSaveRequested, this, [this](int index) {
+        EqPreset existing = RadioSettings::instance()->txEqPreset(index);
+        QString defaultName = existing.name.isEmpty() ? QString("Preset %1").arg(index + 1) : existing.name;
+
+        // Store current EQ bands before dialog (popup may close)
+        QVector<int> currentBands = m_radioState->txEqBands();
+
+        bool ok;
+        QString name =
+            QInputDialog::getText(this, "Save TX Preset", "Preset name:", QLineEdit::Normal, defaultName, &ok);
+
+        // Re-show the EQ popup after dialog closes
+        if (m_bottomMenuBar) {
+            m_txEqPopup->showAboveButton(m_bottomMenuBar->txButton());
+        }
+
+        if (ok) {
+            // Use default name if user cleared it
+            if (name.isEmpty()) {
+                name = QString("Preset %1").arg(index + 1);
+            }
+            EqPreset preset;
+            preset.name = name;
+            preset.bands = currentBands;
+            RadioSettings::instance()->setTxEqPreset(index, preset);
+            m_txEqPopup->updatePresetName(index, name);
+        }
+    });
+
+    // TX EQ Preset clear: remove preset from RadioSettings
+    connect(m_txEqPopup, &RxEqPopupWidget::presetClearRequested, this, [this](int index) {
+        RadioSettings::instance()->clearTxEqPreset(index);
+        m_txEqPopup->updatePresetName(index, "");
+    });
+
+    // Load TX EQ preset names on popup creation
+    for (int i = 0; i < 4; i++) {
+        EqPreset preset = RadioSettings::instance()->txEqPreset(i);
+        m_txEqPopup->updatePresetName(i, preset.name);
+    }
 }
 
 void MainWindow::setupMenuBar() {
