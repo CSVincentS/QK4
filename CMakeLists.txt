@@ -88,6 +88,7 @@ set(SOURCES
     src/controllers/bandnavigationcontroller.cpp
     src/controllers/buttonrowdispatcher.cpp
     src/controllers/macrocontroller.cpp
+    src/controllers/processingdisplaycontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -183,6 +184,7 @@ set(HEADERS
     src/controllers/bandnavigationcontroller.h
     src/controllers/buttonrowdispatcher.h
     src/controllers/macrocontroller.h
+    src/controllers/processingdisplaycontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

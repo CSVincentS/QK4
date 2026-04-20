@@ -25,6 +25,7 @@ class PopupManager;
 class BandNavigationController;
 class ButtonRowDispatcher;
 class MacroController;
+class ProcessingDisplayController;
 class AntennaConfigController;
 class TextDecodeController;
 class FilterIndicatorWidget;
@@ -75,8 +76,6 @@ private slots:
     void onAtuModeChanged(int mode);
     void onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset);
     void onMessageBankChanged(int bank);
-    void onProcessingChanged();
-    void onProcessingChangedB();
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
     void toggleDisplayPopup();
@@ -190,6 +189,7 @@ private:
     BandNavigationController *m_bandNavController;
     ButtonRowDispatcher *m_buttonRowDispatcher;
     MacroController *m_macroController;
+    ProcessingDisplayController *m_processingDisplayController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     FeatureMenuController *m_featureMenuController;

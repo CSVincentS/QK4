@@ -10,6 +10,7 @@
 #include "controllers/bandnavigationcontroller.h"
 #include "controllers/buttonrowdispatcher.h"
 #include "controllers/macrocontroller.h"
+#include "controllers/processingdisplaycontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -110,6 +111,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     setupHardwareController();
 
     m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel->kpa1500Mini(), this);
+
+    m_processingDisplayController = new ProcessingDisplayController(m_radioState, m_vfoA, m_vfoB, this);
 
     setupCatServer();
 }
@@ -483,8 +486,6 @@ void MainWindow::setupRadioStateWiring() {
             [this](int subMode) { m_filterBWidget->setDataSubMode(subMode); });
 
     // RadioState signals -> Processing state updates (AGC, PRE, ATT, NB, NR)
-    connect(m_radioState, &RadioState::processingChanged, this, &MainWindow::onProcessingChanged);
-    connect(m_radioState, &RadioState::processingChangedB, this, &MainWindow::onProcessingChangedB);
 
     // RadioState signals -> MAIN RX / SUB RX popup button label updates
     // AFX button: primary = "AFX ON/OFF", alternate = mode (DELAY/PITCH/OFF)
@@ -2460,66 +2461,6 @@ void MainWindow::onMessageBankChanged(int bank) {
     } else {
         m_msgBankLabel->setText("MSG: II");
     }
-}
-
-void MainWindow::onProcessingChanged() {
-    // AGC
-    QString agcText;
-    switch (m_radioState->agcSpeed()) {
-    case RadioState::AGC_Off:
-        agcText = "AGC";
-        break;
-    case RadioState::AGC_Slow:
-        agcText = "AGC-S";
-        break;
-    case RadioState::AGC_Fast:
-        agcText = "AGC-F";
-        break;
-    }
-    m_vfoA->setAGC(agcText);
-
-    // Preamp (level 0-3)
-    m_vfoA->setPreamp(m_radioState->preampEnabled() && m_radioState->preamp() > 0, m_radioState->preamp());
-
-    // Attenuator (level 0-21 dB)
-    m_vfoA->setAtt(m_radioState->attenuatorEnabled() && m_radioState->attenuatorLevel() > 0,
-                   m_radioState->attenuatorLevel());
-
-    // Noise Blanker
-    m_vfoA->setNB(m_radioState->noiseBlankerEnabled());
-
-    // Noise Reduction
-    m_vfoA->setNR(m_radioState->noiseReductionEnabled());
-}
-
-void MainWindow::onProcessingChangedB() {
-    // AGC
-    QString agcText;
-    switch (m_radioState->agcSpeedB()) {
-    case RadioState::AGC_Off:
-        agcText = "AGC";
-        break;
-    case RadioState::AGC_Slow:
-        agcText = "AGC-S";
-        break;
-    case RadioState::AGC_Fast:
-        agcText = "AGC-F";
-        break;
-    }
-    m_vfoB->setAGC(agcText);
-
-    // Preamp (level 0-3)
-    m_vfoB->setPreamp(m_radioState->preampEnabledB() && m_radioState->preampB() > 0, m_radioState->preampB());
-
-    // Attenuator (level 0-21 dB)
-    m_vfoB->setAtt(m_radioState->attenuatorEnabledB() && m_radioState->attenuatorLevelB() > 0,
-                   m_radioState->attenuatorLevelB());
-
-    // Noise Blanker
-    m_vfoB->setNB(m_radioState->noiseBlankerEnabledB());
-
-    // Noise Reduction
-    m_vfoB->setNR(m_radioState->noiseReductionEnabledB());
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
