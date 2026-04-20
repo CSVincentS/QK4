@@ -88,203 +88,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupBandPopup();
     setupDisplayPopup();
     setupFnPopup();
-
-    // Create button row popups for MAIN RX, SUB RX, TX
-
-    m_mainRxPopup = new ButtonRowPopup(this);
-    // Set button labels: primary (white), alternate (amber if has right-click function, white otherwise)
-    m_mainRxPopup->setButtonLabel(0, "ANT", "CFG", false);     // No alternate function - all white
-    m_mainRxPopup->setButtonLabel(1, "RX", "EQ", false);       // No alternate function - all white
-    m_mainRxPopup->setButtonLabel(2, "LINE OUT", "VFO LINK");  // Right-click toggles VFO LINK
-    m_mainRxPopup->setButtonLabel(3, "AFX OFF", "OFF");        // Right-click same as left
-    m_mainRxPopup->setButtonLabel(4, "AGC-S", "ON");           // Right-click toggles AGC on/off
-    m_mainRxPopup->setButtonLabel(5, "APF", "OFF");            // No alternate function but shows state
-    m_mainRxPopup->setButtonLabel(6, "TEXT", "DECODE", false); // No alternate function - all white
-    connect(m_mainRxPopup, &ButtonRowPopup::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setMainRxActive(false);
-        }
-    });
-    connect(m_mainRxPopup, &ButtonRowPopup::buttonClicked, this, &MainWindow::onMainRxButtonClicked);
-    connect(m_mainRxPopup, &ButtonRowPopup::buttonRightClicked, this, &MainWindow::onMainRxButtonRightClicked);
-
-    m_subRxPopup = new ButtonRowPopup(this);
-    // Set button labels: primary (white), alternate (amber if has right-click function, white otherwise)
-    m_subRxPopup->setButtonLabel(0, "ANT", "CFG", false);     // No alternate function - all white
-    m_subRxPopup->setButtonLabel(1, "RX", "EQ", false);       // No alternate function - all white
-    m_subRxPopup->setButtonLabel(2, "LINE OUT", "VFO LINK");  // Right-click toggles VFO LINK
-    m_subRxPopup->setButtonLabel(3, "AFX OFF", "OFF");        // Right-click same as left
-    m_subRxPopup->setButtonLabel(4, "AGC-S", "ON");           // Right-click toggles AGC on/off
-    m_subRxPopup->setButtonLabel(5, "APF", "OFF");            // No alternate function but shows state
-    m_subRxPopup->setButtonLabel(6, "TEXT", "DECODE", false); // No alternate function - all white
-    connect(m_subRxPopup, &ButtonRowPopup::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setSubRxActive(false);
-        }
-    });
-    connect(m_subRxPopup, &ButtonRowPopup::buttonClicked, this, &MainWindow::onSubRxButtonClicked);
-    connect(m_subRxPopup, &ButtonRowPopup::buttonRightClicked, this, &MainWindow::onSubRxButtonRightClicked);
-
-    m_txPopup = new ButtonRowPopup(this);
-    m_txPopup->setButtonLabel(0, "ANT", "CFG", false);        // TX Antenna config
-    m_txPopup->setButtonLabel(1, "TX", "EQ", false);          // TX Equalizer (future)
-    m_txPopup->setButtonLabel(2, "LINE", "IN", false);        // LINE IN control
-    m_txPopup->setButtonLabel(3, "MIC INP", "MIC CFG", true); // Mic input/config
-    m_txPopup->setButtonLabel(4, "VOX GN", "ANTIVOX", true);  // VOX Gain / Anti-VOX
-    m_txPopup->setButtonLabel(5, "SSB BW", "2.8k", false);    // SSB TX Bandwidth
-    m_txPopup->setButtonLabel(6, "ESSB", "OFF", false);       // ESSB toggle
-    connect(m_txPopup, &ButtonRowPopup::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setTxActive(false);
-        }
-    });
-    connect(m_txPopup, &ButtonRowPopup::buttonClicked, this, [this](int index) {
-        if (!m_connectionController->isConnected())
-            return;
-        switch (index) {
-        case 0: // ANT CFG - show TX antenna config popup
-            if (m_txAntCfgPopup && m_txPopup) {
-                m_txAntCfgPopup->showAboveWidget(m_txPopup);
-            }
-            break;
-        case 1: // TX EQ - show TX graphic equalizer popup
-            if (m_txEqPopup && m_txPopup) {
-                m_txEqPopup->setAllBands(m_radioState->txEqBands());
-                m_txEqPopup->showAboveWidget(m_txPopup);
-            }
-            break;
-        case 2: // LINE IN - show line in control popup
-            if (m_lineInPopup && m_txPopup) {
-                m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
-                m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
-                m_lineInPopup->setSource(m_radioState->lineInSource());
-                m_lineInPopup->showAboveWidget(m_txPopup);
-            }
-            break;
-        case 3: // MIC INP - show mic input selection popup
-            if (m_micInputPopup && m_txPopup) {
-                m_micInputPopup->setCurrentInput(m_radioState->micInput());
-                m_micInputPopup->showAboveWidget(m_txPopup);
-            }
-            break;
-        case 4: // VOX GN - show VOX Gain popup
-            if (m_voxPopup && m_txPopup) {
-                bool isDataMode =
-                    (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
-                m_voxPopup->setPopupMode(VoxPopupWidget::VoxGain);
-                m_voxPopup->setDataMode(isDataMode);
-                m_voxPopup->setValue(m_radioState->voxGainForCurrentMode());
-                m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
-                m_voxPopup->showAboveWidget(m_txPopup);
-            }
-            break;
-        case 5: { // Paddle toggle (CW) or SSB BW popup (voice/data)
-            auto mode = m_radioState->mode();
-            if (mode == RadioState::CW || mode == RadioState::CW_R) {
-                // Toggle paddle orientation N↔R
-                QChar curPaddle = m_radioState->paddleOrientation();
-                QChar newPaddle = (curPaddle == 'R') ? QChar('N') : QChar('R');
-                QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
-                int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
-                m_connectionController->sendCAT(
-                    QString("KP%1%2%3;").arg(iambic).arg(newPaddle).arg(weight, 3, 10, QChar('0')));
-                m_radioState->setPaddleOrientation(newPaddle);
-            } else if (m_ssbBwPopup && m_txPopup) {
-                m_ssbBwPopup->setEssbEnabled(m_radioState->essbEnabled());
-                int bw = m_radioState->ssbTxBw();
-                if (bw >= 24 && bw <= 45) {
-                    m_ssbBwPopup->setBandwidth(bw);
-                }
-                m_ssbBwPopup->showAboveWidget(m_txPopup);
-            }
-            break;
-        }
-        case 6: { // Keying Weight popup (CW) or ESSB toggle (voice/data)
-            auto mode = m_radioState->mode();
-            if (mode == RadioState::CW || mode == RadioState::CW_R) {
-                if (m_keyingWeightPopup && m_txPopup) {
-                    int weight = m_radioState->keyingWeight();
-                    if (weight >= 90 && weight <= 125)
-                        m_keyingWeightPopup->setWeight(weight);
-                    m_keyingWeightPopup->showAboveWidget(m_txPopup);
-                }
-            } else {
-                bool newState = !m_radioState->essbEnabled();
-                int bw = m_radioState->ssbTxBw();
-                // Ensure bw is valid for the new mode
-                // SSB: 24-28, ESSB: 30-45
-                if (newState) {
-                    // Switching to ESSB - use 30 if bw is outside ESSB range
-                    if (bw < 30 || bw > 45)
-                        bw = 30;
-                } else {
-                    // Switching to SSB - use 28 if bw is outside SSB range
-                    if (bw < 24 || bw > 28)
-                        bw = 28;
-                }
-                m_connectionController->sendCAT(QString("ES%1%2;").arg(newState ? 1 : 0).arg(bw, 2, 10, QChar('0')));
-                // Optimistic update
-                m_radioState->setEssbEnabled(newState);
-                m_radioState->setSsbTxBw(bw);
-                // Update button labels
-                if (m_txPopup) {
-                    QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-                    m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
-                    m_txPopup->setButtonLabel(6, "ESSB", newState ? "ON" : "OFF", false);
-                }
-            }
-            break;
-        }
-        default:
-            break;
-        }
-    });
-
-    // TX popup right-click handler for MIC CFG and ANTIVOX
-    connect(m_txPopup, &ButtonRowPopup::buttonRightClicked, this, [this](int index) {
-        if (!m_connectionController->isConnected())
-            return;
-        if (index == 4) { // ANTIVOX
-            if (m_voxPopup && m_txPopup) {
-                m_voxPopup->setPopupMode(VoxPopupWidget::AntiVox);
-                m_voxPopup->setValue(m_radioState->antiVox());
-                m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
-                m_voxPopup->showAboveWidget(m_txPopup);
-            }
-        } else if (index == 5) { // Iambic A↔B toggle (CW mode only)
-            auto mode = m_radioState->mode();
-            if (mode == RadioState::CW || mode == RadioState::CW_R) {
-                QChar curIambic = m_radioState->iambicMode();
-                QChar newIambic = (curIambic == 'B') ? QChar('A') : QChar('B');
-                QChar paddle =
-                    m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
-                int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
-                m_connectionController->sendCAT(
-                    QString("KP%1%2%3;").arg(newIambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
-                m_radioState->setIambicMode(newIambic);
-            }
-        } else if (index == 3) { // MIC CFG
-            int input = m_radioState->micInput();
-            // LINE IN only (input=2) has no mic config
-            if (input == 2)
-                return;
-
-            // Determine if Front or Rear mic
-            bool isFront = (input == 0 || input == 3); // 0=front, 3=front+line
-            if (m_micConfigPopup && m_txPopup) {
-                m_micConfigPopup->setMicType(isFront ? MicConfigPopupWidget::Front : MicConfigPopupWidget::Rear);
-                if (isFront) {
-                    m_micConfigPopup->setBias(m_radioState->micFrontBias());
-                    m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
-                    m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
-                } else {
-                    m_micConfigPopup->setBias(m_radioState->micRearBias());
-                    m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
-                }
-                m_micConfigPopup->showAboveWidget(m_txPopup);
-            }
-        }
-    });
+    setupButtonRowPopups();
 
     // Create RX EQ popup (Main RX - cyan theme)
     m_rxEqPopup = new RxEqPopupWidget("RX GRAPHIC EQUALIZER", K4Styles::Colors::VfoACyan, this);
@@ -1880,6 +1684,205 @@ void MainWindow::setupFnPopup() {
     // Create macro configuration dialog (full-screen overlay)
     m_macroDialog = new MacroDialog(this);
     m_macroDialog->hide();
+}
+
+void MainWindow::setupButtonRowPopups() {
+    // Create button row popups for MAIN RX, SUB RX, TX
+
+    m_mainRxPopup = new ButtonRowPopup(this);
+    // Set button labels: primary (white), alternate (amber if has right-click function, white otherwise)
+    m_mainRxPopup->setButtonLabel(0, "ANT", "CFG", false);     // No alternate function - all white
+    m_mainRxPopup->setButtonLabel(1, "RX", "EQ", false);       // No alternate function - all white
+    m_mainRxPopup->setButtonLabel(2, "LINE OUT", "VFO LINK");  // Right-click toggles VFO LINK
+    m_mainRxPopup->setButtonLabel(3, "AFX OFF", "OFF");        // Right-click same as left
+    m_mainRxPopup->setButtonLabel(4, "AGC-S", "ON");           // Right-click toggles AGC on/off
+    m_mainRxPopup->setButtonLabel(5, "APF", "OFF");            // No alternate function but shows state
+    m_mainRxPopup->setButtonLabel(6, "TEXT", "DECODE", false); // No alternate function - all white
+    connect(m_mainRxPopup, &ButtonRowPopup::closed, this, [this]() {
+        if (m_bottomMenuBar) {
+            m_bottomMenuBar->setMainRxActive(false);
+        }
+    });
+    connect(m_mainRxPopup, &ButtonRowPopup::buttonClicked, this, &MainWindow::onMainRxButtonClicked);
+    connect(m_mainRxPopup, &ButtonRowPopup::buttonRightClicked, this, &MainWindow::onMainRxButtonRightClicked);
+
+    m_subRxPopup = new ButtonRowPopup(this);
+    // Set button labels: primary (white), alternate (amber if has right-click function, white otherwise)
+    m_subRxPopup->setButtonLabel(0, "ANT", "CFG", false);     // No alternate function - all white
+    m_subRxPopup->setButtonLabel(1, "RX", "EQ", false);       // No alternate function - all white
+    m_subRxPopup->setButtonLabel(2, "LINE OUT", "VFO LINK");  // Right-click toggles VFO LINK
+    m_subRxPopup->setButtonLabel(3, "AFX OFF", "OFF");        // Right-click same as left
+    m_subRxPopup->setButtonLabel(4, "AGC-S", "ON");           // Right-click toggles AGC on/off
+    m_subRxPopup->setButtonLabel(5, "APF", "OFF");            // No alternate function but shows state
+    m_subRxPopup->setButtonLabel(6, "TEXT", "DECODE", false); // No alternate function - all white
+    connect(m_subRxPopup, &ButtonRowPopup::closed, this, [this]() {
+        if (m_bottomMenuBar) {
+            m_bottomMenuBar->setSubRxActive(false);
+        }
+    });
+    connect(m_subRxPopup, &ButtonRowPopup::buttonClicked, this, &MainWindow::onSubRxButtonClicked);
+    connect(m_subRxPopup, &ButtonRowPopup::buttonRightClicked, this, &MainWindow::onSubRxButtonRightClicked);
+
+    m_txPopup = new ButtonRowPopup(this);
+    m_txPopup->setButtonLabel(0, "ANT", "CFG", false);        // TX Antenna config
+    m_txPopup->setButtonLabel(1, "TX", "EQ", false);          // TX Equalizer (future)
+    m_txPopup->setButtonLabel(2, "LINE", "IN", false);        // LINE IN control
+    m_txPopup->setButtonLabel(3, "MIC INP", "MIC CFG", true); // Mic input/config
+    m_txPopup->setButtonLabel(4, "VOX GN", "ANTIVOX", true);  // VOX Gain / Anti-VOX
+    m_txPopup->setButtonLabel(5, "SSB BW", "2.8k", false);    // SSB TX Bandwidth
+    m_txPopup->setButtonLabel(6, "ESSB", "OFF", false);       // ESSB toggle
+    connect(m_txPopup, &ButtonRowPopup::closed, this, [this]() {
+        if (m_bottomMenuBar) {
+            m_bottomMenuBar->setTxActive(false);
+        }
+    });
+    connect(m_txPopup, &ButtonRowPopup::buttonClicked, this, [this](int index) {
+        if (!m_connectionController->isConnected())
+            return;
+        switch (index) {
+        case 0: // ANT CFG - show TX antenna config popup
+            if (m_txAntCfgPopup && m_txPopup) {
+                m_txAntCfgPopup->showAboveWidget(m_txPopup);
+            }
+            break;
+        case 1: // TX EQ - show TX graphic equalizer popup
+            if (m_txEqPopup && m_txPopup) {
+                m_txEqPopup->setAllBands(m_radioState->txEqBands());
+                m_txEqPopup->showAboveWidget(m_txPopup);
+            }
+            break;
+        case 2: // LINE IN - show line in control popup
+            if (m_lineInPopup && m_txPopup) {
+                m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
+                m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
+                m_lineInPopup->setSource(m_radioState->lineInSource());
+                m_lineInPopup->showAboveWidget(m_txPopup);
+            }
+            break;
+        case 3: // MIC INP - show mic input selection popup
+            if (m_micInputPopup && m_txPopup) {
+                m_micInputPopup->setCurrentInput(m_radioState->micInput());
+                m_micInputPopup->showAboveWidget(m_txPopup);
+            }
+            break;
+        case 4: // VOX GN - show VOX Gain popup
+            if (m_voxPopup && m_txPopup) {
+                bool isDataMode =
+                    (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
+                m_voxPopup->setPopupMode(VoxPopupWidget::VoxGain);
+                m_voxPopup->setDataMode(isDataMode);
+                m_voxPopup->setValue(m_radioState->voxGainForCurrentMode());
+                m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
+                m_voxPopup->showAboveWidget(m_txPopup);
+            }
+            break;
+        case 5: { // Paddle toggle (CW) or SSB BW popup (voice/data)
+            auto mode = m_radioState->mode();
+            if (mode == RadioState::CW || mode == RadioState::CW_R) {
+                // Toggle paddle orientation N↔R
+                QChar curPaddle = m_radioState->paddleOrientation();
+                QChar newPaddle = (curPaddle == 'R') ? QChar('N') : QChar('R');
+                QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
+                int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
+                m_connectionController->sendCAT(
+                    QString("KP%1%2%3;").arg(iambic).arg(newPaddle).arg(weight, 3, 10, QChar('0')));
+                m_radioState->setPaddleOrientation(newPaddle);
+            } else if (m_ssbBwPopup && m_txPopup) {
+                m_ssbBwPopup->setEssbEnabled(m_radioState->essbEnabled());
+                int bw = m_radioState->ssbTxBw();
+                if (bw >= 24 && bw <= 45) {
+                    m_ssbBwPopup->setBandwidth(bw);
+                }
+                m_ssbBwPopup->showAboveWidget(m_txPopup);
+            }
+            break;
+        }
+        case 6: { // Keying Weight popup (CW) or ESSB toggle (voice/data)
+            auto mode = m_radioState->mode();
+            if (mode == RadioState::CW || mode == RadioState::CW_R) {
+                if (m_keyingWeightPopup && m_txPopup) {
+                    int weight = m_radioState->keyingWeight();
+                    if (weight >= 90 && weight <= 125)
+                        m_keyingWeightPopup->setWeight(weight);
+                    m_keyingWeightPopup->showAboveWidget(m_txPopup);
+                }
+            } else {
+                bool newState = !m_radioState->essbEnabled();
+                int bw = m_radioState->ssbTxBw();
+                // Ensure bw is valid for the new mode
+                // SSB: 24-28, ESSB: 30-45
+                if (newState) {
+                    // Switching to ESSB - use 30 if bw is outside ESSB range
+                    if (bw < 30 || bw > 45)
+                        bw = 30;
+                } else {
+                    // Switching to SSB - use 28 if bw is outside SSB range
+                    if (bw < 24 || bw > 28)
+                        bw = 28;
+                }
+                m_connectionController->sendCAT(QString("ES%1%2;").arg(newState ? 1 : 0).arg(bw, 2, 10, QChar('0')));
+                // Optimistic update
+                m_radioState->setEssbEnabled(newState);
+                m_radioState->setSsbTxBw(bw);
+                // Update button labels
+                if (m_txPopup) {
+                    QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+                    m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
+                    m_txPopup->setButtonLabel(6, "ESSB", newState ? "ON" : "OFF", false);
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    });
+
+    // TX popup right-click handler for MIC CFG and ANTIVOX
+    connect(m_txPopup, &ButtonRowPopup::buttonRightClicked, this, [this](int index) {
+        if (!m_connectionController->isConnected())
+            return;
+        if (index == 4) { // ANTIVOX
+            if (m_voxPopup && m_txPopup) {
+                m_voxPopup->setPopupMode(VoxPopupWidget::AntiVox);
+                m_voxPopup->setValue(m_radioState->antiVox());
+                m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
+                m_voxPopup->showAboveWidget(m_txPopup);
+            }
+        } else if (index == 5) { // Iambic A↔B toggle (CW mode only)
+            auto mode = m_radioState->mode();
+            if (mode == RadioState::CW || mode == RadioState::CW_R) {
+                QChar curIambic = m_radioState->iambicMode();
+                QChar newIambic = (curIambic == 'B') ? QChar('A') : QChar('B');
+                QChar paddle =
+                    m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
+                int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
+                m_connectionController->sendCAT(
+                    QString("KP%1%2%3;").arg(newIambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+                m_radioState->setIambicMode(newIambic);
+            }
+        } else if (index == 3) { // MIC CFG
+            int input = m_radioState->micInput();
+            // LINE IN only (input=2) has no mic config
+            if (input == 2)
+                return;
+
+            // Determine if Front or Rear mic
+            bool isFront = (input == 0 || input == 3); // 0=front, 3=front+line
+            if (m_micConfigPopup && m_txPopup) {
+                m_micConfigPopup->setMicType(isFront ? MicConfigPopupWidget::Front : MicConfigPopupWidget::Rear);
+                if (isFront) {
+                    m_micConfigPopup->setBias(m_radioState->micFrontBias());
+                    m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
+                    m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
+                } else {
+                    m_micConfigPopup->setBias(m_radioState->micRearBias());
+                    m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
+                }
+                m_micConfigPopup->showAboveWidget(m_txPopup);
+            }
+        }
+    });
 }
 
 void MainWindow::setupMenuBar() {
