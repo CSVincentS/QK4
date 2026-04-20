@@ -275,6 +275,227 @@ private slots:
         QCOMPARE(rs.mode(), RadioState::Unknown);
         QCOMPARE(rs.filterPosition(), -1); // sentinel
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — FrequencyVfo subsystem
+    // Handlers covered: FA, FB, FT, RT, RT$, XT, RO, RO$
+    // =========================================================================
+
+    // --- FB signal / idempotence (A/B symmetry with testFrequencySignalEmitted) ---
+    void testFrequencyBSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::frequencyBChanged);
+        rs.parseCATCommand("FB00007074000;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toULongLong(), quint64(7074000));
+    }
+
+    void testFrequencyBNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("FB00007074000;");
+        QSignalSpy spy(&rs, &RadioState::frequencyBChanged);
+        rs.parseCATCommand("FB00007074000;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- FA/FB non-numeric payload (toULongLong fails) ---
+    void testFrequencyANonNumeric() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::frequencyChanged);
+        rs.parseCATCommand("FAABCDEFGHIJK;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.frequency(), quint64(0));
+    }
+
+    void testFrequencyBNonNumeric() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::frequencyBChanged);
+        rs.parseCATCommand("FBABCDEFGHIJK;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.vfoB(), quint64(0));
+    }
+
+    // --- FA/FB low-edge values ---
+    void testFrequencyALowEdge() {
+        RadioState rs;
+        rs.parseCATCommand("FA00000001000;"); // 1 kHz
+        QCOMPARE(rs.frequency(), quint64(1000));
+    }
+
+    void testFrequencyBLowEdge() {
+        RadioState rs;
+        rs.parseCATCommand("FB00000001000;");
+        QCOMPARE(rs.vfoB(), quint64(1000));
+    }
+
+    // --- Split (FT) signal + idempotence ---
+    void testSplitSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::splitChanged);
+        rs.parseCATCommand("FT1;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true);
+    }
+
+    void testSplitNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("FT1;");
+        QSignalSpy spy(&rs, &RadioState::splitChanged);
+        rs.parseCATCommand("FT1;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testSplitTreatsNonOneAsOff() {
+        // handleFT uses strict "mid(2) == \"1\"" — anything else is "off"
+        RadioState rs;
+        rs.parseCATCommand("FT1;");
+        rs.parseCATCommand("FT2;"); // not "1" → off
+        QCOMPARE(rs.splitEnabled(), false);
+    }
+
+    // --- RIT on/off (RT) ---
+    void testRitEnable() {
+        RadioState rs;
+        rs.parseCATCommand("RT1;");
+        QCOMPARE(rs.ritEnabled(), true);
+    }
+
+    void testRitDisable() {
+        RadioState rs;
+        rs.parseCATCommand("RT1;");
+        rs.parseCATCommand("RT0;");
+        QCOMPARE(rs.ritEnabled(), false);
+    }
+
+    void testRitIgnoresInvalidChar() {
+        // handleRT returns silently if char at [2] is not '0' or '1'
+        RadioState rs;
+        rs.parseCATCommand("RT1;");
+        QSignalSpy spy(&rs, &RadioState::ritXitChanged);
+        rs.parseCATCommand("RT2;"); // invalid
+        rs.parseCATCommand("RTX;"); // invalid
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.ritEnabled(), true); // unchanged
+    }
+
+    void testRitNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("RT1;");
+        QSignalSpy spy(&rs, &RadioState::ritXitChanged);
+        rs.parseCATCommand("RT1;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- XIT on/off (XT) ---
+    void testXitEnable() {
+        RadioState rs;
+        rs.parseCATCommand("XT1;");
+        QCOMPARE(rs.xitEnabled(), true);
+    }
+
+    void testXitDisable() {
+        RadioState rs;
+        rs.parseCATCommand("XT1;");
+        rs.parseCATCommand("XT0;");
+        QCOMPARE(rs.xitEnabled(), false);
+    }
+
+    void testXitIgnoresInvalidChar() {
+        RadioState rs;
+        rs.parseCATCommand("XT1;");
+        QSignalSpy spy(&rs, &RadioState::ritXitChanged);
+        rs.parseCATCommand("XT2;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.xitEnabled(), true);
+    }
+
+    void testXitNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("XT1;");
+        QSignalSpy spy(&rs, &RadioState::ritXitChanged);
+        rs.parseCATCommand("XT1;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- RIT/XIT offset (RO) ---
+    void testRitXitOffsetPositive() {
+        RadioState rs;
+        rs.parseCATCommand("RO+0500;");
+        QCOMPARE(rs.ritXitOffset(), 500);
+    }
+
+    void testRitXitOffsetNegative() {
+        RadioState rs;
+        rs.parseCATCommand("RO-0500;");
+        QCOMPARE(rs.ritXitOffset(), -500);
+    }
+
+    void testRitXitOffsetZero() {
+        // First set non-zero so we can detect the change to zero
+        RadioState rs;
+        rs.parseCATCommand("RO+0100;");
+        rs.parseCATCommand("RO+0000;");
+        QCOMPARE(rs.ritXitOffset(), 0);
+    }
+
+    void testRitXitOffsetNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("RO+0500;");
+        QSignalSpy spy(&rs, &RadioState::ritXitChanged);
+        rs.parseCATCommand("RO+0500;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- RT$/RO$ (VFO B RIT register) ---
+    void testRitBEnable() {
+        RadioState rs;
+        rs.parseCATCommand("RT$1;");
+        QCOMPARE(rs.ritEnabledB(), true);
+    }
+
+    void testRitBDisable() {
+        RadioState rs;
+        rs.parseCATCommand("RT$1;");
+        rs.parseCATCommand("RT$0;");
+        QCOMPARE(rs.ritEnabledB(), false);
+    }
+
+    void testRitXitBOffset() {
+        RadioState rs;
+        rs.parseCATCommand("RO$+0250;");
+        QCOMPARE(rs.ritXitOffsetB(), 250);
+    }
+
+    void testRitXitBOffsetNegative() {
+        RadioState rs;
+        rs.parseCATCommand("RO$-0250;");
+        QCOMPARE(rs.ritXitOffsetB(), -250);
+    }
+
+    // --- Rollup signal semantic: ritXitChanged carries rit AND xit AND offset ---
+    // WHY: The RT/XT/RO handlers all fire the same rollup signal. A regression
+    // that splits these onto separate signals (during Phase 1) would only
+    // emit one arg — this test catches that.
+    void testRitXitRollupCarriesAllThree() {
+        RadioState rs;
+        rs.parseCATCommand("XT1;");     // set XIT first
+        rs.parseCATCommand("RO+0500;"); // set offset
+        QSignalSpy spy(&rs, &RadioState::ritXitChanged);
+        rs.parseCATCommand("RT1;"); // now enable RIT — should emit rollup
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true); // ritEnabled
+        QCOMPARE(spy.at(0).at(1).toBool(), true); // xitEnabled still true
+        QCOMPARE(spy.at(0).at(2).toInt(), 500);   // offset still 500
+    }
+
+    // --- A/B symmetry gap flagged by plan exploration ---
+    // Paired with testFilterPositionOutOfRange.
+    void testFilterPositionBOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("FP$2;");       // valid
+        rs.parseCATCommand("FP$9;");       // out of range (1-3)
+        QCOMPARE(rs.filterPositionB(), 2); // unchanged
+    }
 };
 
 QTEST_MAIN(TestRadioState)
