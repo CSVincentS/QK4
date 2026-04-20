@@ -96,19 +96,8 @@ MainWindow::MainWindow(QWidget *parent)
     setupVoxAndSsbPopups();
     setupKeyingWeightPopup();
     setupTextDecodeWindows();
-
-    // Create notification popup for K4 error/status messages (ERxx:)
-    m_notificationWidget = new NotificationWidget(this);
-
-    // ConnectionController signals
-    connect(m_connectionController, &ConnectionController::connectionStateChanged, this,
-            &MainWindow::onConnectionStateChanged);
-    connect(m_connectionController, &ConnectionController::connectionError, this, &MainWindow::onConnectionError);
-    connect(m_connectionController, &ConnectionController::radioReady, this, &MainWindow::onRadioReady);
-    connect(m_connectionController, &ConnectionController::authFailed, this, &MainWindow::onAuthFailed);
-
-    // Protocol CAT responses -> RadioState (via ConnectionController re-emitted signal)
-    connect(m_connectionController, &ConnectionController::catResponseReceived, this, &MainWindow::onCatResponse);
+    setupNotificationWidget();
+    setupConnectionWiring();
 
     // RadioState signals -> UI updates (VFO A)
     connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::onFrequencyChanged);
@@ -1904,6 +1893,23 @@ void MainWindow::setupTextDecodeWindows() {
             m_textDecodeWindowMain->appendText(text);
         }
     });
+}
+
+void MainWindow::setupNotificationWidget() {
+    // Create notification popup for K4 error/status messages (ERxx:)
+    m_notificationWidget = new NotificationWidget(this);
+}
+
+void MainWindow::setupConnectionWiring() {
+    // ConnectionController signals
+    connect(m_connectionController, &ConnectionController::connectionStateChanged, this,
+            &MainWindow::onConnectionStateChanged);
+    connect(m_connectionController, &ConnectionController::connectionError, this, &MainWindow::onConnectionError);
+    connect(m_connectionController, &ConnectionController::radioReady, this, &MainWindow::onRadioReady);
+    connect(m_connectionController, &ConnectionController::authFailed, this, &MainWindow::onAuthFailed);
+
+    // Protocol CAT responses -> RadioState (via ConnectionController re-emitted signal)
+    connect(m_connectionController, &ConnectionController::catResponseReceived, this, &MainWindow::onCatResponse);
 }
 
 void MainWindow::setupMenuBar() {

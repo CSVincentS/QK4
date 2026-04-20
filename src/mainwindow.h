@@ -152,6 +152,8 @@ private:
     void setupVoxAndSsbPopups();
     void setupKeyingWeightPopup();
     void setupTextDecodeWindows();
+    void setupNotificationWidget();
+    void setupConnectionWiring();
 
     void updateConnectionState(TcpClient::ConnectionState state);
     QString formatFrequency(quint64 freq);
