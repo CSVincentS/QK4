@@ -28,7 +28,7 @@
 #include "ui/ssbbwpopup.h"
 #include "ui/keyingweightpopup.h"
 #include "controllers/textdecodecontroller.h"
-#include "models/menumodel.h"
+#include "controllers/menucontroller.h"
 #include "controllers/dxclustercontroller.h"
 #include "controllers/spectrumcontroller.h"
 #include "dsp/panadapter_rhi.h"
@@ -61,9 +61,7 @@
 Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
 
 // ============== MainWindow Implementation ==============
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), m_radioState(new RadioState(this)), m_menuModel(new MenuModel(this)),
-      m_menuOverlay(nullptr) {
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new RadioState(this)) {
     setupControllers();
 
     // IMPORTANT: setupUi() MUST be called BEFORE setupMenuBar()!
@@ -84,7 +82,11 @@ MainWindow::MainWindow(QWidget *parent)
         m_bottomMenuBar->setPttActive(false);
     });
 
-    setupMenuOverlay();
+    m_menuController = new MenuController(m_connectionController, m_spectrumController, this, this);
+    connect(m_menuController, &MenuController::overlayClosed, this, [this]() {
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setMenuActive(false);
+    });
     setupBandPopup();
     setupDisplayPopup();
     setupFnPopup();
@@ -167,56 +169,6 @@ void MainWindow::setupControllers() {
     // DX Cluster controller owns the cluster TCP client and spot cache
     m_dxClusterController = new DxClusterController(m_radioState, this);
     m_spectrumController->setDxClusterController(m_dxClusterController);
-}
-
-void MainWindow::setupMenuOverlay() {
-    // Menu items are populated from MEDF responses in onCatResponse()
-    // when the radio sends RDY; after connection
-
-    // Create menu overlay (positioned over spectrum container)
-    m_menuOverlay = new MenuOverlayWidget(m_menuModel, this);
-    m_menuOverlay->hide();
-
-    // Connect menu overlay signals
-    connect(m_menuOverlay, &MenuOverlayWidget::menuValueChangeRequested, this, &MainWindow::onMenuValueChangeRequested);
-    connect(m_menuOverlay, &MenuOverlayWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setMenuActive(false);
-        }
-    });
-
-    // Connect menu model value changes for display settings
-    connect(m_menuModel, &MenuModel::menuValueChanged, this, &MainWindow::onMenuModelValueChanged);
-
-    // Also check initial values when menu items are first loaded from MEDF
-    connect(m_menuModel, &MenuModel::menuItemAdded, this, [this](int menuId) {
-        const MenuItem *item = m_menuModel->getMenuItem(menuId);
-        if (item && item->name == "Spectrum Amplitude Units") {
-            bool useSUnits = (item->currentValue == 1);
-            qCDebug(qk4Main) << "Initial spectrum amplitude units:" << (useSUnits ? "S-UNITS" : "dBm");
-            if (m_spectrumController->panadapterA()) {
-                m_spectrumController->panadapterA()->setAmplitudeUnits(useSUnits);
-            }
-            if (m_spectrumController->panadapterB()) {
-                m_spectrumController->panadapterB()->setAmplitudeUnits(useSUnits);
-            }
-        }
-        if (item && item->name == "Mouse L/R Button QSY") {
-            m_mouseQsyMenuId = item->id;
-            m_mouseQsyMode = item->currentValue;
-            m_spectrumController->setMouseQsyMode(m_mouseQsyMode);
-            qCDebug(qk4Main) << "Mouse L/R Button QSY: menuId=" << m_mouseQsyMenuId << "mode=" << m_mouseQsyMode;
-        }
-        if (item && item->name == "FSK Mark-Tone") {
-            m_fskMarkToneMenuId = item->id;
-            int toneHz = item->options[item->currentValue].toInt();
-            qCDebug(qk4Main) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
-            if (m_spectrumController->panadapterA())
-                m_spectrumController->panadapterA()->setFskMarkTone(toneHz);
-            if (m_spectrumController->panadapterB())
-                m_spectrumController->panadapterB()->setFskMarkTone(toneHz);
-        }
-    });
 }
 
 void MainWindow::setupBandPopup() {
@@ -2740,7 +2692,7 @@ void MainWindow::setupUi() {
     m_rclBtn->installEventFilter(this);
 
     // Connect bottom menu bar signals
-    connect(m_bottomMenuBar, &BottomMenuBar::menuClicked, this, &MainWindow::showMenuOverlay);
+    connect(m_bottomMenuBar, &BottomMenuBar::menuClicked, m_menuController, &MenuController::toggleOverlay);
     connect(m_bottomMenuBar, &BottomMenuBar::fnClicked, this, &MainWindow::toggleFnPopup);
     connect(m_bottomMenuBar, &BottomMenuBar::displayClicked, this, &MainWindow::toggleDisplayPopup);
     connect(m_bottomMenuBar, &BottomMenuBar::bandClicked, this, &MainWindow::toggleBandPopup);
@@ -3296,7 +3248,7 @@ void MainWindow::onRadioReady() {
     }
 
     // Create synthetic "Display FPS" menu item (will update from radio echo)
-    m_menuModel->addSyntheticDisplayFpsItem(15);
+    m_menuController->addSyntheticDisplayFpsItem(15);
 
     // Startup macro is sent pre-RDY by TcpClient so the state dump reflects changes.
 
@@ -3338,11 +3290,11 @@ void MainWindow::onCatResponse(const QString &response) {
 
         // Parse MEDF (menu definitions) from RDY response
         if (cmd.startsWith("MEDF")) {
-            m_menuModel->parseMEDF(cmd + ";");
+            m_menuController->menuModel()->parseMEDF(cmd + ";");
         }
         // Route ME (menu value) commands to MenuModel for real-time updates
         else if (cmd.startsWith("ME")) {
-            m_menuModel->parseME(cmd + ";");
+            m_menuController->menuModel()->parseME(cmd + ";");
         }
         // Parse BN$ (Band Number) response for VFO B (Sub RX)
         else if (cmd.startsWith("BN$")) {
@@ -3646,7 +3598,7 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
         m_vfoB->setMiniPanNotchFilter(false, 0);
 
         // Clear menu model
-        m_menuModel->clear();
+        m_menuController->menuModel()->clear();
 
         // Disconnect KPA1500 when K4 disconnects
         if (m_kpa1500Client->isConnected()) {
@@ -3696,7 +3648,7 @@ void MainWindow::onSwrChanged(double swr) {
 
 void MainWindow::onDisplayFpsChanged(int fps) {
     // Update synthetic menu item value with whatever the radio reports
-    m_menuModel->updateValue(MenuModel::SYNTHETIC_DISPLAY_FPS_ID, fps);
+    m_menuController->setDisplayFps(fps);
 }
 
 void MainWindow::onSplitChanged(bool enabled) {
@@ -4087,121 +4039,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     QMainWindow::keyPressEvent(event);
 }
 
-void MainWindow::showMenuOverlay() {
-    // Close display popup if visible
-    if (m_displayPopup && m_displayPopup->isVisible()) {
-        m_displayPopup->hidePopup();
-    }
-
-    // Toggle menu overlay visibility
-    if (m_spectrumController->spectrumContainer() && m_menuOverlay) {
-        if (m_menuOverlay->isVisible()) {
-            // Hide the overlay
-            m_menuOverlay->hide();
-            if (m_bottomMenuBar) {
-                m_bottomMenuBar->setMenuActive(false);
-            }
-        } else {
-            // Show the overlay
-            QPoint pos = m_spectrumController->spectrumContainer()->mapTo(this, QPoint(0, 0));
-            m_menuOverlay->setGeometry(pos.x(), pos.y(), m_spectrumController->spectrumContainer()->width(),
-                                       m_spectrumController->spectrumContainer()->height());
-            m_menuOverlay->show();
-            m_menuOverlay->raise();
-
-            // Set MENU button to active (inverse colors)
-            if (m_bottomMenuBar) {
-                m_bottomMenuBar->setMenuActive(true);
-            }
-        }
-    }
-}
-
-void MainWindow::onMenuValueChangeRequested(int menuId, const QString &action) {
-    // Handle synthetic menu items (negative IDs)
-    if (menuId == MenuModel::SYNTHETIC_DISPLAY_FPS_ID) {
-        MenuItem *item = m_menuModel->getMenuItem(menuId);
-        if (!item)
-            return;
-
-        int newValue = item->currentValue;
-        if (action == "+") {
-            newValue = qMin(item->currentValue + 1, 30);
-        } else if (action == "-") {
-            newValue = qMax(item->currentValue - 1, 12);
-        }
-
-        // Update menu model
-        m_menuModel->updateValue(menuId, newValue);
-
-        // Send #FPS command (not ME command)
-        if (m_connectionController->isConnected()) {
-            qCDebug(qk4Main) << "Display FPS change:" << QString("#FPS%1;").arg(newValue);
-            m_connectionController->sendCAT(QString("#FPS%1;").arg(newValue));
-        }
-
-        // Update stored preference
-        m_connectionController->setDisplayFps(newValue);
-        return;
-    }
-
-    // Build and send ME command for real K4 menu items
-    // action: "+" = increment, "-" = decrement, "/" = toggle
-    QString cmd = QString("ME%1.%2;").arg(menuId, 4, 10, QChar('0')).arg(action);
-    qCDebug(qk4Main) << "Menu value change:" << cmd;
-
-    // For prototype: update local model immediately (optimistic update)
-    MenuItem *item = m_menuModel->getMenuItem(menuId);
-    if (item) {
-        int newValue = item->currentValue;
-        if (action == "+") {
-            newValue = qMin(item->currentValue + item->step, item->maxValue);
-        } else if (action == "-") {
-            newValue = qMax(item->currentValue - item->step, item->minValue);
-        } else if (action == "/") {
-            // Toggle binary
-            newValue = (item->currentValue == 0) ? 1 : 0;
-        }
-        m_menuModel->updateValue(menuId, newValue);
-    }
-
-    // When connected to radio, send the command
-    if (m_connectionController->isConnected()) {
-        m_connectionController->sendCAT(cmd);
-    }
-}
-
-void MainWindow::onMenuModelValueChanged(int menuId, int newValue) {
-    // Check if this is the "Spectrum Amplitude Units" menu item
-    const MenuItem *item = m_menuModel->getMenuItem(menuId);
-    if (item && item->name == "Spectrum Amplitude Units") {
-        // 0 = dBm, 1 = S-UNITS
-        bool useSUnits = (newValue == 1);
-        qCDebug(qk4Main) << "Spectrum amplitude units changed:" << (useSUnits ? "S-UNITS" : "dBm");
-
-        m_spectrumController->panadapterA()->setAmplitudeUnits(useSUnits);
-        m_spectrumController->panadapterB()->setAmplitudeUnits(useSUnits);
-    }
-
-    // Track "Mouse L/R Button QSY" setting changes (from radio or menu overlay)
-    if (menuId == m_mouseQsyMenuId) {
-        m_mouseQsyMode = newValue;
-        m_spectrumController->setMouseQsyMode(newValue);
-        qCDebug(qk4Main) << "Mouse L/R Button QSY changed to:" << m_mouseQsyMode;
-    }
-
-    // Track "FSK Mark-Tone" setting changes
-    if (menuId == m_fskMarkToneMenuId) {
-        auto *item = m_menuModel->getMenuItem(menuId);
-        if (item && newValue >= 0 && newValue < item->options.size()) {
-            int toneHz = item->options[newValue].toInt();
-            qCDebug(qk4Main) << "FSK Mark-Tone changed to:" << toneHz << "Hz";
-            m_spectrumController->panadapterA()->setFskMarkTone(toneHz);
-            m_spectrumController->panadapterB()->setFskMarkTone(toneHz);
-        }
-    }
-}
-
 void MainWindow::toggleDisplayPopup() {
     bool wasVisible = m_displayPopup && m_displayPopup->isVisible();
     closeAllPopups();
@@ -4214,8 +4051,8 @@ void MainWindow::toggleDisplayPopup() {
 
 void MainWindow::closeAllPopups() {
     // Close menu overlay
-    if (m_menuOverlay && m_menuOverlay->isVisible()) {
-        m_menuOverlay->hide();
+    if (m_menuController && m_menuController->isOverlayVisible()) {
+        m_menuController->closeOverlay();
         if (m_bottomMenuBar) {
             m_bottomMenuBar->setMenuActive(false);
         }

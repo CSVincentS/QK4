@@ -79,6 +79,7 @@ set(SOURCES
     src/controllers/dxclustercontroller.cpp
     src/controllers/textdecodecontroller.cpp
     src/controllers/statusbarcontroller.cpp
+    src/controllers/menucontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -165,6 +166,7 @@ set(HEADERS
     src/controllers/dxclustercontroller.h
     src/controllers/textdecodecontroller.h
     src/controllers/statusbarcontroller.h
+    src/controllers/menucontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

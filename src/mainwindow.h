@@ -20,8 +20,7 @@ class StatusBarController;
 class SideControlPanel;
 class RightSidePanel;
 class BottomMenuBar;
-class MenuModel;
-class MenuOverlayWidget;
+class MenuController;
 class BandPopupWidget;
 class ButtonRowPopup;
 class DisplayPopupWidget;
@@ -89,9 +88,6 @@ private slots:
     void onProcessingChangedB();
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
-    void showMenuOverlay();
-    void onMenuValueChangeRequested(int menuId, const QString &action);
-    void onMenuModelValueChanged(int menuId, int newValue);
     void onBandSelected(const QString &bandName);
     void updateBandSelection(int bandNum);
     void updateBandSelectionB(int bandNum);
@@ -138,7 +134,6 @@ private:
     // no behavior change. Phase 3 lifts some of these seams into dedicated
     // controller classes under src/controllers/.
     void setupControllers();
-    void setupMenuOverlay();
     void setupBandPopup();
     void setupDisplayPopup();
     void setupFnPopup();
@@ -225,9 +220,8 @@ private:
     RightSidePanel *m_rightSidePanel;
     BottomMenuBar *m_bottomMenuBar;
 
-    // Menu system
-    MenuModel *m_menuModel;
-    MenuOverlayWidget *m_menuOverlay;
+    // Menu system — owned by MenuController (src/controllers/).
+    MenuController *m_menuController;
     BandPopupWidget *m_bandPopup;
     DisplayPopupWidget *m_displayPopup;
     FnPopupWidget *m_fnPopup;
@@ -277,11 +271,6 @@ private:
 
     // Debounce timer for TX EQ slider changes
     QTimer *m_txEqDebounceTimer;
-
-    // K4 "Mouse L/R Button QSY" menu setting
-    int m_mouseQsyMode = 0;         // 0=Left Only, 1=L=A R=B
-    int m_mouseQsyMenuId = -999;    // Menu ID from MEDF (sentinel = not yet discovered)
-    int m_fskMarkToneMenuId = -999; // "FSK Mark-Tone" menu ID (sentinel = not yet discovered)
 
     WheelAccumulator m_ritWheelAccumulator;
 };
