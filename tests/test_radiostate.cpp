@@ -2206,6 +2206,274 @@ private slots:
         rs.parseCATCommand("ES130;");
         QCOMPARE(spy.count(), 0);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — RxTxMeter subsystem
+    // Handlers: TX/RX (transmit state), SM/SM$ (S-meter — always emits),
+    // TM (TX meter telemetry — always emits), PO (unused),
+    // SIFP (supply voltage/current), ID/OM/RV. (radio identity — no signals),
+    // MN (message bank), SB/DV/TS/BS (control state flags).
+    // =========================================================================
+
+    // --- TX / RX (transmit state: signals fire only on transition) ---
+    void testTxTransitionEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::transmitStateChanged);
+        rs.parseCATCommand("TX;");
+        QCOMPARE(rs.isTransmitting(), true);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true);
+    }
+
+    void testRxTransitionEmits() {
+        RadioState rs;
+        rs.parseCATCommand("TX;");
+        QSignalSpy spy(&rs, &RadioState::transmitStateChanged);
+        rs.parseCATCommand("RX;");
+        QCOMPARE(rs.isTransmitting(), false);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), false);
+    }
+
+    void testTxWhileTransmittingNoDuplicateSignal() {
+        RadioState rs;
+        rs.parseCATCommand("TX;");
+        QSignalSpy spy(&rs, &RadioState::transmitStateChanged);
+        rs.parseCATCommand("TX;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testRxWhileReceivingNoDuplicateSignal() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::transmitStateChanged);
+        rs.parseCATCommand("RX;"); // already RX by default
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- SM / SM$ (S-meter — emits on EVERY parse; streaming telemetry) ---
+    // WHY: unlike config handlers, meters are intentionally non-idempotent —
+    // the UI wants a repaint tick for every packet even if the displayed
+    // value happens to match the previous one.
+    void testSMeterLowRangeBarsEncoding() {
+        RadioState rs;
+        rs.parseCATCommand("SM09;"); // bars=9 → S4.5 (bars/2)
+        QCOMPARE(rs.sMeter(), 4.5);
+    }
+
+    void testSMeterHighRangeBarsEncoding() {
+        RadioState rs;
+        // bars=20 → 9 + (20-18)*3/10 = 9.6 dB above S9
+        rs.parseCATCommand("SM20;");
+        QCOMPARE(rs.sMeter(), 9.6);
+    }
+
+    void testSMeterStreamingAlwaysEmits() {
+        RadioState rs;
+        rs.parseCATCommand("SM09;");
+        QSignalSpy spy(&rs, &RadioState::sMeterChanged);
+        rs.parseCATCommand("SM09;"); // same value — but meter still emits
+        rs.parseCATCommand("SM09;");
+        QCOMPARE(spy.count(), 2);
+    }
+
+    void testSMeterBSubParses() {
+        RadioState rs;
+        rs.parseCATCommand("SM$09;");
+        QCOMPARE(rs.sMeterB(), 4.5);
+    }
+
+    // --- TM (TX meter telemetry: TMaaabbbcccddd — ALC, CMP, FWD, SWRx10) ---
+    void testTxMeterParsesQro() {
+        RadioState rs;
+        QSignalSpy txSpy(&rs, &RadioState::txMeterChanged);
+        QSignalSpy swrSpy(&rs, &RadioState::swrChanged);
+        rs.parseCATCommand("TM050010100015;"); // ALC=50, CMP=10, FWD=100 (W), SWR=1.5
+        QCOMPARE(rs.alcMeter(), 50);
+        QCOMPARE(rs.compressionDb(), 10);
+        QCOMPARE(rs.forwardPower(), 100.0); // QRO mode → watts direct
+        QCOMPARE(rs.swrMeter(), 1.5);
+        QCOMPARE(txSpy.count(), 1);
+        QCOMPARE(swrSpy.count(), 1);
+    }
+
+    void testTxMeterForwardPowerQrpUsesTenths() {
+        // In QRP mode, forward-power field is tenths of a watt.
+        RadioState rs;
+        rs.parseCATCommand("PC099L;"); // QRP mode (isQrpMode=true)
+        rs.parseCATCommand("TM050010100015;");
+        QCOMPARE(rs.forwardPower(), 10.0); // 100 / 10
+    }
+
+    void testTxMeterSwrEmitsIndependently() {
+        // Both txMeterChanged AND swrChanged fire for every TM packet.
+        RadioState rs;
+        QSignalSpy swrSpy(&rs, &RadioState::swrChanged);
+        rs.parseCATCommand("TM050010100015;");
+        rs.parseCATCommand("TM050010100015;"); // same values — still emits (streaming)
+        QCOMPARE(swrSpy.count(), 2);
+    }
+
+    void testTxMeterTooShortRejected() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::txMeterChanged);
+        rs.parseCATCommand("TM0501;"); // way too short
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- PO (raw power meter, intentionally unused) ---
+    void testPowerMeterDoesNotCrash() {
+        RadioState rs;
+        rs.parseCATCommand("PO050;"); // handler ignores payload
+        // No signal, no state change; just must not crash.
+    }
+
+    // --- SIFP (status: VS:voltage, IS:current) ---
+    void testSifpParsesVoltageAndCurrent() {
+        RadioState rs;
+        QSignalSpy vSpy(&rs, &RadioState::supplyVoltageChanged);
+        QSignalSpy iSpy(&rs, &RadioState::supplyCurrentChanged);
+        rs.parseCATCommand("SIFPVS:13.8,IS:2.5;");
+        QCOMPARE(rs.supplyVoltage(), 13.8);
+        QCOMPARE(rs.supplyCurrent(), 2.5);
+        QCOMPARE(vSpy.count(), 1);
+        QCOMPARE(iSpy.count(), 1);
+    }
+
+    void testSifpNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("SIFPVS:13.8,IS:2.5;");
+        QSignalSpy vSpy(&rs, &RadioState::supplyVoltageChanged);
+        rs.parseCATCommand("SIFPVS:13.8,IS:2.5;");
+        QCOMPARE(vSpy.count(), 0);
+    }
+
+    void testSifpWithTrailingFieldOnly() {
+        // If only VS (voltage) is present without trailing comma, still parses.
+        RadioState rs;
+        rs.parseCATCommand("SIFPVS:12.5;");
+        QCOMPARE(rs.supplyVoltage(), 12.5);
+    }
+
+    // --- ID (radio ID — stores string, no signal) ---
+    void testRadioIdStored() {
+        RadioState rs;
+        rs.parseCATCommand("ID017;");
+        QCOMPARE(rs.radioID(), QString("017"));
+    }
+
+    // --- OM (Option Modules — parses and derives radioModel) ---
+    // WHY positions: handleOM gates model detection on trimmed length > 8
+    // and checks pos 3=='S', pos 4=='H', pos 8=='4'. Inputs must survive
+    // QString::trimmed() and still be at least 9 chars with the sentinel
+    // characters at the required offsets.
+    void testOptionModulesK4HD() {
+        RadioState rs;
+        rs.parseCATCommand("OM---SH---4X;"); // trimmed "---SH---4X": pos 3=S, 4=H, 8=4
+        QCOMPARE(rs.radioModel(), QString("K4HD"));
+    }
+
+    void testOptionModulesK4Plain() {
+        RadioState rs;
+        rs.parseCATCommand("OM--------4X;"); // trimmed "--------4X" (len 10): only pos 8=4
+        QCOMPARE(rs.radioModel(), QString("K4"));
+    }
+
+    // --- RV. (firmware versions: component-version pairs) ---
+    void testFirmwareVersionStored() {
+        RadioState rs;
+        rs.parseCATCommand("RV.DDC0-00.65 (0:35);");
+        QCOMPARE(rs.firmwareVersions().value("DDC0"), QString("00.65 (0:35)"));
+    }
+
+    // --- MN (message bank 1-4) ---
+    void testMessageBankParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::messageBankChanged);
+        rs.parseCATCommand("MN2;");
+        QCOMPARE(rs.messageBank(), 2);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testMessageBankOutOfRangeRejected() {
+        RadioState rs;
+        rs.parseCATCommand("MN2;");
+        rs.parseCATCommand("MN5;"); // above 4
+        QCOMPARE(rs.messageBank(), 2);
+    }
+
+    // --- SB (sub receiver: SB0=off, SB1 or SB3=on) ---
+    void testSubRxOffToOn() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::subRxEnabledChanged);
+        rs.parseCATCommand("SB1;");
+        QCOMPARE(rs.subReceiverEnabled(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testSubRxDiversityStateAlsoOn() {
+        RadioState rs;
+        rs.parseCATCommand("SB3;"); // diversity — still "on" for subReceiverEnabled
+        QCOMPARE(rs.subReceiverEnabled(), true);
+    }
+
+    void testSubRxOff() {
+        RadioState rs;
+        rs.parseCATCommand("SB1;");
+        rs.parseCATCommand("SB0;");
+        QCOMPARE(rs.subReceiverEnabled(), false);
+    }
+
+    // --- DV (diversity) ---
+    void testDiversityOn() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::diversityChanged);
+        rs.parseCATCommand("DV1;");
+        QCOMPARE(rs.diversityEnabled(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- TS (test mode) ---
+    void testTestModeOn() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::testModeChanged);
+        rs.parseCATCommand("TS1;");
+        QCOMPARE(rs.testMode(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- BS (B SET) ---
+    void testBSetOn() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::bSetChanged);
+        rs.parseCATCommand("BS1;");
+        QCOMPARE(rs.bSetEnabled(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testBSetNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("BS1;");
+        QSignalSpy spy(&rs, &RadioState::bSetChanged);
+        rs.parseCATCommand("BS1;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- ER (error notification with code:message) ---
+    void testErrorNotificationParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::errorNotificationReceived);
+        rs.parseCATCommand("ER42:Something went wrong;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 42);
+        QCOMPARE(spy.at(0).at(1).toString(), QString("Something went wrong"));
+    }
+
+    void testErrorNotificationWithoutCodeIgnored() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::errorNotificationReceived);
+        rs.parseCATCommand("ER;"); // no ':' at all
+        QCOMPARE(spy.count(), 0);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
