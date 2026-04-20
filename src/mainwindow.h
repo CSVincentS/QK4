@@ -146,6 +146,12 @@ private:
     void setupFnPopup();
     void setupButtonRowPopups();
     void setupEqPopups();
+    void setupAntennaPopups();
+    void setupLinePopups();
+    void setupMicPopups();
+    void setupVoxAndSsbPopups();
+    void setupKeyingWeightPopup();
+    void setupTextDecodeWindows();
 
     void updateConnectionState(TcpClient::ConnectionState state);
     QString formatFrequency(quint64 freq);

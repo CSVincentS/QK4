@@ -90,497 +90,12 @@ MainWindow::MainWindow(QWidget *parent)
     setupFnPopup();
     setupButtonRowPopups();
     setupEqPopups();
-
-    // Create antenna configuration popups (MAIN RX, SUB RX, TX)
-    m_mainRxAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::MainRx, this);
-    connect(m_mainRxAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this,
-            [this](bool displayAll, QVector<bool> mask) {
-                if (!m_connectionController->isConnected())
-                    return;
-                // Build ACM command: ACMzabcdefg where z=displayAll, a-g=antenna enables
-                QString cmd = QString("ACM%1").arg(displayAll ? '1' : '0');
-                for (int i = 0; i < 7; i++) {
-                    cmd += (i < mask.size() && mask[i]) ? '1' : '0';
-                }
-                m_connectionController->sendCAT(cmd);
-            });
-
-    m_subRxAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::SubRx, this);
-    connect(m_subRxAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this,
-            [this](bool displayAll, QVector<bool> mask) {
-                if (!m_connectionController->isConnected())
-                    return;
-                // Build ACS command: ACSzabcdefg where z=displayAll, a-g=antenna enables
-                QString cmd = QString("ACS%1").arg(displayAll ? '1' : '0');
-                for (int i = 0; i < 7; i++) {
-                    cmd += (i < mask.size() && mask[i]) ? '1' : '0';
-                }
-                m_connectionController->sendCAT(cmd);
-            });
-
-    m_txAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::Tx, this);
-    connect(m_txAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this, [this](bool displayAll, QVector<bool> mask) {
-        if (!m_connectionController->isConnected())
-            return;
-        // Build ACT command: ACTzabc where z=displayAll, a-c=antenna enables
-        QString cmd = QString("ACT%1").arg(displayAll ? '1' : '0');
-        for (int i = 0; i < 3; i++) {
-            cmd += (i < mask.size() && mask[i]) ? '1' : '0';
-        }
-        m_connectionController->sendCAT(cmd);
-    });
-
-    // Create Line Out popup (shared by MAIN RX and SUB RX)
-    m_lineOutPopup = new LineOutPopupWidget(this);
-    connect(m_lineOutPopup, &LineOutPopupWidget::leftLevelChanged, this, [this](int level) {
-        if (!m_connectionController->isConnected())
-            return;
-        // Send full LO command with current state
-        QString cmd = QString("LO%1%2%3;")
-                          .arg(level, 3, 10, QChar('0'))
-                          .arg(m_radioState->lineOutRight(), 3, 10, QChar('0'))
-                          .arg(m_radioState->lineOutRightEqualsLeft() ? 1 : 0);
-        m_connectionController->sendCAT(cmd);
-    });
-    connect(m_lineOutPopup, &LineOutPopupWidget::rightLevelChanged, this, [this](int level) {
-        if (!m_connectionController->isConnected())
-            return;
-        QString cmd = QString("LO%1%2%3;")
-                          .arg(m_radioState->lineOutLeft(), 3, 10, QChar('0'))
-                          .arg(level, 3, 10, QChar('0'))
-                          .arg(m_radioState->lineOutRightEqualsLeft() ? 1 : 0);
-        m_connectionController->sendCAT(cmd);
-    });
-    connect(m_lineOutPopup, &LineOutPopupWidget::rightEqualsLeftChanged, this, [this](bool enabled) {
-        if (!m_connectionController->isConnected())
-            return;
-        int left = m_radioState->lineOutLeft();
-        int right = enabled ? left : m_radioState->lineOutRight();
-        QString cmd =
-            QString("LO%1%2%3;").arg(left, 3, 10, QChar('0')).arg(right, 3, 10, QChar('0')).arg(enabled ? 1 : 0);
-        m_connectionController->sendCAT(cmd);
-    });
-    // Connect RadioState to update popup when K4 sends LO response
-    connect(m_radioState, &RadioState::lineOutChanged, this, [this]() {
-        if (m_lineOutPopup) {
-            m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
-            m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
-            m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
-        }
-    });
-
-    // Create Line In popup (TX menu button index 3)
-    m_lineInPopup = new LineInPopupWidget(this);
-    connect(m_lineInPopup, &LineInPopupWidget::soundCardLevelChanged, this, [this](int level) {
-        if (!m_connectionController->isConnected())
-            return;
-        m_radioState->setLineInSoundCard(level);
-        QString cmd = QString("LI%1%2%3;")
-                          .arg(level, 3, 10, QChar('0'))
-                          .arg(m_radioState->lineInJack(), 3, 10, QChar('0'))
-                          .arg(m_radioState->lineInSource());
-        m_connectionController->sendCAT(cmd);
-    });
-    connect(m_lineInPopup, &LineInPopupWidget::lineInJackLevelChanged, this, [this](int level) {
-        if (!m_connectionController->isConnected())
-            return;
-        m_radioState->setLineInJack(level);
-        QString cmd = QString("LI%1%2%3;")
-                          .arg(m_radioState->lineInSoundCard(), 3, 10, QChar('0'))
-                          .arg(level, 3, 10, QChar('0'))
-                          .arg(m_radioState->lineInSource());
-        m_connectionController->sendCAT(cmd);
-    });
-    connect(m_lineInPopup, &LineInPopupWidget::sourceChanged, this, [this](int source) {
-        if (!m_connectionController->isConnected())
-            return;
-        m_radioState->setLineInSource(source);
-        QString cmd = QString("LI%1%2%3;")
-                          .arg(m_radioState->lineInSoundCard(), 3, 10, QChar('0'))
-                          .arg(m_radioState->lineInJack(), 3, 10, QChar('0'))
-                          .arg(source);
-        m_connectionController->sendCAT(cmd);
-    });
-    // Connect RadioState to update popup when K4 sends LI response
-    connect(m_radioState, &RadioState::lineInChanged, this, [this]() {
-        if (m_lineInPopup) {
-            m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
-            m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
-            m_lineInPopup->setSource(m_radioState->lineInSource());
-        }
-    });
-
-    // Create Mic Input popup (TX menu button index 3, left-click)
-    m_micInputPopup = new MicInputPopupWidget(this);
-    connect(m_micInputPopup, &MicInputPopupWidget::inputChanged, this, [this](int input) {
-        if (!m_connectionController->isConnected())
-            return;
-        m_radioState->setMicInput(input);
-        m_connectionController->sendCAT(QString("MI%1;").arg(input));
-    });
-    // Connect RadioState to update popup when K4 sends MI response
-    connect(m_radioState, &RadioState::micInputChanged, this, [this](int input) {
-        if (m_micInputPopup) {
-            m_micInputPopup->setCurrentInput(input);
-        }
-    });
-
-    // Create Mic Config popup (TX menu button index 3, right-click)
-    m_micConfigPopup = new MicConfigPopupWidget(this);
-    connect(m_micConfigPopup, &MicConfigPopupWidget::biasChanged, this, [this](int bias) {
-        if (!m_connectionController->isConnected())
-            return;
-        // Use individual SET command based on mic type
-        if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
-            m_radioState->setMicFrontBias(bias);
-            m_connectionController->sendCAT(QString("MSB%1;").arg(bias));
-        } else {
-            m_radioState->setMicRearBias(bias);
-            m_connectionController->sendCAT(QString("MSE%1;").arg(bias));
-        }
-    });
-    connect(m_micConfigPopup, &MicConfigPopupWidget::preampChanged, this, [this](int preamp) {
-        if (!m_connectionController->isConnected())
-            return;
-        if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
-            m_radioState->setMicFrontPreamp(preamp);
-            m_connectionController->sendCAT(QString("MSA%1;").arg(preamp));
-        } else {
-            m_radioState->setMicRearPreamp(preamp);
-            m_connectionController->sendCAT(QString("MSD%1;").arg(preamp));
-        }
-    });
-    connect(m_micConfigPopup, &MicConfigPopupWidget::buttonsChanged, this, [this](int buttons) {
-        if (!m_connectionController->isConnected())
-            return;
-        // Buttons only applies to Front mic
-        m_radioState->setMicFrontButtons(buttons);
-        m_connectionController->sendCAT(QString("MSC%1;").arg(buttons));
-    });
-    // Connect RadioState to update popup when K4 sends MS response
-    connect(m_radioState, &RadioState::micSetupChanged, this, [this]() {
-        if (m_micConfigPopup) {
-            if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
-                m_micConfigPopup->setBias(m_radioState->micFrontBias());
-                m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
-                m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
-            } else {
-                m_micConfigPopup->setBias(m_radioState->micRearBias());
-                m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
-            }
-        }
-    });
-
-    // Create VOX Gain / Anti-VOX popup (TX menu button index 4)
-    m_voxPopup = new VoxPopupWidget(this);
-    connect(m_voxPopup, &VoxPopupWidget::valueChanged, this, [this](int value) {
-        if (!m_connectionController->isConnected())
-            return;
-        if (m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
-            // VOX Gain: VGVnnn or VGDnnn depending on mode
-            bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
-            QString modeChar = isDataMode ? "D" : "V";
-            if (isDataMode) {
-                m_radioState->setVoxGainData(value);
-            } else {
-                m_radioState->setVoxGainVoice(value);
-            }
-            m_connectionController->sendCAT(QString("VG%1%2;").arg(modeChar).arg(value, 3, 10, QChar('0')));
-        } else {
-            // Anti-VOX: VInnn
-            m_radioState->setAntiVox(value);
-            m_connectionController->sendCAT(QString("VI%1;").arg(value, 3, 10, QChar('0')));
-        }
-    });
-    connect(m_voxPopup, &VoxPopupWidget::voxToggled, this, [this](bool enabled) {
-        if (!m_connectionController->isConnected())
-            return;
-        // VXmn where m=C/V/D, n=0/1
-        RadioState::Mode mode = m_radioState->mode();
-        QString modeChar;
-        if (mode == RadioState::CW || mode == RadioState::CW_R) {
-            modeChar = "C";
-        } else if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
-            modeChar = "D";
-        } else {
-            modeChar = "V";
-        }
-        m_connectionController->sendCAT(QString("VX%1%2;").arg(modeChar).arg(enabled ? 1 : 0));
-    });
-    // Connect RadioState to update popup when K4 sends VG/VI/VX response
-    connect(m_radioState, &RadioState::voxGainChanged, this, [this](int mode, int gain) {
-        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
-            bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
-            if ((mode == 1 && isDataMode) || (mode == 0 && !isDataMode)) {
-                m_voxPopup->setValue(gain);
-            }
-        }
-    });
-    connect(m_radioState, &RadioState::antiVoxChanged, this, [this](int level) {
-        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::AntiVox) {
-            m_voxPopup->setValue(level);
-        }
-    });
-    connect(m_radioState, &RadioState::voxChanged, this, [this](bool enabled) {
-        if (m_voxPopup) {
-            m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
-        }
-    });
-
-    // Create SSB TX Bandwidth popup (TX menu button index 5)
-    m_ssbBwPopup = new SsbBwPopupWidget(this);
-    connect(m_ssbBwPopup, &SsbBwPopupWidget::bandwidthChanged, this, [this](int bw) {
-        if (!m_connectionController->isConnected())
-            return;
-        // ES command: ESnbb where n=essb mode, bb=bandwidth
-        int essbMode = m_radioState->essbEnabled() ? 1 : 0;
-        m_radioState->setSsbTxBw(bw);
-        m_connectionController->sendCAT(QString("ES%1%2;").arg(essbMode).arg(bw, 2, 10, QChar('0')));
-        // Update button label with new bandwidth (optimistic)
-        if (m_txPopup) {
-            QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-            m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
-        }
-    });
-    // Connect RadioState to update popup and ESSB button when K4 sends ES response
-    // SSB: 24-28 (2.4-2.8 kHz), ESSB: 30-45 (3.0-4.5 kHz)
-    connect(m_radioState, &RadioState::essbChanged, this, [this](bool enabled, int bw) {
-        if (m_ssbBwPopup) {
-            m_ssbBwPopup->setEssbEnabled(enabled);
-            if (bw >= 24 && bw <= 45) {
-                m_ssbBwPopup->setBandwidth(bw);
-            }
-        }
-        // Update TX popup button labels (only in non-CW modes — CW uses paddle/weight buttons)
-        auto mode = m_radioState->mode();
-        if (m_txPopup && mode != RadioState::CW && mode != RadioState::CW_R) {
-            // Button 5: SSB BW with current bandwidth value (e.g., "2.8k" or "3.0k")
-            if (bw >= 24 && bw <= 45) {
-                QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-                m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
-            }
-            // Button 6: ESSB toggle with ON/OFF state
-            m_txPopup->setButtonLabel(6, "ESSB", enabled ? "ON" : "OFF", false);
-        }
-        // Update mode labels to show USB+/LSB+ when ESSB enabled
-        updateModeLabels();
-    });
-
-    // Create Keying Weight popup (TX menu button index 6 in CW mode)
-    m_keyingWeightPopup = new KeyingWeightPopupWidget(this);
-    connect(m_keyingWeightPopup, &KeyingWeightPopupWidget::weightChanged, this, [this](int weight) {
-        if (!m_connectionController->isConnected())
-            return;
-        QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
-        QChar paddle = m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
-        m_radioState->setKeyingWeight(weight);
-        m_connectionController->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
-        // Update button label with new weight value (optimistic)
-        if (m_txPopup) {
-            QString weightStr = QString::number(weight / 100.0, 'f', 2);
-            m_txPopup->setButtonLabel(6, "WEIGHT", weightStr, false);
-        }
-    });
-
-    // Connect keyerPaddleChanged to update CW button labels and weight popup
-    connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int weight) {
-        auto mode = m_radioState->mode();
-        if (m_txPopup && (mode == RadioState::CW || mode == RadioState::CW_R)) {
-            // Button 5: paddle orientation + iambic mode
-            QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
-            QString iambicStr = QString("IAMB %1").arg(iambic);
-            m_txPopup->setButtonLabel(5, paddleStr, iambicStr, true);
-            // Button 6: keying weight ratio
-            if (weight >= 90 && weight <= 125) {
-                QString weightStr = QString::number(weight / 100.0, 'f', 2);
-                m_txPopup->setButtonLabel(6, "WEIGHT", weightStr, false);
-            }
-        }
-        // Update weight popup if visible
-        if (m_keyingWeightPopup && m_keyingWeightPopup->isVisible() && weight >= 90 && weight <= 125) {
-            m_keyingWeightPopup->setWeight(weight);
-        }
-    });
-
-    // Create floating text decode windows (separate for MAIN RX and SUB RX)
-    // Controls integrated in title bar - no separate popup needed
-    m_textDecodeWindowMain = new TextDecodeWindow(TextDecodeWindow::MainRx, this);
-    m_textDecodeWindowSub = new TextDecodeWindow(TextDecodeWindow::SubRx, this);
-
-    // Helper lambda to send TD command
-    auto sendTextDecodeCmd = [this](TextDecodeWindow *window, bool isMainRx) {
-        if (!m_connectionController->isConnected())
-            return;
-        int mode = 0;
-        int threshold = 0;
-        if (window->isDecodeEnabled()) {
-            auto opMode = window->operatingMode();
-            if (opMode == TextDecodeWindow::ModeCW) {
-                mode = 2 + window->wpmRange(); // 2=8-45, 3=8-60, 4=8-90
-                threshold = window->autoThreshold() ? 0 : window->threshold();
-            } else {
-                mode = 1; // DATA/SSB mode
-            }
-        }
-        QString cmdPrefix = isMainRx ? "TD" : "TD$";
-        QString cmd = QString("%1%2%3%4;").arg(cmdPrefix).arg(mode).arg(threshold).arg(window->maxLines());
-        qCDebug(qk4Main) << "Sending TD command:" << cmd;
-        m_connectionController->sendCAT(cmd);
-    };
-
-    // Wire MAIN RX window signals
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::enabledChanged, this,
-            [this, sendTextDecodeCmd](bool) { sendTextDecodeCmd(m_textDecodeWindowMain, true); });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::wpmRangeChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowMain->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        }
-    });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::thresholdModeChanged, this, [this, sendTextDecodeCmd](bool) {
-        if (m_textDecodeWindowMain->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        }
-    });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::thresholdChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowMain->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        }
-    });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::closeRequested, this, [this, sendTextDecodeCmd]() {
-        // Disable decode and hide window
-        m_textDecodeWindowMain->setDecodeEnabled(false);
-        sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        m_textDecodeWindowMain->clearText();
-        m_textDecodeWindowMain->hide();
-    });
-
-    // Wire SUB RX window signals
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::enabledChanged, this,
-            [this, sendTextDecodeCmd](bool) { sendTextDecodeCmd(m_textDecodeWindowSub, false); });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::wpmRangeChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowSub->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::thresholdModeChanged, this, [this, sendTextDecodeCmd](bool) {
-        if (m_textDecodeWindowSub->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::thresholdChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowSub->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::closeRequested, this, [this, sendTextDecodeCmd]() {
-        // Disable decode and hide window
-        m_textDecodeWindowSub->setDecodeEnabled(false);
-        sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        m_textDecodeWindowSub->clearText();
-        m_textDecodeWindowSub->hide();
-    });
-
-    // Wire data rate changes → send DR command
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::dataRateChanged, this, [this](int rate) {
-        if (m_connectionController->isConnected()) {
-            m_radioState->setDataRate(rate);
-            m_connectionController->sendCAT(QString("DR%1;").arg(rate));
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::dataRateChanged, this, [this](int rate) {
-        if (m_connectionController->isConnected()) {
-            m_radioState->setDataRateB(rate);
-            m_connectionController->sendCAT(QString("DR$%1;").arg(rate));
-        }
-    });
-
-    // Sync data rate from radio echoes
-    connect(m_radioState, &RadioState::dataRateChanged, this,
-            [this](int rate) { m_textDecodeWindowMain->setDataRate(rate); });
-    connect(m_radioState, &RadioState::dataRateBChanged, this,
-            [this](int rate) { m_textDecodeWindowSub->setDataRate(rate); });
-
-    // Connect RadioState text decode signals to sync window state
-    connect(m_radioState, &RadioState::textDecodeChanged, this, [this]() {
-        int mode = m_radioState->textDecodeMode();
-        bool enabled = (mode > 0);
-        m_textDecodeWindowMain->setDecodeEnabled(enabled);
-        if (mode >= 2 && mode <= 4) {
-            m_textDecodeWindowMain->setWpmRange(mode - 2);
-        }
-        int threshold = m_radioState->textDecodeThreshold();
-        m_textDecodeWindowMain->setAutoThreshold(threshold == 0);
-        if (threshold > 0) {
-            m_textDecodeWindowMain->setThreshold(threshold);
-        }
-        m_textDecodeWindowMain->setMaxLines(m_radioState->textDecodeLines());
-    });
-    connect(m_radioState, &RadioState::textDecodeBChanged, this, [this]() {
-        int mode = m_radioState->textDecodeModeB();
-        bool enabled = (mode > 0);
-        m_textDecodeWindowSub->setDecodeEnabled(enabled);
-        if (mode >= 2 && mode <= 4) {
-            m_textDecodeWindowSub->setWpmRange(mode - 2);
-        }
-        int threshold = m_radioState->textDecodeThresholdB();
-        m_textDecodeWindowSub->setAutoThreshold(threshold == 0);
-        if (threshold > 0) {
-            m_textDecodeWindowSub->setThreshold(threshold);
-        }
-        m_textDecodeWindowSub->setMaxLines(m_radioState->textDecodeLinesB());
-    });
-
-    // Helper to determine text decode operating mode from radio state
-    auto textDecodeMode = [](RadioState::Mode radioMode, int dataSubMode) -> TextDecodeWindow::OperatingMode {
-        if (radioMode == RadioState::CW || radioMode == RadioState::CW_R)
-            return TextDecodeWindow::ModeCW;
-        if (radioMode == RadioState::DATA || radioMode == RadioState::DATA_R) {
-            switch (dataSubMode) {
-            case 1:
-                return TextDecodeWindow::ModeAFSK;
-            case 2:
-                return TextDecodeWindow::ModeFSK;
-            case 3:
-                return TextDecodeWindow::ModePSK;
-            default:
-                return TextDecodeWindow::ModeData;
-            }
-        }
-        if (radioMode == RadioState::LSB || radioMode == RadioState::USB)
-            return TextDecodeWindow::ModeSSB;
-        return TextDecodeWindow::ModeOther;
-    };
-
-    // Update text decode window mode when radio mode changes while window is open
-    connect(m_radioState, &RadioState::modeChanged, this, [this, textDecodeMode](RadioState::Mode mode) {
-        if (m_textDecodeWindowMain->isVisible()) {
-            m_textDecodeWindowMain->setOperatingMode(textDecodeMode(mode, m_radioState->dataSubMode()));
-        }
-    });
-    connect(m_radioState, &RadioState::modeBChanged, this, [this, textDecodeMode](RadioState::Mode mode) {
-        if (m_textDecodeWindowSub->isVisible()) {
-            m_textDecodeWindowSub->setOperatingMode(textDecodeMode(mode, m_radioState->dataSubModeB()));
-        }
-    });
-    connect(m_radioState, &RadioState::dataSubModeChanged, this, [this, textDecodeMode](int subMode) {
-        if (m_textDecodeWindowMain->isVisible()) {
-            m_textDecodeWindowMain->setOperatingMode(textDecodeMode(m_radioState->mode(), subMode));
-        }
-    });
-    connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this, textDecodeMode](int subMode) {
-        if (m_textDecodeWindowSub->isVisible()) {
-            m_textDecodeWindowSub->setOperatingMode(textDecodeMode(m_radioState->modeB(), subMode));
-        }
-    });
-
-    // Connect decoded text buffer to windows
-    connect(m_radioState, &RadioState::textBufferReceived, this, [this](const QString &text, bool isSubRx) {
-        if (isSubRx) {
-            m_textDecodeWindowSub->appendText(text);
-        } else {
-            m_textDecodeWindowMain->appendText(text);
-        }
-    });
+    setupAntennaPopups();
+    setupLinePopups();
+    setupMicPopups();
+    setupVoxAndSsbPopups();
+    setupKeyingWeightPopup();
+    setupTextDecodeWindows();
 
     // Create notification popup for K4 error/status messages (ERxx:)
     m_notificationWidget = new NotificationWidget(this);
@@ -1886,6 +1401,509 @@ void MainWindow::setupEqPopups() {
         EqPreset preset = RadioSettings::instance()->txEqPreset(i);
         m_txEqPopup->updatePresetName(i, preset.name);
     }
+}
+
+void MainWindow::setupAntennaPopups() {
+    // Create antenna configuration popups (MAIN RX, SUB RX, TX)
+    m_mainRxAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::MainRx, this);
+    connect(m_mainRxAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this,
+            [this](bool displayAll, QVector<bool> mask) {
+                if (!m_connectionController->isConnected())
+                    return;
+                // Build ACM command: ACMzabcdefg where z=displayAll, a-g=antenna enables
+                QString cmd = QString("ACM%1").arg(displayAll ? '1' : '0');
+                for (int i = 0; i < 7; i++) {
+                    cmd += (i < mask.size() && mask[i]) ? '1' : '0';
+                }
+                m_connectionController->sendCAT(cmd);
+            });
+
+    m_subRxAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::SubRx, this);
+    connect(m_subRxAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this,
+            [this](bool displayAll, QVector<bool> mask) {
+                if (!m_connectionController->isConnected())
+                    return;
+                // Build ACS command: ACSzabcdefg where z=displayAll, a-g=antenna enables
+                QString cmd = QString("ACS%1").arg(displayAll ? '1' : '0');
+                for (int i = 0; i < 7; i++) {
+                    cmd += (i < mask.size() && mask[i]) ? '1' : '0';
+                }
+                m_connectionController->sendCAT(cmd);
+            });
+
+    m_txAntCfgPopup = new AntennaCfgPopupWidget(AntennaCfgVariant::Tx, this);
+    connect(m_txAntCfgPopup, &AntennaCfgPopupWidget::configChanged, this, [this](bool displayAll, QVector<bool> mask) {
+        if (!m_connectionController->isConnected())
+            return;
+        // Build ACT command: ACTzabc where z=displayAll, a-c=antenna enables
+        QString cmd = QString("ACT%1").arg(displayAll ? '1' : '0');
+        for (int i = 0; i < 3; i++) {
+            cmd += (i < mask.size() && mask[i]) ? '1' : '0';
+        }
+        m_connectionController->sendCAT(cmd);
+    });
+}
+
+void MainWindow::setupLinePopups() {
+    // Create Line Out popup (shared by MAIN RX and SUB RX)
+    m_lineOutPopup = new LineOutPopupWidget(this);
+    connect(m_lineOutPopup, &LineOutPopupWidget::leftLevelChanged, this, [this](int level) {
+        if (!m_connectionController->isConnected())
+            return;
+        // Send full LO command with current state
+        QString cmd = QString("LO%1%2%3;")
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineOutRight(), 3, 10, QChar('0'))
+                          .arg(m_radioState->lineOutRightEqualsLeft() ? 1 : 0);
+        m_connectionController->sendCAT(cmd);
+    });
+    connect(m_lineOutPopup, &LineOutPopupWidget::rightLevelChanged, this, [this](int level) {
+        if (!m_connectionController->isConnected())
+            return;
+        QString cmd = QString("LO%1%2%3;")
+                          .arg(m_radioState->lineOutLeft(), 3, 10, QChar('0'))
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineOutRightEqualsLeft() ? 1 : 0);
+        m_connectionController->sendCAT(cmd);
+    });
+    connect(m_lineOutPopup, &LineOutPopupWidget::rightEqualsLeftChanged, this, [this](bool enabled) {
+        if (!m_connectionController->isConnected())
+            return;
+        int left = m_radioState->lineOutLeft();
+        int right = enabled ? left : m_radioState->lineOutRight();
+        QString cmd =
+            QString("LO%1%2%3;").arg(left, 3, 10, QChar('0')).arg(right, 3, 10, QChar('0')).arg(enabled ? 1 : 0);
+        m_connectionController->sendCAT(cmd);
+    });
+    // Connect RadioState to update popup when K4 sends LO response
+    connect(m_radioState, &RadioState::lineOutChanged, this, [this]() {
+        if (m_lineOutPopup) {
+            m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
+            m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
+            m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
+        }
+    });
+
+    // Create Line In popup (TX menu button index 3)
+    m_lineInPopup = new LineInPopupWidget(this);
+    connect(m_lineInPopup, &LineInPopupWidget::soundCardLevelChanged, this, [this](int level) {
+        if (!m_connectionController->isConnected())
+            return;
+        m_radioState->setLineInSoundCard(level);
+        QString cmd = QString("LI%1%2%3;")
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInJack(), 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInSource());
+        m_connectionController->sendCAT(cmd);
+    });
+    connect(m_lineInPopup, &LineInPopupWidget::lineInJackLevelChanged, this, [this](int level) {
+        if (!m_connectionController->isConnected())
+            return;
+        m_radioState->setLineInJack(level);
+        QString cmd = QString("LI%1%2%3;")
+                          .arg(m_radioState->lineInSoundCard(), 3, 10, QChar('0'))
+                          .arg(level, 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInSource());
+        m_connectionController->sendCAT(cmd);
+    });
+    connect(m_lineInPopup, &LineInPopupWidget::sourceChanged, this, [this](int source) {
+        if (!m_connectionController->isConnected())
+            return;
+        m_radioState->setLineInSource(source);
+        QString cmd = QString("LI%1%2%3;")
+                          .arg(m_radioState->lineInSoundCard(), 3, 10, QChar('0'))
+                          .arg(m_radioState->lineInJack(), 3, 10, QChar('0'))
+                          .arg(source);
+        m_connectionController->sendCAT(cmd);
+    });
+    // Connect RadioState to update popup when K4 sends LI response
+    connect(m_radioState, &RadioState::lineInChanged, this, [this]() {
+        if (m_lineInPopup) {
+            m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
+            m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
+            m_lineInPopup->setSource(m_radioState->lineInSource());
+        }
+    });
+}
+
+void MainWindow::setupMicPopups() {
+    // Create Mic Input popup (TX menu button index 3, left-click)
+    m_micInputPopup = new MicInputPopupWidget(this);
+    connect(m_micInputPopup, &MicInputPopupWidget::inputChanged, this, [this](int input) {
+        if (!m_connectionController->isConnected())
+            return;
+        m_radioState->setMicInput(input);
+        m_connectionController->sendCAT(QString("MI%1;").arg(input));
+    });
+    // Connect RadioState to update popup when K4 sends MI response
+    connect(m_radioState, &RadioState::micInputChanged, this, [this](int input) {
+        if (m_micInputPopup) {
+            m_micInputPopup->setCurrentInput(input);
+        }
+    });
+
+    // Create Mic Config popup (TX menu button index 3, right-click)
+    m_micConfigPopup = new MicConfigPopupWidget(this);
+    connect(m_micConfigPopup, &MicConfigPopupWidget::biasChanged, this, [this](int bias) {
+        if (!m_connectionController->isConnected())
+            return;
+        // Use individual SET command based on mic type
+        if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
+            m_radioState->setMicFrontBias(bias);
+            m_connectionController->sendCAT(QString("MSB%1;").arg(bias));
+        } else {
+            m_radioState->setMicRearBias(bias);
+            m_connectionController->sendCAT(QString("MSE%1;").arg(bias));
+        }
+    });
+    connect(m_micConfigPopup, &MicConfigPopupWidget::preampChanged, this, [this](int preamp) {
+        if (!m_connectionController->isConnected())
+            return;
+        if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
+            m_radioState->setMicFrontPreamp(preamp);
+            m_connectionController->sendCAT(QString("MSA%1;").arg(preamp));
+        } else {
+            m_radioState->setMicRearPreamp(preamp);
+            m_connectionController->sendCAT(QString("MSD%1;").arg(preamp));
+        }
+    });
+    connect(m_micConfigPopup, &MicConfigPopupWidget::buttonsChanged, this, [this](int buttons) {
+        if (!m_connectionController->isConnected())
+            return;
+        // Buttons only applies to Front mic
+        m_radioState->setMicFrontButtons(buttons);
+        m_connectionController->sendCAT(QString("MSC%1;").arg(buttons));
+    });
+    // Connect RadioState to update popup when K4 sends MS response
+    connect(m_radioState, &RadioState::micSetupChanged, this, [this]() {
+        if (m_micConfigPopup) {
+            if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
+                m_micConfigPopup->setBias(m_radioState->micFrontBias());
+                m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
+                m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
+            } else {
+                m_micConfigPopup->setBias(m_radioState->micRearBias());
+                m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
+            }
+        }
+    });
+}
+
+void MainWindow::setupVoxAndSsbPopups() {
+    // Create VOX Gain / Anti-VOX popup (TX menu button index 4)
+    m_voxPopup = new VoxPopupWidget(this);
+    connect(m_voxPopup, &VoxPopupWidget::valueChanged, this, [this](int value) {
+        if (!m_connectionController->isConnected())
+            return;
+        if (m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
+            // VOX Gain: VGVnnn or VGDnnn depending on mode
+            bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
+            QString modeChar = isDataMode ? "D" : "V";
+            if (isDataMode) {
+                m_radioState->setVoxGainData(value);
+            } else {
+                m_radioState->setVoxGainVoice(value);
+            }
+            m_connectionController->sendCAT(QString("VG%1%2;").arg(modeChar).arg(value, 3, 10, QChar('0')));
+        } else {
+            // Anti-VOX: VInnn
+            m_radioState->setAntiVox(value);
+            m_connectionController->sendCAT(QString("VI%1;").arg(value, 3, 10, QChar('0')));
+        }
+    });
+    connect(m_voxPopup, &VoxPopupWidget::voxToggled, this, [this](bool enabled) {
+        if (!m_connectionController->isConnected())
+            return;
+        // VXmn where m=C/V/D, n=0/1
+        RadioState::Mode mode = m_radioState->mode();
+        QString modeChar;
+        if (mode == RadioState::CW || mode == RadioState::CW_R) {
+            modeChar = "C";
+        } else if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
+            modeChar = "D";
+        } else {
+            modeChar = "V";
+        }
+        m_connectionController->sendCAT(QString("VX%1%2;").arg(modeChar).arg(enabled ? 1 : 0));
+    });
+    // Connect RadioState to update popup when K4 sends VG/VI/VX response
+    connect(m_radioState, &RadioState::voxGainChanged, this, [this](int mode, int gain) {
+        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
+            bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
+            if ((mode == 1 && isDataMode) || (mode == 0 && !isDataMode)) {
+                m_voxPopup->setValue(gain);
+            }
+        }
+    });
+    connect(m_radioState, &RadioState::antiVoxChanged, this, [this](int level) {
+        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::AntiVox) {
+            m_voxPopup->setValue(level);
+        }
+    });
+    connect(m_radioState, &RadioState::voxChanged, this, [this](bool enabled) {
+        if (m_voxPopup) {
+            m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
+        }
+    });
+
+    // Create SSB TX Bandwidth popup (TX menu button index 5)
+    m_ssbBwPopup = new SsbBwPopupWidget(this);
+    connect(m_ssbBwPopup, &SsbBwPopupWidget::bandwidthChanged, this, [this](int bw) {
+        if (!m_connectionController->isConnected())
+            return;
+        // ES command: ESnbb where n=essb mode, bb=bandwidth
+        int essbMode = m_radioState->essbEnabled() ? 1 : 0;
+        m_radioState->setSsbTxBw(bw);
+        m_connectionController->sendCAT(QString("ES%1%2;").arg(essbMode).arg(bw, 2, 10, QChar('0')));
+        // Update button label with new bandwidth (optimistic)
+        if (m_txPopup) {
+            QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+            m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
+        }
+    });
+    // Connect RadioState to update popup and ESSB button when K4 sends ES response
+    // SSB: 24-28 (2.4-2.8 kHz), ESSB: 30-45 (3.0-4.5 kHz)
+    connect(m_radioState, &RadioState::essbChanged, this, [this](bool enabled, int bw) {
+        if (m_ssbBwPopup) {
+            m_ssbBwPopup->setEssbEnabled(enabled);
+            if (bw >= 24 && bw <= 45) {
+                m_ssbBwPopup->setBandwidth(bw);
+            }
+        }
+        // Update TX popup button labels (only in non-CW modes — CW uses paddle/weight buttons)
+        auto mode = m_radioState->mode();
+        if (m_txPopup && mode != RadioState::CW && mode != RadioState::CW_R) {
+            // Button 5: SSB BW with current bandwidth value (e.g., "2.8k" or "3.0k")
+            if (bw >= 24 && bw <= 45) {
+                QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+                m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
+            }
+            // Button 6: ESSB toggle with ON/OFF state
+            m_txPopup->setButtonLabel(6, "ESSB", enabled ? "ON" : "OFF", false);
+        }
+        // Update mode labels to show USB+/LSB+ when ESSB enabled
+        updateModeLabels();
+    });
+}
+
+void MainWindow::setupKeyingWeightPopup() {
+    // Create Keying Weight popup (TX menu button index 6 in CW mode)
+    m_keyingWeightPopup = new KeyingWeightPopupWidget(this);
+    connect(m_keyingWeightPopup, &KeyingWeightPopupWidget::weightChanged, this, [this](int weight) {
+        if (!m_connectionController->isConnected())
+            return;
+        QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
+        QChar paddle = m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
+        m_radioState->setKeyingWeight(weight);
+        m_connectionController->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+        // Update button label with new weight value (optimistic)
+        if (m_txPopup) {
+            QString weightStr = QString::number(weight / 100.0, 'f', 2);
+            m_txPopup->setButtonLabel(6, "WEIGHT", weightStr, false);
+        }
+    });
+
+    // Connect keyerPaddleChanged to update CW button labels and weight popup
+    connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int weight) {
+        auto mode = m_radioState->mode();
+        if (m_txPopup && (mode == RadioState::CW || mode == RadioState::CW_R)) {
+            // Button 5: paddle orientation + iambic mode
+            QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
+            QString iambicStr = QString("IAMB %1").arg(iambic);
+            m_txPopup->setButtonLabel(5, paddleStr, iambicStr, true);
+            // Button 6: keying weight ratio
+            if (weight >= 90 && weight <= 125) {
+                QString weightStr = QString::number(weight / 100.0, 'f', 2);
+                m_txPopup->setButtonLabel(6, "WEIGHT", weightStr, false);
+            }
+        }
+        // Update weight popup if visible
+        if (m_keyingWeightPopup && m_keyingWeightPopup->isVisible() && weight >= 90 && weight <= 125) {
+            m_keyingWeightPopup->setWeight(weight);
+        }
+    });
+}
+
+void MainWindow::setupTextDecodeWindows() {
+    // Create floating text decode windows (separate for MAIN RX and SUB RX)
+    // Controls integrated in title bar - no separate popup needed
+    m_textDecodeWindowMain = new TextDecodeWindow(TextDecodeWindow::MainRx, this);
+    m_textDecodeWindowSub = new TextDecodeWindow(TextDecodeWindow::SubRx, this);
+
+    // Helper lambda to send TD command
+    auto sendTextDecodeCmd = [this](TextDecodeWindow *window, bool isMainRx) {
+        if (!m_connectionController->isConnected())
+            return;
+        int mode = 0;
+        int threshold = 0;
+        if (window->isDecodeEnabled()) {
+            auto opMode = window->operatingMode();
+            if (opMode == TextDecodeWindow::ModeCW) {
+                mode = 2 + window->wpmRange(); // 2=8-45, 3=8-60, 4=8-90
+                threshold = window->autoThreshold() ? 0 : window->threshold();
+            } else {
+                mode = 1; // DATA/SSB mode
+            }
+        }
+        QString cmdPrefix = isMainRx ? "TD" : "TD$";
+        QString cmd = QString("%1%2%3%4;").arg(cmdPrefix).arg(mode).arg(threshold).arg(window->maxLines());
+        qCDebug(qk4Main) << "Sending TD command:" << cmd;
+        m_connectionController->sendCAT(cmd);
+    };
+
+    // Wire MAIN RX window signals
+    connect(m_textDecodeWindowMain, &TextDecodeWindow::enabledChanged, this,
+            [this, sendTextDecodeCmd](bool) { sendTextDecodeCmd(m_textDecodeWindowMain, true); });
+    connect(m_textDecodeWindowMain, &TextDecodeWindow::wpmRangeChanged, this, [this, sendTextDecodeCmd](int) {
+        if (m_textDecodeWindowMain->isDecodeEnabled()) {
+            sendTextDecodeCmd(m_textDecodeWindowMain, true);
+        }
+    });
+    connect(m_textDecodeWindowMain, &TextDecodeWindow::thresholdModeChanged, this, [this, sendTextDecodeCmd](bool) {
+        if (m_textDecodeWindowMain->isDecodeEnabled()) {
+            sendTextDecodeCmd(m_textDecodeWindowMain, true);
+        }
+    });
+    connect(m_textDecodeWindowMain, &TextDecodeWindow::thresholdChanged, this, [this, sendTextDecodeCmd](int) {
+        if (m_textDecodeWindowMain->isDecodeEnabled()) {
+            sendTextDecodeCmd(m_textDecodeWindowMain, true);
+        }
+    });
+    connect(m_textDecodeWindowMain, &TextDecodeWindow::closeRequested, this, [this, sendTextDecodeCmd]() {
+        // Disable decode and hide window
+        m_textDecodeWindowMain->setDecodeEnabled(false);
+        sendTextDecodeCmd(m_textDecodeWindowMain, true);
+        m_textDecodeWindowMain->clearText();
+        m_textDecodeWindowMain->hide();
+    });
+
+    // Wire SUB RX window signals
+    connect(m_textDecodeWindowSub, &TextDecodeWindow::enabledChanged, this,
+            [this, sendTextDecodeCmd](bool) { sendTextDecodeCmd(m_textDecodeWindowSub, false); });
+    connect(m_textDecodeWindowSub, &TextDecodeWindow::wpmRangeChanged, this, [this, sendTextDecodeCmd](int) {
+        if (m_textDecodeWindowSub->isDecodeEnabled()) {
+            sendTextDecodeCmd(m_textDecodeWindowSub, false);
+        }
+    });
+    connect(m_textDecodeWindowSub, &TextDecodeWindow::thresholdModeChanged, this, [this, sendTextDecodeCmd](bool) {
+        if (m_textDecodeWindowSub->isDecodeEnabled()) {
+            sendTextDecodeCmd(m_textDecodeWindowSub, false);
+        }
+    });
+    connect(m_textDecodeWindowSub, &TextDecodeWindow::thresholdChanged, this, [this, sendTextDecodeCmd](int) {
+        if (m_textDecodeWindowSub->isDecodeEnabled()) {
+            sendTextDecodeCmd(m_textDecodeWindowSub, false);
+        }
+    });
+    connect(m_textDecodeWindowSub, &TextDecodeWindow::closeRequested, this, [this, sendTextDecodeCmd]() {
+        // Disable decode and hide window
+        m_textDecodeWindowSub->setDecodeEnabled(false);
+        sendTextDecodeCmd(m_textDecodeWindowSub, false);
+        m_textDecodeWindowSub->clearText();
+        m_textDecodeWindowSub->hide();
+    });
+
+    // Wire data rate changes → send DR command
+    connect(m_textDecodeWindowMain, &TextDecodeWindow::dataRateChanged, this, [this](int rate) {
+        if (m_connectionController->isConnected()) {
+            m_radioState->setDataRate(rate);
+            m_connectionController->sendCAT(QString("DR%1;").arg(rate));
+        }
+    });
+    connect(m_textDecodeWindowSub, &TextDecodeWindow::dataRateChanged, this, [this](int rate) {
+        if (m_connectionController->isConnected()) {
+            m_radioState->setDataRateB(rate);
+            m_connectionController->sendCAT(QString("DR$%1;").arg(rate));
+        }
+    });
+
+    // Sync data rate from radio echoes
+    connect(m_radioState, &RadioState::dataRateChanged, this,
+            [this](int rate) { m_textDecodeWindowMain->setDataRate(rate); });
+    connect(m_radioState, &RadioState::dataRateBChanged, this,
+            [this](int rate) { m_textDecodeWindowSub->setDataRate(rate); });
+
+    // Connect RadioState text decode signals to sync window state
+    connect(m_radioState, &RadioState::textDecodeChanged, this, [this]() {
+        int mode = m_radioState->textDecodeMode();
+        bool enabled = (mode > 0);
+        m_textDecodeWindowMain->setDecodeEnabled(enabled);
+        if (mode >= 2 && mode <= 4) {
+            m_textDecodeWindowMain->setWpmRange(mode - 2);
+        }
+        int threshold = m_radioState->textDecodeThreshold();
+        m_textDecodeWindowMain->setAutoThreshold(threshold == 0);
+        if (threshold > 0) {
+            m_textDecodeWindowMain->setThreshold(threshold);
+        }
+        m_textDecodeWindowMain->setMaxLines(m_radioState->textDecodeLines());
+    });
+    connect(m_radioState, &RadioState::textDecodeBChanged, this, [this]() {
+        int mode = m_radioState->textDecodeModeB();
+        bool enabled = (mode > 0);
+        m_textDecodeWindowSub->setDecodeEnabled(enabled);
+        if (mode >= 2 && mode <= 4) {
+            m_textDecodeWindowSub->setWpmRange(mode - 2);
+        }
+        int threshold = m_radioState->textDecodeThresholdB();
+        m_textDecodeWindowSub->setAutoThreshold(threshold == 0);
+        if (threshold > 0) {
+            m_textDecodeWindowSub->setThreshold(threshold);
+        }
+        m_textDecodeWindowSub->setMaxLines(m_radioState->textDecodeLinesB());
+    });
+
+    // Helper to determine text decode operating mode from radio state
+    auto textDecodeMode = [](RadioState::Mode radioMode, int dataSubMode) -> TextDecodeWindow::OperatingMode {
+        if (radioMode == RadioState::CW || radioMode == RadioState::CW_R)
+            return TextDecodeWindow::ModeCW;
+        if (radioMode == RadioState::DATA || radioMode == RadioState::DATA_R) {
+            switch (dataSubMode) {
+            case 1:
+                return TextDecodeWindow::ModeAFSK;
+            case 2:
+                return TextDecodeWindow::ModeFSK;
+            case 3:
+                return TextDecodeWindow::ModePSK;
+            default:
+                return TextDecodeWindow::ModeData;
+            }
+        }
+        if (radioMode == RadioState::LSB || radioMode == RadioState::USB)
+            return TextDecodeWindow::ModeSSB;
+        return TextDecodeWindow::ModeOther;
+    };
+
+    // Update text decode window mode when radio mode changes while window is open
+    connect(m_radioState, &RadioState::modeChanged, this, [this, textDecodeMode](RadioState::Mode mode) {
+        if (m_textDecodeWindowMain->isVisible()) {
+            m_textDecodeWindowMain->setOperatingMode(textDecodeMode(mode, m_radioState->dataSubMode()));
+        }
+    });
+    connect(m_radioState, &RadioState::modeBChanged, this, [this, textDecodeMode](RadioState::Mode mode) {
+        if (m_textDecodeWindowSub->isVisible()) {
+            m_textDecodeWindowSub->setOperatingMode(textDecodeMode(mode, m_radioState->dataSubModeB()));
+        }
+    });
+    connect(m_radioState, &RadioState::dataSubModeChanged, this, [this, textDecodeMode](int subMode) {
+        if (m_textDecodeWindowMain->isVisible()) {
+            m_textDecodeWindowMain->setOperatingMode(textDecodeMode(m_radioState->mode(), subMode));
+        }
+    });
+    connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this, textDecodeMode](int subMode) {
+        if (m_textDecodeWindowSub->isVisible()) {
+            m_textDecodeWindowSub->setOperatingMode(textDecodeMode(m_radioState->modeB(), subMode));
+        }
+    });
+
+    // Connect decoded text buffer to windows
+    connect(m_radioState, &RadioState::textBufferReceived, this, [this](const QString &text, bool isSubRx) {
+        if (isSubRx) {
+            m_textDecodeWindowSub->appendText(text);
+        } else {
+            m_textDecodeWindowMain->appendText(text);
+        }
+    });
 }
 
 void MainWindow::setupMenuBar() {
