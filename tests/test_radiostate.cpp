@@ -2539,6 +2539,143 @@ private slots:
         rs.parseCATCommand("TE+01+02+03+04+05+06+07+08;");
         QCOMPARE(spy.count(), 0);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — ModeFilter gaps
+    // Existing tests cover LSB/USB/CW/DATA on VFO A and simple BW/IS/FP/FP$.
+    // This block fills in: FM/AM/CW_R/DATA_R mode codes, unknown mode fallback,
+    // CW pitch bounds + the CW-R dash-prefix skip, signal-emission spies for
+    // BW/IS/FP.
+    // =========================================================================
+
+    // --- MD full mode-code coverage ---
+    void testModeA_FM() {
+        RadioState rs;
+        rs.parseCATCommand("MD4;");
+        QCOMPARE(rs.mode(), RadioState::FM);
+    }
+
+    void testModeA_AM() {
+        RadioState rs;
+        rs.parseCATCommand("MD5;");
+        QCOMPARE(rs.mode(), RadioState::AM);
+    }
+
+    void testModeA_CWR() {
+        RadioState rs;
+        rs.parseCATCommand("MD7;");
+        QCOMPARE(rs.mode(), RadioState::CW_R);
+    }
+
+    void testModeA_DATAR() {
+        RadioState rs;
+        rs.parseCATCommand("MD9;");
+        QCOMPARE(rs.mode(), RadioState::DATA_R);
+    }
+
+    void testModeUnknownCodeFallsBackToUsb() {
+        // modeFromCode defaults to USB on any code not in 1-9 (except 8).
+        RadioState rs;
+        rs.parseCATCommand("MD8;"); // 8 is unassigned
+        QCOMPARE(rs.mode(), RadioState::USB);
+    }
+
+    void testModeChangeEmitsQskDelayRefresh() {
+        // Switching mode also re-emits qskDelayChanged with the delay for
+        // the new mode band (so the UI shows the right delay for CW vs voice).
+        RadioState rs;
+        rs.parseCATCommand("SD1C050;"); // CW delay = 50
+        rs.parseCATCommand("SD0V100;"); // Voice delay = 100
+        QSignalSpy qskSpy(&rs, &RadioState::qskDelayChanged);
+        rs.parseCATCommand("MD1;"); // LSB is voice → emit delay 100
+        QCOMPARE(qskSpy.count(), 1);
+        QCOMPARE(qskSpy.at(0).at(0).toInt(), 100);
+    }
+
+    // --- CW pitch bounds (CWnn; nn=pitch/10, range 25-95) ---
+    void testCwPitchBelowRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("CW60;"); // baseline 600 Hz
+        rs.parseCATCommand("CW20;"); // 20 < 25 minimum
+        QCOMPARE(rs.cwPitch(), 600);
+    }
+
+    void testCwPitchAboveRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("CW60;");
+        rs.parseCATCommand("CW99;"); // 99 > 95 maximum
+        QCOMPARE(rs.cwPitch(), 600);
+    }
+
+    void testCwPitchSkipsCwRPrefix() {
+        // handleCW short-circuits on payloads starting with '-' so CW-R
+        // mode strings don't get parsed as pitch codes.
+        RadioState rs;
+        rs.parseCATCommand("CW60;"); // baseline 600 Hz
+        QSignalSpy spy(&rs, &RadioState::cwPitchChanged);
+        rs.parseCATCommand("CW-R;"); // must not alter pitch
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.cwPitch(), 600);
+    }
+
+    // --- BW signal-emission spies ---
+    void testBandwidthSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::filterBandwidthChanged);
+        rs.parseCATCommand("BW240;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 2400);
+    }
+
+    void testBandwidthNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("BW240;");
+        QSignalSpy spy(&rs, &RadioState::filterBandwidthChanged);
+        rs.parseCATCommand("BW240;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testBandwidthBNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("BW$300;");
+        QSignalSpy spy(&rs, &RadioState::filterBandwidthBChanged);
+        rs.parseCATCommand("BW$300;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- IS signal-emission spies ---
+    void testIfShiftSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::ifShiftChanged);
+        rs.parseCATCommand("IS50;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 50);
+    }
+
+    void testIfShiftNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("IS50;");
+        QSignalSpy spy(&rs, &RadioState::ifShiftChanged);
+        rs.parseCATCommand("IS50;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- FP signal-emission spy ---
+    void testFilterPositionSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::filterPositionChanged);
+        rs.parseCATCommand("FP2;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 2);
+    }
+
+    void testFilterPositionNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("FP2;");
+        QSignalSpy spy(&rs, &RadioState::filterPositionChanged);
+        rs.parseCATCommand("FP2;");
+        QCOMPARE(spy.count(), 0);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
