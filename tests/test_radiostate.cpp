@@ -1299,6 +1299,330 @@ private slots:
         QCOMPARE(rs.tuningStepB(), 2);
         QCOMPARE(spy.count(), 1);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — SpectrumDisplay subsystem
+    // Handlers: 24 "#"-prefix commands for panadapter/waterfall/scale/span/etc.
+    // All follow the same shape: parse int, range-check, change-detect, emit.
+    // Primary coverage = one parse-and-emit test per handler; bounds and
+    // idempotence sampled where the range is non-trivial.
+    // =========================================================================
+
+    // --- #SCL (panadapter scale, 10-150) ---
+    void testScaleParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::scaleChanged);
+        rs.parseCATCommand("#SCL080;");
+        QCOMPARE(rs.scale(), 80);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testScaleBelowRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("#SCL080;");
+        QSignalSpy spy(&rs, &RadioState::scaleChanged);
+        rs.parseCATCommand("#SCL005;"); // below 10
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.scale(), 80);
+    }
+
+    void testScaleAboveRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("#SCL080;");
+        rs.parseCATCommand("#SCL200;"); // above 150
+        QCOMPARE(rs.scale(), 80);
+    }
+
+    // --- #DPM / #HDPM (dual-pan mode LCD / external, 0-2) ---
+    void testDualPanModeLcdParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::dualPanModeLcdChanged);
+        rs.parseCATCommand("#DPM1;");
+        QCOMPARE(rs.dualPanModeLcd(), 1);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testDualPanModeLcdOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("#DPM1;");
+        rs.parseCATCommand("#DPM5;"); // above 2
+        QCOMPARE(rs.dualPanModeLcd(), 1);
+    }
+
+    void testDualPanModeExtParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::dualPanModeExtChanged);
+        rs.parseCATCommand("#HDPM2;");
+        QCOMPARE(rs.dualPanModeExt(), 2);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- #DSM / #HDSM (display mode LCD/ext, 0 or 1 only) ---
+    void testDisplayModeLcdParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::displayModeLcdChanged);
+        rs.parseCATCommand("#DSM1;");
+        QCOMPARE(rs.displayModeLcd(), 1);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testDisplayModeLcdRejectsNonBoolean() {
+        RadioState rs;
+        rs.parseCATCommand("#DSM1;");
+        rs.parseCATCommand("#DSM3;"); // not 0 or 1
+        QCOMPARE(rs.displayModeLcd(), 1);
+    }
+
+    void testDisplayModeExtParses() {
+        RadioState rs;
+        rs.parseCATCommand("#HDSM1;");
+        QCOMPARE(rs.displayModeExt(), 1);
+    }
+
+    // --- #FPS (display FPS, 12-30) ---
+    void testDisplayFpsParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::displayFpsChanged);
+        rs.parseCATCommand("#FPS24;");
+        QCOMPARE(rs.displayFps(), 24);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testDisplayFpsBelowRangeIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("#FPS24;");
+        rs.parseCATCommand("#FPS08;"); // below 12
+        QCOMPARE(rs.displayFps(), 24);
+    }
+
+    // --- #WFC (waterfall color, 0-4) ---
+    void testWaterfallColorParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::waterfallColorChanged);
+        rs.parseCATCommand("#WFC3;");
+        QCOMPARE(rs.waterfallColor(), 3);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testWaterfallColorOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("#WFC3;");
+        rs.parseCATCommand("#WFC9;");
+        QCOMPARE(rs.waterfallColor(), 3);
+    }
+
+    // --- #WFH / #HWFH (waterfall height, 0-100) ---
+    // WHY value=60 not 50: default m_waterfallHeight = 50, so 50 is no-change.
+    void testWaterfallHeightParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::waterfallHeightChanged);
+        rs.parseCATCommand("#WFH060;");
+        QCOMPARE(rs.waterfallHeight(), 60);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testWaterfallHeightExtParses() {
+        RadioState rs;
+        rs.parseCATCommand("#HWFH075;");
+        QCOMPARE(rs.waterfallHeightExt(), 75);
+    }
+
+    // --- #AVG (averaging, 1-20) ---
+    void testAveragingParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::averagingChanged);
+        rs.parseCATCommand("#AVG05;");
+        QCOMPARE(rs.averaging(), 5);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testAveragingZeroRejected() {
+        RadioState rs;
+        rs.parseCATCommand("#AVG05;");
+        rs.parseCATCommand("#AVG00;"); // below 1
+        QCOMPARE(rs.averaging(), 5);
+    }
+
+    // --- #PKM (peak mode, 0 or 1) ---
+    void testPeakModeParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::peakModeChanged);
+        rs.parseCATCommand("#PKM1;");
+        QCOMPARE(rs.peakMode(), true);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true);
+    }
+
+    // --- #FXT / #FXA (fixed-tune enable + mode, both emit fixedTuneChanged) ---
+    void testFixedTuneEnableParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::fixedTuneChanged);
+        rs.parseCATCommand("#FXT1;");
+        QCOMPARE(rs.fixedTune(), 1);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testFixedTuneModeParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::fixedTuneChanged);
+        rs.parseCATCommand("#FXA3;");
+        QCOMPARE(rs.fixedTuneMode(), 3);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testFixedTuneModeOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("#FXA3;");
+        rs.parseCATCommand("#FXA7;"); // above 4
+        QCOMPARE(rs.fixedTuneMode(), 3);
+    }
+
+    // --- #FRZ (freeze, 0 or 1) ---
+    void testFreezeParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::freezeChanged);
+        rs.parseCATCommand("#FRZ1;");
+        QCOMPARE(rs.freeze(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- #VFA / #VFB (VFO cursor style, 0-3) ---
+    void testVfoACursorParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::vfoACursorChanged);
+        rs.parseCATCommand("#VFA2;");
+        QCOMPARE(rs.vfoACursor(), 2);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testVfoBCursorParses() {
+        RadioState rs;
+        rs.parseCATCommand("#VFB3;");
+        QCOMPARE(rs.vfoBCursor(), 3);
+    }
+
+    void testVfoACursorOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("#VFA2;");
+        rs.parseCATCommand("#VFA9;"); // above 3
+        QCOMPARE(rs.vfoACursor(), 2);
+    }
+
+    // --- #AR (auto ref level — checks last char for 'A' = auto) ---
+    void testAutoRefLevelAuto() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::autoRefLevelChanged);
+        rs.parseCATCommand("#AR-200+050A;"); // ends with 'A' → auto
+        QCOMPARE(rs.autoRefLevel(), true);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true);
+    }
+
+    void testAutoRefLevelManual() {
+        RadioState rs;
+        rs.parseCATCommand("#AR-200+050A;"); // auto
+        QSignalSpy spy(&rs, &RadioState::autoRefLevelChanged);
+        rs.parseCATCommand("#AR-200+050M;"); // manual
+        QCOMPARE(rs.autoRefLevel(), false);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testAutoRefLevelTooShort() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::autoRefLevelChanged);
+        rs.parseCATCommand("#AR;"); // way too short
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- #NB$ (DDC NB mode, 0-2) ---
+    // WHY the '$' — the DDC NB registry key is "#NB$" (handleDisplayNB), not "#NB".
+    // "#NB" unprefixed would fall through to the RX-audio noise blanker.
+    void testDdcNbModeParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::ddcNbModeChanged);
+        rs.parseCATCommand("#NB$1;");
+        QCOMPARE(rs.ddcNbMode(), 1);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testDdcNbModeOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("#NB$1;");
+        rs.parseCATCommand("#NB$9;"); // above 2
+        QCOMPARE(rs.ddcNbMode(), 1);
+    }
+
+    // --- #NBL$ (DDC NB level, 0-14) ---
+    void testDdcNbLevelParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::ddcNbLevelChanged);
+        rs.parseCATCommand("#NBL$08;");
+        QCOMPARE(rs.ddcNbLevel(), 8);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testDdcNbLevelOutOfRange() {
+        RadioState rs;
+        rs.parseCATCommand("#NBL$08;");
+        rs.parseCATCommand("#NBL$15;"); // above 14
+        QCOMPARE(rs.ddcNbLevel(), 8);
+    }
+
+    // --- #REF / #REF$ (ref level, -200..50, via handleIntPair) ---
+    void testRefLevelParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::refLevelChanged);
+        rs.parseCATCommand("#REF-150;");
+        QCOMPARE(rs.refLevel(), -150);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testRefLevelBParses() {
+        RadioState rs;
+        rs.parseCATCommand("#REF$-100;");
+        QCOMPARE(rs.refLevelB(), -100);
+    }
+
+    // --- #SPN / #SPN$ (span Hz, 1..999999, via handleIntPair) ---
+    void testSpanParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::spanChanged);
+        rs.parseCATCommand("#SPN50000;");
+        QCOMPARE(rs.spanHz(), 50000);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testSpanBParses() {
+        RadioState rs;
+        rs.parseCATCommand("#SPN$25000;");
+        QCOMPARE(rs.spanHzB(), 25000);
+    }
+
+    // --- #MP / #MP$ (mini-pan enabled, via handleBoolPairVal) ---
+    void testMiniPanAEnabledParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::miniPanAEnabledChanged);
+        rs.parseCATCommand("#MP1;");
+        QCOMPARE(rs.miniPanAEnabled(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testMiniPanBEnabledParses() {
+        RadioState rs;
+        rs.parseCATCommand("#MP$1;");
+        QCOMPARE(rs.miniPanBEnabled(), true);
+    }
+
+    // Idempotence sample: the big chain above all uses the same pattern;
+    // one representative no-change test is enough to verify the
+    // "only emit when changed" semantic applies uniformly.
+    void testScaleNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("#SCL080;");
+        QSignalSpy spy(&rs, &RadioState::scaleChanged);
+        rs.parseCATCommand("#SCL080;");
+        QCOMPARE(spy.count(), 0);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
