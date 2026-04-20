@@ -77,6 +77,7 @@ set(SOURCES
     src/controllers/audiocontroller.cpp
     src/controllers/spectrumcontroller.cpp
     src/controllers/dxclustercontroller.cpp
+    src/controllers/textdecodecontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -161,6 +162,7 @@ set(HEADERS
     src/controllers/audiocontroller.h
     src/controllers/spectrumcontroller.h
     src/controllers/dxclustercontroller.h
+    src/controllers/textdecodecontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

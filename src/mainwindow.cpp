@@ -27,7 +27,7 @@
 #include "ui/voxpopup.h"
 #include "ui/ssbbwpopup.h"
 #include "ui/keyingweightpopup.h"
-#include "ui/textdecodewindow.h"
+#include "controllers/textdecodecontroller.h"
 #include "models/menumodel.h"
 #include "controllers/dxclustercontroller.h"
 #include "controllers/spectrumcontroller.h"
@@ -95,7 +95,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupMicPopups();
     setupVoxAndSsbPopups();
     setupKeyingWeightPopup();
-    setupTextDecodeWindows();
+    m_textDecodeController = new TextDecodeController(m_radioState, m_connectionController, this, this);
     setupNotificationWidget();
     setupConnectionWiring();
 
@@ -1117,188 +1117,6 @@ void MainWindow::setupKeyingWeightPopup() {
         // Update weight popup if visible
         if (m_keyingWeightPopup && m_keyingWeightPopup->isVisible() && weight >= 90 && weight <= 125) {
             m_keyingWeightPopup->setWeight(weight);
-        }
-    });
-}
-
-void MainWindow::setupTextDecodeWindows() {
-    // Create floating text decode windows (separate for MAIN RX and SUB RX)
-    // Controls integrated in title bar - no separate popup needed
-    m_textDecodeWindowMain = new TextDecodeWindow(TextDecodeWindow::MainRx, this);
-    m_textDecodeWindowSub = new TextDecodeWindow(TextDecodeWindow::SubRx, this);
-
-    // Helper lambda to send TD command
-    auto sendTextDecodeCmd = [this](TextDecodeWindow *window, bool isMainRx) {
-        if (!m_connectionController->isConnected())
-            return;
-        int mode = 0;
-        int threshold = 0;
-        if (window->isDecodeEnabled()) {
-            auto opMode = window->operatingMode();
-            if (opMode == TextDecodeWindow::ModeCW) {
-                mode = 2 + window->wpmRange(); // 2=8-45, 3=8-60, 4=8-90
-                threshold = window->autoThreshold() ? 0 : window->threshold();
-            } else {
-                mode = 1; // DATA/SSB mode
-            }
-        }
-        QString cmdPrefix = isMainRx ? "TD" : "TD$";
-        QString cmd = QString("%1%2%3%4;").arg(cmdPrefix).arg(mode).arg(threshold).arg(window->maxLines());
-        qCDebug(qk4Main) << "Sending TD command:" << cmd;
-        m_connectionController->sendCAT(cmd);
-    };
-
-    // Wire MAIN RX window signals
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::enabledChanged, this,
-            [this, sendTextDecodeCmd](bool) { sendTextDecodeCmd(m_textDecodeWindowMain, true); });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::wpmRangeChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowMain->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        }
-    });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::thresholdModeChanged, this, [this, sendTextDecodeCmd](bool) {
-        if (m_textDecodeWindowMain->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        }
-    });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::thresholdChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowMain->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        }
-    });
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::closeRequested, this, [this, sendTextDecodeCmd]() {
-        // Disable decode and hide window
-        m_textDecodeWindowMain->setDecodeEnabled(false);
-        sendTextDecodeCmd(m_textDecodeWindowMain, true);
-        m_textDecodeWindowMain->clearText();
-        m_textDecodeWindowMain->hide();
-    });
-
-    // Wire SUB RX window signals
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::enabledChanged, this,
-            [this, sendTextDecodeCmd](bool) { sendTextDecodeCmd(m_textDecodeWindowSub, false); });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::wpmRangeChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowSub->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::thresholdModeChanged, this, [this, sendTextDecodeCmd](bool) {
-        if (m_textDecodeWindowSub->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::thresholdChanged, this, [this, sendTextDecodeCmd](int) {
-        if (m_textDecodeWindowSub->isDecodeEnabled()) {
-            sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::closeRequested, this, [this, sendTextDecodeCmd]() {
-        // Disable decode and hide window
-        m_textDecodeWindowSub->setDecodeEnabled(false);
-        sendTextDecodeCmd(m_textDecodeWindowSub, false);
-        m_textDecodeWindowSub->clearText();
-        m_textDecodeWindowSub->hide();
-    });
-
-    // Wire data rate changes → send DR command
-    connect(m_textDecodeWindowMain, &TextDecodeWindow::dataRateChanged, this, [this](int rate) {
-        if (m_connectionController->isConnected()) {
-            m_radioState->setDataRate(rate);
-            m_connectionController->sendCAT(QString("DR%1;").arg(rate));
-        }
-    });
-    connect(m_textDecodeWindowSub, &TextDecodeWindow::dataRateChanged, this, [this](int rate) {
-        if (m_connectionController->isConnected()) {
-            m_radioState->setDataRateB(rate);
-            m_connectionController->sendCAT(QString("DR$%1;").arg(rate));
-        }
-    });
-
-    // Sync data rate from radio echoes
-    connect(m_radioState, &RadioState::dataRateChanged, this,
-            [this](int rate) { m_textDecodeWindowMain->setDataRate(rate); });
-    connect(m_radioState, &RadioState::dataRateBChanged, this,
-            [this](int rate) { m_textDecodeWindowSub->setDataRate(rate); });
-
-    // Connect RadioState text decode signals to sync window state
-    connect(m_radioState, &RadioState::textDecodeChanged, this, [this]() {
-        int mode = m_radioState->textDecodeMode();
-        bool enabled = (mode > 0);
-        m_textDecodeWindowMain->setDecodeEnabled(enabled);
-        if (mode >= 2 && mode <= 4) {
-            m_textDecodeWindowMain->setWpmRange(mode - 2);
-        }
-        int threshold = m_radioState->textDecodeThreshold();
-        m_textDecodeWindowMain->setAutoThreshold(threshold == 0);
-        if (threshold > 0) {
-            m_textDecodeWindowMain->setThreshold(threshold);
-        }
-        m_textDecodeWindowMain->setMaxLines(m_radioState->textDecodeLines());
-    });
-    connect(m_radioState, &RadioState::textDecodeBChanged, this, [this]() {
-        int mode = m_radioState->textDecodeModeB();
-        bool enabled = (mode > 0);
-        m_textDecodeWindowSub->setDecodeEnabled(enabled);
-        if (mode >= 2 && mode <= 4) {
-            m_textDecodeWindowSub->setWpmRange(mode - 2);
-        }
-        int threshold = m_radioState->textDecodeThresholdB();
-        m_textDecodeWindowSub->setAutoThreshold(threshold == 0);
-        if (threshold > 0) {
-            m_textDecodeWindowSub->setThreshold(threshold);
-        }
-        m_textDecodeWindowSub->setMaxLines(m_radioState->textDecodeLinesB());
-    });
-
-    // Helper to determine text decode operating mode from radio state
-    auto textDecodeMode = [](RadioState::Mode radioMode, int dataSubMode) -> TextDecodeWindow::OperatingMode {
-        if (radioMode == RadioState::CW || radioMode == RadioState::CW_R)
-            return TextDecodeWindow::ModeCW;
-        if (radioMode == RadioState::DATA || radioMode == RadioState::DATA_R) {
-            switch (dataSubMode) {
-            case 1:
-                return TextDecodeWindow::ModeAFSK;
-            case 2:
-                return TextDecodeWindow::ModeFSK;
-            case 3:
-                return TextDecodeWindow::ModePSK;
-            default:
-                return TextDecodeWindow::ModeData;
-            }
-        }
-        if (radioMode == RadioState::LSB || radioMode == RadioState::USB)
-            return TextDecodeWindow::ModeSSB;
-        return TextDecodeWindow::ModeOther;
-    };
-
-    // Update text decode window mode when radio mode changes while window is open
-    connect(m_radioState, &RadioState::modeChanged, this, [this, textDecodeMode](RadioState::Mode mode) {
-        if (m_textDecodeWindowMain->isVisible()) {
-            m_textDecodeWindowMain->setOperatingMode(textDecodeMode(mode, m_radioState->dataSubMode()));
-        }
-    });
-    connect(m_radioState, &RadioState::modeBChanged, this, [this, textDecodeMode](RadioState::Mode mode) {
-        if (m_textDecodeWindowSub->isVisible()) {
-            m_textDecodeWindowSub->setOperatingMode(textDecodeMode(mode, m_radioState->dataSubModeB()));
-        }
-    });
-    connect(m_radioState, &RadioState::dataSubModeChanged, this, [this, textDecodeMode](int subMode) {
-        if (m_textDecodeWindowMain->isVisible()) {
-            m_textDecodeWindowMain->setOperatingMode(textDecodeMode(m_radioState->mode(), subMode));
-        }
-    });
-    connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this, textDecodeMode](int subMode) {
-        if (m_textDecodeWindowSub->isVisible()) {
-            m_textDecodeWindowSub->setOperatingMode(textDecodeMode(m_radioState->modeB(), subMode));
-        }
-    });
-
-    // Connect decoded text buffer to windows
-    connect(m_radioState, &RadioState::textBufferReceived, this, [this](const QString &text, bool isSubRx) {
-        if (isSubRx) {
-            m_textDecodeWindowSub->appendText(text);
-        } else {
-            m_textDecodeWindowMain->appendText(text);
         }
     });
 }
@@ -4864,42 +4682,7 @@ void MainWindow::onMainRxButtonClicked(int index) {
         m_connectionController->sendCAT("AP/;");
         break;
     case 6: // TEXT DECODE - open window directly for Main RX
-        if (m_textDecodeWindowMain) {
-            // Set operating mode based on current radio mode + data submode
-            RadioState::Mode radioMode = m_radioState->mode();
-            if (radioMode == RadioState::CW || radioMode == RadioState::CW_R) {
-                m_textDecodeWindowMain->setOperatingMode(TextDecodeWindow::ModeCW);
-            } else if (radioMode == RadioState::DATA || radioMode == RadioState::DATA_R) {
-                int subMode = m_radioState->dataSubMode();
-                switch (subMode) {
-                case 1:
-                    m_textDecodeWindowMain->setOperatingMode(TextDecodeWindow::ModeAFSK);
-                    break;
-                case 2:
-                    m_textDecodeWindowMain->setOperatingMode(TextDecodeWindow::ModeFSK);
-                    break;
-                case 3:
-                    m_textDecodeWindowMain->setOperatingMode(TextDecodeWindow::ModePSK);
-                    break;
-                default:
-                    m_textDecodeWindowMain->setOperatingMode(TextDecodeWindow::ModeData);
-                    break;
-                }
-                // Sync current data rate from radio
-                int dr = m_radioState->dataRate();
-                if (dr >= 0)
-                    m_textDecodeWindowMain->setDataRate(dr);
-            } else if (radioMode == RadioState::LSB || radioMode == RadioState::USB) {
-                m_textDecodeWindowMain->setOperatingMode(TextDecodeWindow::ModeSSB);
-            } else {
-                m_textDecodeWindowMain->setOperatingMode(TextDecodeWindow::ModeOther);
-            }
-            // Show window and enable decode
-            m_textDecodeWindowMain->show();
-            if (!m_textDecodeWindowMain->isDecodeEnabled()) {
-                m_textDecodeWindowMain->setDecodeEnabled(true);
-            }
-        }
+        m_textDecodeController->showMainRx();
         break;
     }
 }
@@ -4975,42 +4758,7 @@ void MainWindow::onSubRxButtonClicked(int index) {
         m_connectionController->sendCAT("AP$/;");
         break;
     case 6: // TEXT DECODE - open window directly for Sub RX
-        if (m_textDecodeWindowSub) {
-            // Set operating mode based on Sub RX mode + data submode
-            RadioState::Mode radioMode = m_radioState->modeB();
-            if (radioMode == RadioState::CW || radioMode == RadioState::CW_R) {
-                m_textDecodeWindowSub->setOperatingMode(TextDecodeWindow::ModeCW);
-            } else if (radioMode == RadioState::DATA || radioMode == RadioState::DATA_R) {
-                int subMode = m_radioState->dataSubModeB();
-                switch (subMode) {
-                case 1:
-                    m_textDecodeWindowSub->setOperatingMode(TextDecodeWindow::ModeAFSK);
-                    break;
-                case 2:
-                    m_textDecodeWindowSub->setOperatingMode(TextDecodeWindow::ModeFSK);
-                    break;
-                case 3:
-                    m_textDecodeWindowSub->setOperatingMode(TextDecodeWindow::ModePSK);
-                    break;
-                default:
-                    m_textDecodeWindowSub->setOperatingMode(TextDecodeWindow::ModeData);
-                    break;
-                }
-                // Sync current data rate from radio
-                int dr = m_radioState->dataRateB();
-                if (dr >= 0)
-                    m_textDecodeWindowSub->setDataRate(dr);
-            } else if (radioMode == RadioState::LSB || radioMode == RadioState::USB) {
-                m_textDecodeWindowSub->setOperatingMode(TextDecodeWindow::ModeSSB);
-            } else {
-                m_textDecodeWindowSub->setOperatingMode(TextDecodeWindow::ModeOther);
-            }
-            // Show window and enable decode
-            m_textDecodeWindowSub->show();
-            if (!m_textDecodeWindowSub->isDecodeEnabled()) {
-                m_textDecodeWindowSub->setDecodeEnabled(true);
-            }
-        }
+        m_textDecodeController->showSubRx();
         break;
     }
 }

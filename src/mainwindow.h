@@ -35,7 +35,7 @@ class MicConfigPopupWidget;
 class VoxPopupWidget;
 class SsbBwPopupWidget;
 class KeyingWeightPopupWidget;
-class TextDecodeWindow;
+class TextDecodeController;
 class MacroDialog;
 class FilterIndicatorWidget;
 class FeatureMenuBar;
@@ -151,7 +151,6 @@ private:
     void setupMicPopups();
     void setupVoxAndSsbPopups();
     void setupKeyingWeightPopup();
-    void setupTextDecodeWindows();
     void setupNotificationWidget();
     void setupConnectionWiring();
     void setupRadioStateWiring();
@@ -257,8 +256,7 @@ private:
     VoxPopupWidget *m_voxPopup;
     SsbBwPopupWidget *m_ssbBwPopup;
     KeyingWeightPopupWidget *m_keyingWeightPopup;
-    TextDecodeWindow *m_textDecodeWindowMain;
-    TextDecodeWindow *m_textDecodeWindowSub;
+    TextDecodeController *m_textDecodeController;
     AntennaCfgPopupWidget *m_mainRxAntCfgPopup;
     AntennaCfgPopupWidget *m_subRxAntCfgPopup;
     AntennaCfgPopupWidget *m_txAntCfgPopup;
