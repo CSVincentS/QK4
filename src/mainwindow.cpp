@@ -39,7 +39,7 @@
 #include "network/kpa1500client.h"
 #include "network/catserver.h"
 #include "network/networkmetrics.h"
-#include "ui/nethealthwidget.h"
+#include "controllers/statusbarcontroller.h"
 #include "settings/radiosettings.h"
 #include <QVBoxLayout>
 #include <QInputDialog>
@@ -62,8 +62,8 @@ Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
 
 // ============== MainWindow Implementation ==============
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), m_radioState(new RadioState(this)), m_clockTimer(new QTimer(this)),
-      m_menuModel(new MenuModel(this)), m_menuOverlay(nullptr) {
+    : QMainWindow(parent), m_radioState(new RadioState(this)), m_menuModel(new MenuModel(this)),
+      m_menuOverlay(nullptr) {
     setupControllers();
 
     // IMPORTANT: setupUi() MUST be called BEFORE setupMenuBar()!
@@ -102,8 +102,6 @@ MainWindow::MainWindow(QWidget *parent)
     setupRadioStateWiring();
 
     setupSpectrumDataRouting();
-
-    setupClockTimer();
 
     setupHardwareController();
 
@@ -1207,14 +1205,7 @@ void MainWindow::setupRadioStateWiring() {
 
     // TX Meter data -> update power displays and VFO multifunction meters during TX
     connect(m_radioState, &RadioState::txMeterChanged, this, [this](int alc, int comp, double fwdPower, double swr) {
-        // Update status bar power label
-        QString powerStr;
-        if (fwdPower < 10.0) {
-            powerStr = QString("%1 W").arg(fwdPower, 0, 'f', 1);
-        } else {
-            powerStr = QString("%1 W").arg(static_cast<int>(fwdPower));
-        }
-        m_powerLabel->setText(powerStr);
+        m_statusBarController->setForwardPower(fwdPower);
         // Update side panel power reading
         m_sideControlPanel->setPowerReading(fwdPower);
 
@@ -1619,15 +1610,6 @@ void MainWindow::setupSpectrumDataRouting() {
             &SpectrumController::onMiniSpectrumData);
 }
 
-void MainWindow::setupClockTimer() {
-    // Clock timer for date/time display — 1 Hz tick is fine; sub-second drift on a clock label
-    // is imperceptible and saves 50× timer overhead vs 50 ms updates.
-    constexpr int kClockUpdateIntervalMs = 1000;
-    connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);
-    m_clockTimer->start(kClockUpdateIntervalMs);
-    updateDateTime();
-}
-
 void MainWindow::setupHardwareController() {
     // Hardware controller owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads
     m_hardwareController = new HardwareController(m_radioState, m_connectionController, this);
@@ -1821,9 +1803,10 @@ void MainWindow::setupUi() {
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
-    // Top status bar
-    setupTopStatusBar(centralWidget);
-    mainLayout->addWidget(m_titleLabel->parentWidget());
+    // Top status bar — owned by StatusBarController
+    m_statusBarController =
+        new StatusBarController(m_radioState, m_connectionController->networkMetrics(), centralWidget, this);
+    mainLayout->addWidget(m_statusBarController->widget());
 
     // Middle section: Side Panel + Main Content (L-shaped)
     auto *middleWidget = new QWidget(centralWidget);
@@ -2782,82 +2765,6 @@ void MainWindow::setupUi() {
     // occurs. Flushing would cause a brief audio dropout on every mode/filter switch.
 }
 
-void MainWindow::setupTopStatusBar(QWidget *parent) {
-    auto *statusBar = new QWidget(parent);
-    statusBar->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
-    statusBar->setStyleSheet(QString("background-color: %1;").arg(K4Styles::Colors::DarkBackground));
-
-    auto *layout = new QHBoxLayout(statusBar);
-    layout->setContentsMargins(8, 2, 8, 2);
-    layout->setSpacing(20);
-
-    // Elecraft K4 title
-    m_titleLabel = new QLabel("Elecraft K4", statusBar);
-    m_titleLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: %2px;")
-                                    .arg(K4Styles::Colors::TextWhite)
-                                    .arg(K4Styles::Dimensions::FontSizePopup));
-    layout->addWidget(m_titleLabel);
-
-    // Date/Time
-    m_dateTimeLabel = new QLabel("--/-- --:--:-- Z", statusBar);
-    m_dateTimeLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                       .arg(K4Styles::Colors::TextGray)
-                                       .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_dateTimeLabel);
-
-    layout->addStretch();
-
-    // Power
-    m_powerLabel = new QLabel("--- W", statusBar);
-    m_powerLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                    .arg(K4Styles::Colors::AccentAmber)
-                                    .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_powerLabel);
-
-    // SWR
-    m_swrLabel = new QLabel("-.-:1", statusBar);
-    m_swrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                  .arg(K4Styles::Colors::AccentAmber)
-                                  .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_swrLabel);
-
-    // Voltage
-    m_voltageLabel = new QLabel("--.- V", statusBar);
-    m_voltageLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                      .arg(K4Styles::Colors::AccentAmber)
-                                      .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_voltageLabel);
-
-    // Current
-    m_currentLabel = new QLabel("-.- A", statusBar);
-    m_currentLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                      .arg(K4Styles::Colors::AccentAmber)
-                                      .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_currentLabel);
-
-    layout->addStretch();
-
-    // KPA1500 status (to left of K4 status)
-    m_kpa1500StatusLabel = new QLabel("", statusBar);
-    m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                            .arg(K4Styles::Colors::InactiveGray)
-                                            .arg(K4Styles::Dimensions::FontSizeButton));
-    m_kpa1500StatusLabel->hide(); // Hidden when not enabled
-    layout->addWidget(m_kpa1500StatusLabel);
-
-    // Network health bar
-    // K4 Connection status
-    m_connectionStatusLabel = new QLabel("K4", statusBar);
-    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                               .arg(K4Styles::Colors::InactiveGray)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_connectionStatusLabel);
-
-    // Network health signal bars
-    m_netHealthWidget = new NetHealthWidget(m_connectionController->networkMetrics(), statusBar);
-    layout->addWidget(m_netHealthWidget);
-}
-
 void MainWindow::setupVfoSection(QWidget *parent) {
     // Main vertical layout: VFO row on top, antenna row below
     auto *mainVLayout = new QVBoxLayout(parent);
@@ -3287,12 +3194,6 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     mainVLayout->addLayout(antennaRow);
 }
 
-void MainWindow::updateDateTime() {
-    QDateTime now = QDateTime::currentDateTimeUtc();
-    m_dateTimeLabel->setText(now.toString("M-dd / HH:mm:ss") + " Z");
-    m_sideControlPanel->setTime(now.toString("HH:mm:ss") + " Z");
-}
-
 QString MainWindow::formatFrequency(quint64 freq) {
     QString freqStr = QString::number(freq);
     while (freqStr.length() < 8) {
@@ -3342,7 +3243,7 @@ void MainWindow::showRadioManager() {
 }
 
 void MainWindow::connectToRadio(const RadioEntry &radio) {
-    m_titleLabel->setText("Elecraft K4 - " + radio.name);
+    m_statusBarController->setTitle("Elecraft K4 - " + radio.name);
     m_connectionController->connectToRadio(radio);
 }
 
@@ -3351,10 +3252,10 @@ void MainWindow::onConnectionStateChanged(TcpClient::ConnectionState state) {
 }
 
 void MainWindow::onConnectionError(const QString &error) {
-    m_connectionStatusLabel->setText("Error: " + error);
-    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                               .arg(K4Styles::Colors::TxRed)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
+    m_statusBarController->setConnectionStatus("Error: " + error,
+                                               QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                   .arg(K4Styles::Colors::TxRed)
+                                                   .arg(K4Styles::Dimensions::FontSizeButton));
 }
 
 void MainWindow::onRadioReady() {
@@ -3419,10 +3320,9 @@ void MainWindow::onRadioReady() {
 
 void MainWindow::onAuthFailed() {
     qCDebug(qk4Main) << "Authentication failed";
-    m_connectionStatusLabel->setText("Auth Failed");
-    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                               .arg(K4Styles::Colors::TxRed)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
+    m_statusBarController->setConnectionStatus("Auth Failed", QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                                  .arg(K4Styles::Colors::TxRed)
+                                                                  .arg(K4Styles::Dimensions::FontSizeButton));
 }
 
 void MainWindow::onCatResponse(const QString &response) {
@@ -3570,11 +3470,10 @@ void MainWindow::onSMeterBChanged(double value) {
 void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
     switch (state) {
     case TcpClient::Disconnected:
-        m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                                   .arg(K4Styles::Colors::InactiveGray)
-                                                   .arg(K4Styles::Dimensions::FontSizeButton));
-        m_titleLabel->setText("Elecraft K4");
+        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px;")
+                                                             .arg(K4Styles::Colors::InactiveGray)
+                                                             .arg(K4Styles::Dimensions::FontSizeButton));
+        m_statusBarController->setTitle("Elecraft K4");
         // Stop audio engine to prevent accessing invalid data
         m_audioController->stopAudio();
 
@@ -3716,10 +3615,7 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
         m_sideControlPanel->setSubSquelch(0);
 
         // Status bar values
-        m_powerLabel->setText("--- W");
-        m_swrLabel->setText("-.-:1");
-        m_voltageLabel->setText("--.- V");
-        m_currentLabel->setText("-.- A");
+        m_statusBarController->clearReadings();
         m_sideControlPanel->setPowerReading(0);
         m_sideControlPanel->setSwr(1.0);
         m_sideControlPanel->setVoltage(0);
@@ -3760,24 +3656,21 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
         break;
 
     case TcpClient::Connecting:
-        m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                   .arg(K4Styles::Colors::AccentAmber)
-                                                   .arg(K4Styles::Dimensions::FontSizeButton));
+        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                             .arg(K4Styles::Colors::AccentAmber)
+                                                             .arg(K4Styles::Dimensions::FontSizeButton));
         break;
 
     case TcpClient::Authenticating:
-        m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                   .arg(K4Styles::Colors::AccentAmber)
-                                                   .arg(K4Styles::Dimensions::FontSizeButton));
+        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                             .arg(K4Styles::Colors::AccentAmber)
+                                                             .arg(K4Styles::Dimensions::FontSizeButton));
         break;
 
     case TcpClient::Connected:
-        m_connectionStatusLabel->setText("K4");
-        m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                   .arg(K4Styles::Colors::StatusGreen)
-                                                   .arg(K4Styles::Dimensions::FontSizeButton));
+        m_statusBarController->setConnectionStatus("K4", QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                             .arg(K4Styles::Colors::StatusGreen)
+                                                             .arg(K4Styles::Dimensions::FontSizeButton));
         break;
     }
 }
@@ -3790,17 +3683,14 @@ void MainWindow::onRfPowerChanged(double watts, bool isQrp) {
 }
 
 void MainWindow::onSupplyVoltageChanged(double volts) {
-    m_voltageLabel->setText(QString("%1 V").arg(volts, 0, 'f', 1));
     m_sideControlPanel->setVoltage(volts);
 }
 
 void MainWindow::onSupplyCurrentChanged(double amps) {
-    m_currentLabel->setText(QString("%1 A").arg(amps, 0, 'f', 1));
     m_sideControlPanel->setCurrent(amps);
 }
 
 void MainWindow::onSwrChanged(double swr) {
-    m_swrLabel->setText(QString("%1:1").arg(swr, 0, 'f', 1));
     m_sideControlPanel->setSwr(swr);
 }
 
@@ -4557,19 +4447,17 @@ void MainWindow::updateKpa1500Status() {
     bool connected = m_kpa1500Client && m_kpa1500Client->isConnected();
 
     if (!enabled) {
-        m_kpa1500StatusLabel->hide();
+        m_statusBarController->setKpa1500Visible(false);
     } else {
-        m_kpa1500StatusLabel->show();
+        m_statusBarController->setKpa1500Visible(true);
         if (connected) {
-            m_kpa1500StatusLabel->setText("KPA1500");
-            m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                    .arg(K4Styles::Colors::StatusGreen)
-                                                    .arg(K4Styles::Dimensions::FontSizeButton));
+            m_statusBarController->setKpa1500Status("KPA1500", QString("color: %1; font-size: %2px; font-weight: bold;")
+                                                                   .arg(K4Styles::Colors::StatusGreen)
+                                                                   .arg(K4Styles::Dimensions::FontSizeButton));
         } else {
-            m_kpa1500StatusLabel->setText("KPA1500");
-            m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                                    .arg(K4Styles::Colors::InactiveGray)
-                                                    .arg(K4Styles::Dimensions::FontSizeButton));
+            m_statusBarController->setKpa1500Status("KPA1500", QString("color: %1; font-size: %2px;")
+                                                                   .arg(K4Styles::Colors::InactiveGray)
+                                                                   .arg(K4Styles::Dimensions::FontSizeButton));
         }
     }
 }

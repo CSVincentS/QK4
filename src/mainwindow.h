@@ -16,7 +16,7 @@
 
 class AudioController;
 class SpectrumController;
-class NetHealthWidget;
+class StatusBarController;
 class SideControlPanel;
 class RightSidePanel;
 class BottomMenuBar;
@@ -89,7 +89,6 @@ private slots:
     void onProcessingChangedB();
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
-    void updateDateTime();
     void showMenuOverlay();
     void onMenuValueChangeRequested(int menuId, const QString &action);
     void onMenuModelValueChanged(int menuId, int newValue);
@@ -132,7 +131,6 @@ private slots:
 private:
     void setupMenuBar();
     void setupUi();
-    void setupTopStatusBar(QWidget *parent);
     void setupVfoSection(QWidget *parent);
 
     // Phase 2 mechanical extractions — see PATTERNS.md / CONVENTIONS.md Rule 12.
@@ -155,7 +153,6 @@ private:
     void setupConnectionWiring();
     void setupRadioStateWiring();
     void setupSpectrumDataRouting();
-    void setupClockTimer();
     void setupHardwareController();
     void setupKpa1500();
     void setupCatServer();
@@ -166,7 +163,6 @@ private:
 
     ConnectionController *m_connectionController;
     RadioState *m_radioState;
-    QTimer *m_clockTimer;
 
     // Audio controller owns AudioEngine, Opus codecs, audio thread, and PTT state
     AudioController *m_audioController;
@@ -174,16 +170,8 @@ private:
     // Spectrum controller owns panadapters, span buttons, VFO indicators, and spectrum wiring
     SpectrumController *m_spectrumController;
 
-    // Top status bar
-    QLabel *m_titleLabel;
-    QLabel *m_dateTimeLabel;
-    QLabel *m_powerLabel;
-    QLabel *m_swrLabel;
-    QLabel *m_voltageLabel;
-    QLabel *m_currentLabel;
-    QLabel *m_connectionStatusLabel;
-    NetHealthWidget *m_netHealthWidget;
-    QLabel *m_kpa1500StatusLabel;
+    // Top status bar — owned by StatusBarController (see src/controllers/).
+    StatusBarController *m_statusBarController;
 
     // VFO widgets (modular, reusable components). Each owns its own multifunction S/Po/ALC/COMP/
     // SWR/Id meter (VFOWidget::m_txMeter) so there is no standalone TX meter member here.
