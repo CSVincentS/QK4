@@ -1623,6 +1623,215 @@ private slots:
         rs.parseCATCommand("#SCL080;");
         QCOMPARE(spy.count(), 0);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — AudioGain subsystem
+    // Handlers: MG (mic gain), RG/RG$ (RF gain), SQ/SQ$ (squelch),
+    // CP (compression), ML (monitor level per mode), KP (keyer paddle),
+    // LN (VFO link), SD (QSK/VOX delay per mode).
+    // =========================================================================
+
+    // --- MG (Mic gain, simple int) ---
+    void testMicGainParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::micGainChanged);
+        rs.parseCATCommand("MG050;");
+        QCOMPARE(rs.micGain(), 50);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testMicGainNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("MG050;");
+        QSignalSpy spy(&rs, &RadioState::micGainChanged);
+        rs.parseCATCommand("MG050;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- RG / RG$ (RF gain — handler strips leading '-') ---
+    // WHY: The K4 reports RF gain as a negative value (e.g. "RG-030;" for
+    // -30 dB), but the handler drops the sign and stores the magnitude. UI
+    // callers re-apply the negative sign for display. Locking this in as
+    // current behavior; if Phase 1 surfaces this as a real bug, fix it in a
+    // dedicated commit.
+    void testRfGainStoresMagnitude() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::rfGainChanged);
+        rs.parseCATCommand("RG-020;");
+        QCOMPARE(rs.rfGain(), 20); // stored as positive magnitude
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testRfGainWithoutSignParsesSame() {
+        RadioState rs;
+        rs.parseCATCommand("RG020;");
+        QCOMPARE(rs.rfGain(), 20);
+    }
+
+    void testRfGainNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("RG-020;");
+        QSignalSpy spy(&rs, &RadioState::rfGainChanged);
+        rs.parseCATCommand("RG-020;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testRfGainBStoresMagnitude() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::rfGainBChanged);
+        rs.parseCATCommand("RG$-015;");
+        QCOMPARE(rs.rfGainB(), 15);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- SQ / SQ$ (Squelch, handleIntPair) ---
+    void testSquelchParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::squelchChanged);
+        rs.parseCATCommand("SQ010;");
+        QCOMPARE(rs.squelchLevel(), 10);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testSquelchBParses() {
+        RadioState rs;
+        rs.parseCATCommand("SQ$015;");
+        QCOMPARE(rs.squelchLevelB(), 15);
+    }
+
+    // --- CP (Compression) ---
+    void testCompressionParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::compressionChanged);
+        rs.parseCATCommand("CP015;");
+        QCOMPARE(rs.compression(), 15);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testCompressionNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("CP015;");
+        QSignalSpy spy(&rs, &RadioState::compressionChanged);
+        rs.parseCATCommand("CP015;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    // --- ML (Monitor level: MLmnnn where m=0(CW)/1(Data)/2(Voice), nnn=0-100) ---
+    void testMonitorLevelCwParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::monitorLevelChanged);
+        rs.parseCATCommand("ML0050;"); // CW, 50
+        QCOMPARE(rs.monitorLevelCW(), 50);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 0);
+        QCOMPARE(spy.at(0).at(1).toInt(), 50);
+    }
+
+    void testMonitorLevelDataParses() {
+        RadioState rs;
+        rs.parseCATCommand("ML1075;");
+        QCOMPARE(rs.monitorLevelData(), 75);
+    }
+
+    void testMonitorLevelVoiceParses() {
+        RadioState rs;
+        rs.parseCATCommand("ML2025;");
+        QCOMPARE(rs.monitorLevelVoice(), 25);
+    }
+
+    void testMonitorLevelInvalidModeRejected() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::monitorLevelChanged);
+        rs.parseCATCommand("ML5050;"); // mode=5, invalid
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testMonitorLevelOutOfRangeRejected() {
+        RadioState rs;
+        rs.parseCATCommand("ML0050;");
+        QSignalSpy spy(&rs, &RadioState::monitorLevelChanged);
+        rs.parseCATCommand("ML0150;"); // level=150, > 100
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.monitorLevelCW(), 50);
+    }
+
+    // --- KP (Keyer paddle: KPionnn; i=iambic A/B, o=paddle N/R, nnn=weight 90-125) ---
+    void testKeyerPaddleParses() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::keyerPaddleChanged);
+        rs.parseCATCommand("KPAN100;");
+        QCOMPARE(rs.iambicMode(), QChar('A'));
+        QCOMPARE(rs.paddleOrientation(), QChar('N'));
+        QCOMPARE(rs.keyingWeight(), 100);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toChar(), QChar('A'));
+        QCOMPARE(spy.at(0).at(1).toChar(), QChar('N'));
+        QCOMPARE(spy.at(0).at(2).toInt(), 100);
+    }
+
+    void testKeyerPaddleNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("KPAN100;");
+        QSignalSpy spy(&rs, &RadioState::keyerPaddleChanged);
+        rs.parseCATCommand("KPAN100;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testKeyerPaddleSingleFieldFlipEmits() {
+        RadioState rs;
+        rs.parseCATCommand("KPAN100;");
+        QSignalSpy spy(&rs, &RadioState::keyerPaddleChanged);
+        rs.parseCATCommand("KPBN100;"); // iambic A→B
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // --- LN (VFO Link) ---
+    void testVfoLinkEnable() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::vfoLinkChanged);
+        rs.parseCATCommand("LN1;");
+        QCOMPARE(rs.vfoLink(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testVfoLinkDisable() {
+        RadioState rs;
+        rs.parseCATCommand("LN1;");
+        rs.parseCATCommand("LN0;");
+        QCOMPARE(rs.vfoLink(), false);
+    }
+
+    // --- SD (QSK/VOX delay per mode: SDxMzzz; x=QSK flag, M=mode, zzz=delay) ---
+    void testSdCwModeStoresDelayAndQsk() {
+        RadioState rs;
+        QSignalSpy qskSpy(&rs, &RadioState::qskEnabledChanged);
+        rs.parseCATCommand("SD1C050;");
+        QCOMPARE(rs.qskDelayCW(), 50);
+        QCOMPARE(rs.qskEnabled(), true);
+        QCOMPARE(qskSpy.count(), 1);
+    }
+
+    void testSdVoiceModeStoresDelay() {
+        RadioState rs;
+        rs.parseCATCommand("SD0V100;");
+        QCOMPARE(rs.qskDelayVoice(), 100);
+    }
+
+    void testSdDataModeStoresDelay() {
+        RadioState rs;
+        rs.parseCATCommand("SD0D075;");
+        QCOMPARE(rs.qskDelayData(), 75);
+    }
+
+    void testSdQskFlagOnlyMeaningfulInCwMode() {
+        // QSK flag byte is only inspected when mode char is 'C'.
+        RadioState rs;
+        rs.parseCATCommand("SD1C050;");
+        QSignalSpy spy(&rs, &RadioState::qskEnabledChanged);
+        rs.parseCATCommand("SD0V050;"); // '0' in voice mode — QSK state must not change
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.qskEnabled(), true);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
