@@ -3,7 +3,6 @@
 #include "ui/radiomanagerdialog.h"
 #include "ui/sidecontrolpanel.h"
 #include "ui/rightsidepanel.h"
-#include "ui/kpa1500minipanel.h"
 #include "ui/bottommenubar.h"
 #include "controllers/featuremenucontroller.h"
 #include "ui/modepopupwidget.h"
@@ -25,7 +24,7 @@
 #include "ui/frequencydisplaywidget.h"
 #include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
-#include "network/kpa1500client.h"
+#include "controllers/kpa1500uicontroller.h"
 #include "network/catserver.h"
 #include "network/networkmetrics.h"
 #include "controllers/statusbarcontroller.h"
@@ -98,7 +97,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     setupHardwareController();
 
-    setupKpa1500();
+    m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel->kpa1500Mini(), this);
 
     setupCatServer();
 }
@@ -133,12 +132,8 @@ MainWindow::~MainWindow() {
     // (it's a child of MainWindow, so Qt deletes it automatically)
     // AudioController handles audio thread shutdown in its destructor
 
-    // Disconnect KPA1500 signals before child destruction to prevent
-    // callbacks accessing destroyed widgets during cleanup
-    if (m_kpa1500Client) {
-        disconnect(m_kpa1500Client, nullptr, this, nullptr);
-        m_kpa1500Client->disconnectFromHost();
-    }
+    // KPA1500UiController's own destructor disconnects its signals and
+    // disconnects from the amplifier — Qt handles its deletion as a child.
 }
 
 // ============================================================================
@@ -603,67 +598,6 @@ void MainWindow::setupHardwareController() {
     });
 }
 
-void MainWindow::setupKpa1500() {
-    // KPA1500 amplifier client
-    m_kpa1500Client = new KPA1500Client(this);
-
-    // Connect KPA1500 signals
-    connect(m_kpa1500Client, &KPA1500Client::connected, this, &MainWindow::onKpa1500Connected);
-    connect(m_kpa1500Client, &KPA1500Client::disconnected, this, &MainWindow::onKpa1500Disconnected);
-    connect(m_kpa1500Client, &KPA1500Client::errorOccurred, this, &MainWindow::onKpa1500Error);
-
-    // Wire KPA1500 data signals to embedded mini panel in right side panel
-    auto *kpaMini = m_rightSidePanel->kpa1500Mini();
-    connect(m_kpa1500Client, &KPA1500Client::powerChanged, this, [kpaMini](double fwd, double ref, double) {
-        kpaMini->setForwardPower(static_cast<float>(fwd));
-        kpaMini->setReflectedPower(static_cast<float>(ref));
-    });
-    connect(m_kpa1500Client, &KPA1500Client::swrChanged, this,
-            [kpaMini](double swr) { kpaMini->setSWR(static_cast<float>(swr)); });
-    connect(m_kpa1500Client, &KPA1500Client::paTemperatureChanged, this,
-            [kpaMini](double tempC) { kpaMini->setTemperature(static_cast<float>(tempC)); });
-    connect(m_kpa1500Client, &KPA1500Client::operatingStateChanged, this,
-            [kpaMini](KPA1500Client::OperatingState state) { kpaMini->setMode(state == KPA1500Client::StateOperate); });
-    connect(m_kpa1500Client, &KPA1500Client::atuModeChanged, this,
-            [kpaMini](bool modeInline) { kpaMini->setAtuMode(modeInline); });
-    connect(m_kpa1500Client, &KPA1500Client::atuInlineChanged, this,
-            [kpaMini](bool relayInline) { kpaMini->setAtuInline(relayInline); });
-    connect(m_kpa1500Client, &KPA1500Client::antennaChanged, this,
-            [kpaMini](int antenna) { kpaMini->setAntenna(antenna); });
-    connect(m_kpa1500Client, &KPA1500Client::faultStatusChanged, this,
-            [kpaMini](KPA1500Client::FaultStatus status, const QString &) {
-                kpaMini->setFault(status == KPA1500Client::FaultActive);
-            });
-    connect(m_kpa1500Client, &KPA1500Client::connected, this, [kpaMini]() {
-        kpaMini->setConnected(true);
-        kpaMini->setVisible(true);
-    });
-    connect(m_kpa1500Client, &KPA1500Client::disconnected, this, [kpaMini]() {
-        kpaMini->setConnected(false);
-        kpaMini->setVisible(false);
-    });
-
-    // Wire mini panel button signals to KPA1500 commands
-    connect(kpaMini, &Kpa1500MiniPanel::modeToggled, this,
-            [this](bool operate) { m_kpa1500Client->sendCommand(operate ? "^OS1;" : "^OS0;"); });
-    connect(kpaMini, &Kpa1500MiniPanel::atuTuneRequested, this, [this]() { m_kpa1500Client->sendCommand("^FT;"); });
-    connect(kpaMini, &Kpa1500MiniPanel::atuModeToggled, this,
-            [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AMI;" : "^AMB;"); });
-    connect(kpaMini, &Kpa1500MiniPanel::antennaChanged, this,
-            [this](int ant) { m_kpa1500Client->sendCommand(QString("^AN%1;").arg(ant)); });
-
-    // Connect to settings for KPA1500 enable/disable and settings changes
-    connect(RadioSettings::instance(), &RadioSettings::kpa1500EnabledChanged, this,
-            &MainWindow::onKpa1500EnabledChanged);
-    connect(RadioSettings::instance(), &RadioSettings::kpa1500SettingsChanged, this,
-            &MainWindow::onKpa1500SettingsChanged);
-
-    // KPA1500 connects when K4 connects (in onAuthenticated), not on app start
-
-    // Initialize KPA1500 status display
-    updateKpa1500Status();
-}
-
 void MainWindow::setupCatServer() {
     // CAT server for external app integration (WSJT-X, MacLoggerDX, etc.)
     // Apps connect using their built-in K4 support - no protocol translation needed
@@ -735,7 +669,7 @@ void MainWindow::setupMenuBar() {
     connect(optionsAction, &QAction::triggered, this, [this]() {
         if (!m_optionsDialog) {
             m_optionsDialog = new OptionsDialog(m_radioState, m_audioController, m_hardwareController, m_catServer,
-                                                m_kpa1500Client, m_dxClusterController, this);
+                                                m_kpa1500UiController->client(), m_dxClusterController, this);
         }
         m_optionsDialog->show();
         m_optionsDialog->raise();
@@ -1987,11 +1921,8 @@ void MainWindow::onRadioReady() {
 
     // Startup macro is sent pre-RDY by TcpClient so the state dump reflects changes.
 
-    // Connect KPA1500 if enabled and configured
-    if (RadioSettings::instance()->kpa1500Enabled() && !RadioSettings::instance()->kpa1500Host().isEmpty()) {
-        m_kpa1500Client->connectToHost(RadioSettings::instance()->kpa1500Host(),
-                                       RadioSettings::instance()->kpa1500Port());
-    }
+    // KPA connectivity is gated on K4 connectivity — see KPA1500UiController.
+    m_kpa1500UiController->connectIfEnabled();
 
     // Auto-connect all DX cluster entries marked for auto-connect
     QString dxCall = RadioSettings::instance()->dxClusterCallsign();
@@ -2335,10 +2266,8 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
         // Clear menu model
         m_menuController->menuModel()->clear();
 
-        // Disconnect KPA1500 when K4 disconnects
-        if (m_kpa1500Client->isConnected()) {
-            m_kpa1500Client->disconnectFromHost();
-        }
+        // Disconnect KPA1500 when K4 disconnects.
+        m_kpa1500UiController->disconnectFromHost();
 
         break;
 
@@ -2870,70 +2799,6 @@ void MainWindow::onErrorNotification(int errorCode, const QString &message) {
     // The message contains the text after "ERxx:" (e.g., "KPA1500 Status: operate.")
     if (m_notificationWidget) {
         m_notificationWidget->showMessage(message, 2000);
-    }
-}
-
-// ============== KPA1500 Amplifier Slots ==============
-
-void MainWindow::onKpa1500Connected() {
-    qCDebug(qk4Main) << "KPA1500: Connected to amplifier";
-    // Start polling with configured interval
-    int pollInterval = RadioSettings::instance()->kpa1500PollInterval();
-    m_kpa1500Client->startPolling(pollInterval);
-    updateKpa1500Status();
-}
-
-void MainWindow::onKpa1500Disconnected() {
-    qCDebug(qk4Main) << "KPA1500: Disconnected from amplifier";
-    updateKpa1500Status();
-}
-
-void MainWindow::onKpa1500Error(const QString &error) {
-    qWarning() << "KPA1500: Error -" << error;
-}
-
-void MainWindow::onKpa1500EnabledChanged(bool enabled) {
-    if (enabled) {
-        // Connect if host is configured
-        QString host = RadioSettings::instance()->kpa1500Host();
-        if (!host.isEmpty()) {
-            m_kpa1500Client->connectToHost(host, RadioSettings::instance()->kpa1500Port());
-        }
-    } else {
-        m_kpa1500Client->disconnectFromHost();
-    }
-    updateKpa1500Status();
-}
-
-void MainWindow::onKpa1500SettingsChanged() {
-    // Reconnect with new settings if enabled
-    if (RadioSettings::instance()->kpa1500Enabled()) {
-        m_kpa1500Client->disconnectFromHost();
-        QString host = RadioSettings::instance()->kpa1500Host();
-        if (!host.isEmpty()) {
-            m_kpa1500Client->connectToHost(host, RadioSettings::instance()->kpa1500Port());
-        }
-    }
-    updateKpa1500Status();
-}
-
-void MainWindow::updateKpa1500Status() {
-    bool enabled = RadioSettings::instance()->kpa1500Enabled();
-    bool connected = m_kpa1500Client && m_kpa1500Client->isConnected();
-
-    if (!enabled) {
-        m_statusBarController->setKpa1500Visible(false);
-    } else {
-        m_statusBarController->setKpa1500Visible(true);
-        if (connected) {
-            m_statusBarController->setKpa1500Status("KPA1500", QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                                   .arg(K4Styles::Colors::StatusGreen)
-                                                                   .arg(K4Styles::Dimensions::FontSizeButton));
-        } else {
-            m_statusBarController->setKpa1500Status("KPA1500", QString("color: %1; font-size: %2px;")
-                                                                   .arg(K4Styles::Colors::InactiveGray)
-                                                                   .arg(K4Styles::Dimensions::FontSizeButton));
-        }
     }
 }
 

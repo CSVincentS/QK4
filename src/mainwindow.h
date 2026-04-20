@@ -29,7 +29,7 @@ class FeatureMenuController;
 class ModePopupWidget;
 class HardwareController;
 class DxClusterController;
-class KPA1500Client;
+class KPA1500UiController;
 class CatServer;
 class OptionsDialog;
 class NotificationWidget;
@@ -87,14 +87,6 @@ private slots:
     void toggleTxPopup();
     void closeAllPopups();
 
-    // KPA1500 slots
-    void onKpa1500Connected();
-    void onKpa1500Disconnected();
-    void onKpa1500Error(const QString &error);
-    void onKpa1500EnabledChanged(bool enabled);
-    void onKpa1500SettingsChanged();
-    void updateKpa1500Status();
-
     // Error/notification from K4 (ERxx: messages)
     void onErrorNotification(int errorCode, const QString &message);
 
@@ -129,7 +121,6 @@ private:
     void setupRadioStateWiring();
     void setupSpectrumDataRouting();
     void setupHardwareController();
-    void setupKpa1500();
     void setupCatServer();
 
     void updateConnectionState(TcpClient::ConnectionState state);
@@ -214,8 +205,8 @@ private:
     // Hardware controller (owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads)
     HardwareController *m_hardwareController;
 
-    // KPA1500 amplifier client
-    KPA1500Client *m_kpa1500Client;
+    // KPA1500 amplifier UI controller (owns the KPA1500Client)
+    KPA1500UiController *m_kpa1500UiController;
 
     // DX Cluster controller
     DxClusterController *m_dxClusterController;
