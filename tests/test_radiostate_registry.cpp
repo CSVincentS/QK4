@@ -79,6 +79,45 @@ private slots:
         // If we got here, all handlers returned.
         QVERIFY(true);
     }
+
+    // A/B structural symmetry: every "$"-suffix prefix that represents a
+    // sub-RX variant of a base CAT command must have its non-suffix
+    // counterpart also registered. A "$"-suffix without a base usually
+    // means a registration oversight — sub-RX would be wired up but
+    // main-RX wouldn't be.
+    //
+    // Exceptions: the K4's display-query protocol uses "$" as a
+    // data-separator on some status-only commands (not as a sub-RX
+    // marker). Those prefixes are intentionally singletons.
+    void testEveryDollarPrefixHasNonDollarCounterpart() {
+        // WHY: "#NB$" (DDC noise-blanker mode) and "#NBL$" (DDC NB level)
+        // are display-query status commands — the "$" is part of the K4's
+        // response format, not a sub-RX suffix. They have no main/sub pair.
+        static const QSet<QString> kIntentionalSingletons{
+            QStringLiteral("#NB$"),
+            QStringLiteral("#NBL$"),
+        };
+
+        RadioState rs;
+        const QStringList prefixes = rs.registeredCommandPrefixes();
+        const QSet<QString> all(prefixes.begin(), prefixes.end());
+        QStringList missing;
+        for (const QString &p : prefixes) {
+            if (!p.endsWith('$'))
+                continue;
+            if (kIntentionalSingletons.contains(p))
+                continue;
+            const QString base = p.left(p.length() - 1);
+            if (!all.contains(base))
+                missing.append(p);
+        }
+        if (!missing.isEmpty()) {
+            QFAIL(qPrintable(QString("$-suffix prefixes registered without a non-suffix base: %1. "
+                                     "If this $ is a K4 protocol separator (not a sub-RX marker), add "
+                                     "the prefix to kIntentionalSingletons with a WHY-note.")
+                                 .arg(missing.join(QStringLiteral(", ")))));
+        }
+    }
 };
 
 QTEST_MAIN(TestRadioStateRegistry)
