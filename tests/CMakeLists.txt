@@ -29,6 +29,17 @@ target_include_directories(test_radiostate_registry PRIVATE ${CMAKE_SOURCE_DIR}/
 target_link_libraries(test_radiostate_registry Qt6::Core Qt6::Test)
 add_test(NAME RadioStateRegistryTests COMMAND test_radiostate_registry)
 
+# RadioState golden CAT-trace replay regression test. The trace fixture
+# at tests/golden/session.cat.txt is not committed (local developer data,
+# per .gitignore); the test QSKIPs on a fresh checkout. Primarily a local
+# safety net for Phase 1 refactor work.
+add_executable(test_radiostate_golden test_radiostate_golden.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+)
+target_include_directories(test_radiostate_golden PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_radiostate_golden Qt6::Core Qt6::Test)
+add_test(NAME RadioStateGoldenTests COMMAND test_radiostate_golden)
+
 # RadioState::parseCATCommand() dispatch microbenchmark — not wired into
 # add_test() so it doesn't run during every `ctest` invocation; build and
 # invoke explicitly when checking for perf regressions.

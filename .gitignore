@@ -11,6 +11,11 @@ tools/
 HaliKey_QK4_Integration_Notes.md
 docs/generated/
 
+# Phase 0.5 golden CAT-trace fixture — local only, contains recorded K4
+# session data. The replay test harness skips gracefully if absent.
+tests/golden/
+capture_k4_golden.py
+
 # Python cache
 __pycache__/
 *.pyc
