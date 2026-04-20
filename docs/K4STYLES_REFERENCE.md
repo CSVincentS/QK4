@@ -1,5 +1,23 @@
 # K4Styles Reference
 
+> **⚠️ STALE (as of 2026-04-20). Use `src/ui/k4styles.h` directly — do not trust this file.**
+>
+> A 2026-04-20 audit (see `docs/audit-2026-04-20-supplement.md` §1) found 25+ missing constants,
+> 3 wrong hex values, 14 undocumented helpers, and one wrong function signature. Hand-maintenance
+> of this file has demonstrably failed.
+>
+> **Canonical source of truth:** `src/ui/k4styles.h`. The header comments on every constant and
+> helper are kept current by the code review process; this markdown is not.
+>
+> Anything below this banner is retained only as a historical sketch of the palette's intent.
+> For accurate lists, run:
+> - `rg 'constexpr const char \*' src/ui/k4styles.h` — all color/font constants.
+> - `rg '^\s*QString\s+\w+\(' src/ui/k4styles.h` and `rg '^\s*const QString &\w+' src/ui/k4styles.h` — all helper functions.
+>
+> If this file is ever to be revived, auto-generate it from `k4styles.h` instead of hand-editing.
+
+---
+
 Complete reference for all `K4Styles::Colors` and `K4Styles::Dimensions` constants.
 
 **Source:** `src/ui/k4styles.h`

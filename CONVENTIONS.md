@@ -352,6 +352,20 @@ Any modification to `RadioState::parseCATCommand()` or its handlers must include
 
 If a `.cpp` or `.h` file grows past 800 lines, split it by responsibility before merging. Check with `wc -l` before committing.
 
+**Status (2026-04-20): aspirational.** Seven files currently exceed the cap and will be split as part of the refactor tracked in `memory/refactor-plan.md`. The rule is binding for *new* code: PRs that introduce new files over 800 LOC or push a borderline file past the limit are blocked. PRs that leave an existing violator untouched are fine.
+
+Current violators (for awareness — do not green-light new additions):
+
+| File | LOC | Planned split |
+|------|----:|---------------|
+| `src/mainwindow.cpp` | 4967 | Top of `refactor-plan.md` — MainWindow decomposition |
+| `src/models/radiostate.cpp` | 2893 | `refactor-plan.md` — RadioState handler extraction |
+| `src/dsp/panadapter_rhi.cpp` | 1871 | Natural RHI pipeline size; low priority |
+| `src/models/radiostate.h` | 1156 | Follows the `.cpp` split |
+| `src/dsp/minipan_rhi.cpp` | 1065 | Follows the panadapter refactor |
+| `src/controllers/spectrumcontroller.cpp` | 891 | Close to threshold — hold the line |
+| `src/ui/displaypopupwidget.cpp` | 865 | Close to threshold — hold the line |
+
 ### 8. Every Extraction is Traced First
 
 Before moving code between classes: read every member variable, method, signal, and `connect()` call involved. Document what moves, what stays, and what the cross-domain dependencies are. Missing a dependency means a broken extraction.
@@ -374,3 +388,21 @@ All four must pass. No exceptions.
 ### 11. Controlled Shutdown Order
 
 Every controller and MainWindow calls `disconnect(this)` as the first statement in its destructor. This prevents queued signals from arriving during partial destruction. Thread shutdown follows the dependency chain: producers stop before consumers.
+
+---
+
+## Comment Conventions
+
+Default: **write no comments.** Well-named identifiers already describe *what* the code does. Only add a comment when the *why* is non-obvious: a hidden constraint, a subtle invariant, a K4 protocol quirk, a threading/ordering requirement, a workaround for a specific transient. If removing the comment would not confuse a future reader, do not write it.
+
+Two prefixes are reserved so grep-based surveys can find them:
+
+- **`// WHY: <rationale>`** — design rationale for a non-obvious choice. Use this for protocol quirks (`RO`/`RO$` routing, SL no-echo), threading decisions (`BlockingQueuedConnection` avoidance, deferred-setup to dodge deadlocks), constants whose value is load-bearing (3-byte parse-tail, `PREBUFFER_PACKETS = 1`), and any workaround whose removal would silently break behavior. Prefer this over a bare paragraph so future audits can grep `rg "// WHY:"` to survey every non-obvious decision in the codebase.
+
+- **`// TODO(gh#NNN): <summary>`** — tracked technical debt. The `gh#NNN` points at a GitHub issue. **A `// TODO` without an issue number is not allowed** — file the issue first, then reference it. This prevents TODOs from turning into ambient guilt. Bare `// FIXME`, `// HACK`, `// XXX` are not used; use `// TODO(gh#NNN)` with an issue that states the concern, or delete the comment.
+
+Do NOT write comments that:
+- Restate the function/type name in prose.
+- Reference the current task, PR, or fix (that belongs in the commit message).
+- Describe code that was deleted (git has it).
+- Explain a field whose purpose is obvious from a read-through (e.g., `// the name`).

@@ -1,5 +1,23 @@
 # UI Components Reference
 
+> **⚠️ STALE (footer claims "Last updated: February 10, 2026" — ~70 days old as of 2026-04-20). Do not trust specific numbers or structural claims in this file.**
+>
+> A 2026-04-20 audit (see `docs/audit-2026-04-20-supplement.md` §2) found wrong RHI texture
+> sizes (256/2048 vs actual 1024/4096 in `panadapter_rhi.h:195-196`), an out-of-date side-panel
+> width, missing OptionsDialog tabs (only "About" listed; 8 tabs exist), and at least 11 widgets
+> entirely missing from the inventory.
+>
+> **Canonical sources of truth:**
+> - **Widget headers** — every `src/ui/*.h` file now carries a purpose docstring (added Phase 3 of
+>   the 2026-04-20 audit). Read those instead of this file.
+> - **Patterns & inheritance** — `PATTERNS.md`.
+> - **Structural inventory** — run `python3 tools/extract_all.py` and read `docs/generated/`.
+>
+> The layout-tree ASCII diagrams (sections "Layouts" further down) may still be useful as
+> orientation aids; treat everything else as historical.
+
+---
+
 Complete inventory of all Qt widgets, layouts, and UI elements in QK4.
 
 ---

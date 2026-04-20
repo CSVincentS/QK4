@@ -93,7 +93,7 @@ Base class for all popup widgets. Defined in `src/ui/k4popupbase.h`.
 
 **Inherits:** QWidget
 
-**Inherited by:** BandPopupWidget, ButtonRowPopup, DisplayPopupWidget, FnPopupWidget, ModePopupWidget
+**Inherited by (as of 2026-04-20):** AntennaCfgPopupWidget, BandPopupWidget, ButtonRowPopup, DisplayPopupWidget, FnPopupWidget, ModePopupWidget, RxEqPopupWidget. To regenerate this list: `rg '^class\s+\w+\s*:\s*public\s+K4PopupBase' src/ui`.
 
 #### Public Methods
 
