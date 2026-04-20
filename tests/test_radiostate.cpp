@@ -2474,6 +2474,71 @@ private slots:
         rs.parseCATCommand("ER;"); // no ':' at all
         QCOMPARE(spy.count(), 0);
     }
+
+    // =========================================================================
+    // Phase 0.1 Backfill — Equalizer subsystem
+    // Handlers: RE (RX EQ: 8 bands × 3 signed digits, range -16..+16),
+    // TE (TX EQ: same shape). Both emit a single rollup signal.
+    // =========================================================================
+
+    void testRxEqParsesAllBands() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::rxEqChanged);
+        // 8 bands: +05, -03, +00, +10, -16, +16, +07, -02
+        rs.parseCATCommand("RE+05-03+00+10-16+16+07-02;");
+        QCOMPARE(rs.rxEqBand(0), 5);
+        QCOMPARE(rs.rxEqBand(1), -3);
+        QCOMPARE(rs.rxEqBand(2), 0);
+        QCOMPARE(rs.rxEqBand(3), 10);
+        QCOMPARE(rs.rxEqBand(4), -16);
+        QCOMPARE(rs.rxEqBand(5), 16);
+        QCOMPARE(rs.rxEqBand(6), 7);
+        QCOMPARE(rs.rxEqBand(7), -2);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testRxEqOutOfRangeValueIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("RE+00+00+00+00+00+00+00+00;"); // establish baseline
+        QSignalSpy spy(&rs, &RadioState::rxEqChanged);
+        // Band 0 = +99 (over +16) — rejected; rest match current → no change overall
+        rs.parseCATCommand("RE+99+00+00+00+00+00+00+00;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.rxEqBand(0), 0);
+    }
+
+    void testRxEqNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("RE+05-03+00+10-16+16+07-02;");
+        QSignalSpy spy(&rs, &RadioState::rxEqChanged);
+        rs.parseCATCommand("RE+05-03+00+10-16+16+07-02;");
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testRxEqShortCommandIgnored() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::rxEqChanged);
+        rs.parseCATCommand("RE+05;"); // way too short (needs 26+ chars)
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testTxEqParsesAllBands() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::txEqChanged);
+        rs.parseCATCommand("TE+01+02+03+04+05+06+07+08;");
+        for (int i = 0; i < 8; i++) {
+            QCOMPARE(rs.txEqBand(i), i + 1);
+        }
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testTxEqNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("TE+01+02+03+04+05+06+07+08;");
+        QSignalSpy spy(&rs, &RadioState::txEqChanged);
+        rs.parseCATCommand("TE+01+02+03+04+05+06+07+08;");
+        QCOMPARE(spy.count(), 0);
+    }
 };
 
 QTEST_MAIN(TestRadioState)
