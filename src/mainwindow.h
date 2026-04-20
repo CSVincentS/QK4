@@ -22,6 +22,7 @@ class RightSidePanel;
 class BottomMenuBar;
 class MenuController;
 class PopupManager;
+class BandNavigationController;
 class AntennaConfigController;
 class TextDecodeController;
 class FilterIndicatorWidget;
@@ -76,9 +77,6 @@ private slots:
     void onProcessingChangedB();
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
-    void onBandSelected(const QString &bandName);
-    void updateBandSelection(int bandNum);
-    void updateBandSelectionB(int bandNum);
     void toggleDisplayPopup();
     void toggleBandPopup();
     void toggleFnPopup();
@@ -200,13 +198,11 @@ private:
     // Menu system — owned by MenuController (src/controllers/).
     MenuController *m_menuController;
     PopupManager *m_popupManager;
+    BandNavigationController *m_bandNavController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     FeatureMenuController *m_featureMenuController;
     ModePopupController *m_modePopupController;
-
-    int m_currentBandNum = -1;  // Current band number for VFO A (BN command)
-    int m_currentBandNumB = -1; // Current band number for VFO B (BN$ command)
 
     // Hardware controller (owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads)
     HardwareController *m_hardwareController;

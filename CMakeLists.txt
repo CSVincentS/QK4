@@ -85,6 +85,7 @@ set(SOURCES
     src/controllers/popupmanager.cpp
     src/controllers/kpa1500uicontroller.cpp
     src/controllers/modepopupcontroller.cpp
+    src/controllers/bandnavigationcontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -177,6 +178,7 @@ set(HEADERS
     src/controllers/popupmanager.h
     src/controllers/kpa1500uicontroller.h
     src/controllers/modepopupcontroller.h
+    src/controllers/bandnavigationcontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

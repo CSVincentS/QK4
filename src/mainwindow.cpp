@@ -7,6 +7,7 @@
 #include "controllers/featuremenucontroller.h"
 #include "controllers/modepopupcontroller.h"
 #include "ui/menuoverlay.h"
+#include "controllers/bandnavigationcontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -66,7 +67,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     });
     m_popupManager =
         new PopupManager(m_radioState, m_connectionController, m_spectrumController, nullptr, nullptr, this, this);
-    connect(m_popupManager, &PopupManager::bandSelected, this, &MainWindow::onBandSelected);
+    m_bandNavController = new BandNavigationController(m_radioState, m_connectionController, m_popupManager, this);
     connect(m_popupManager, &PopupManager::macroFunctionTriggered, this, &MainWindow::onFnFunctionTriggered);
     connect(m_popupManager, &PopupManager::mainRxButtonClicked, this, &MainWindow::onMainRxButtonClicked);
     connect(m_popupManager, &PopupManager::mainRxButtonRightClicked, this, &MainWindow::onMainRxButtonRightClicked);
@@ -1906,18 +1907,16 @@ void MainWindow::onCatResponse(const QString &response) {
             // VFO B band number: BN$nn where nn is 00-10 or 16-25
             bool ok;
             int bandNum = cmd.mid(3, 2).toInt(&ok);
-            if (ok) {
-                updateBandSelectionB(bandNum);
-            }
+            if (ok)
+                m_bandNavController->setCurrentBand(bandNum, true);
         }
         // Parse BN (Band Number) response for VFO A
         else if (cmd.startsWith("BN")) {
             // VFO A band number: BNnn where nn is 00-10 or 16-25
             bool ok;
             int bandNum = cmd.mid(2, 2).toInt(&ok);
-            if (ok) {
-                updateBandSelection(bandNum);
-            }
+            if (ok)
+                m_bandNavController->setCurrentBand(bandNum, false);
         }
     }
 }
@@ -2663,59 +2662,6 @@ void MainWindow::toggleSubRxPopup() {
 void MainWindow::toggleTxPopup() {
     closeNonPopupManagerPopups();
     m_popupManager->toggleTx();
-}
-
-void MainWindow::onBandSelected(const QString &bandName) {
-    qCDebug(qk4Main) << "Band selected:" << bandName;
-
-    // Get band number from name
-    int newBandNum = m_popupManager->bandNumberForName(bandName);
-
-    // GEN and MEM are special modes, not band changes (-1 returned)
-    if (newBandNum < 0) {
-        qCDebug(qk4Main) << "Special mode selected (GEN/MEM) - no BN command";
-        return;
-    }
-
-    if (m_connectionController->isConnected()) {
-        // Check if BSET is enabled - target VFO B (Sub RX) instead of VFO A
-        bool bSetEnabled = m_radioState->bSetEnabled();
-        int currentBand = bSetEnabled ? m_currentBandNumB : m_currentBandNum;
-        QString cmdPrefix = bSetEnabled ? "BN$" : "BN";
-
-        if (newBandNum == currentBand) {
-            // Same band tapped - invoke band stack
-            QString bandStackCmd = bSetEnabled ? "BN$^;" : "BN^;";
-            qCDebug(qk4Main) << "Same band - invoking band stack with" << bandStackCmd;
-            m_connectionController->sendCAT(bandStackCmd);
-        } else {
-            // Different band selected - change band
-            QString cmd = QString("%1%2;").arg(cmdPrefix).arg(newBandNum, 2, 10, QChar('0'));
-            qCDebug(qk4Main) << "Changing band:" << cmd;
-            m_connectionController->sendCAT(cmd);
-        }
-        // Request current band to update UI
-        QString queryCmd = bSetEnabled ? "BN$;" : "BN;";
-        m_connectionController->sendCAT(queryCmd);
-    }
-}
-
-void MainWindow::updateBandSelection(int bandNum) {
-    m_currentBandNum = bandNum;
-
-    // Update the band popup to show the current band as selected (only when not in BSET mode)
-    if (!m_radioState->bSetEnabled()) {
-        m_popupManager->setSelectedBandByNumber(bandNum);
-    }
-}
-
-void MainWindow::updateBandSelectionB(int bandNum) {
-    m_currentBandNumB = bandNum;
-
-    // Update the band popup to show the current band as selected (only when in BSET mode)
-    if (m_radioState->bSetEnabled()) {
-        m_popupManager->setSelectedBandByNumber(bandNum);
-    }
 }
 
 // ============== K4 Error/Notification Slots ==============
