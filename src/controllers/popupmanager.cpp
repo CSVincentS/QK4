@@ -6,6 +6,7 @@
 #include "spectrumcontroller.h"
 #include "ui/bandpopupwidget.h"
 #include "ui/bottommenubar.h"
+#include "ui/buttonrowpopup.h"
 #include "ui/displaypopupwidget.h"
 #include "ui/fnpopupwidget.h"
 #include "ui/macrodialog.h"
@@ -21,9 +22,55 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
     : QObject(parent), m_radioState(radioState), m_connection(connection), m_spectrum(spectrum), m_vfoA(vfoA),
       m_vfoB(vfoB), m_parentWidget(parentWidget), m_bandPopup(new BandPopupWidget(parentWidget)),
       m_displayPopup(new DisplayPopupWidget(parentWidget)), m_fnPopup(new FnPopupWidget(parentWidget)),
-      m_macroDialog(new MacroDialog(parentWidget)) {
+      m_macroDialog(new MacroDialog(parentWidget)), m_mainRxRow(new ButtonRowPopup(parentWidget)),
+      m_subRxRow(new ButtonRowPopup(parentWidget)), m_txRow(new ButtonRowPopup(parentWidget)) {
 
     m_macroDialog->hide();
+
+    // --- Button-row popups (Main RX, Sub RX, TX) ---
+    // Initial labels. Alternate color: amber when the right-click has its
+    // own function, white when primary and alternate are both informational.
+    m_mainRxRow->setButtonLabel(0, "ANT", "CFG", false);
+    m_mainRxRow->setButtonLabel(1, "RX", "EQ", false);
+    m_mainRxRow->setButtonLabel(2, "LINE OUT", "VFO LINK");
+    m_mainRxRow->setButtonLabel(3, "AFX OFF", "OFF");
+    m_mainRxRow->setButtonLabel(4, "AGC-S", "ON");
+    m_mainRxRow->setButtonLabel(5, "APF", "OFF");
+    m_mainRxRow->setButtonLabel(6, "TEXT", "DECODE", false);
+    connect(m_mainRxRow, &ButtonRowPopup::closed, this, [this]() {
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setMainRxActive(false);
+    });
+    connect(m_mainRxRow, &ButtonRowPopup::buttonClicked, this, &PopupManager::mainRxButtonClicked);
+    connect(m_mainRxRow, &ButtonRowPopup::buttonRightClicked, this, &PopupManager::mainRxButtonRightClicked);
+
+    m_subRxRow->setButtonLabel(0, "ANT", "CFG", false);
+    m_subRxRow->setButtonLabel(1, "RX", "EQ", false);
+    m_subRxRow->setButtonLabel(2, "LINE OUT", "VFO LINK");
+    m_subRxRow->setButtonLabel(3, "AFX OFF", "OFF");
+    m_subRxRow->setButtonLabel(4, "AGC-S", "ON");
+    m_subRxRow->setButtonLabel(5, "APF", "OFF");
+    m_subRxRow->setButtonLabel(6, "TEXT", "DECODE", false);
+    connect(m_subRxRow, &ButtonRowPopup::closed, this, [this]() {
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setSubRxActive(false);
+    });
+    connect(m_subRxRow, &ButtonRowPopup::buttonClicked, this, &PopupManager::subRxButtonClicked);
+    connect(m_subRxRow, &ButtonRowPopup::buttonRightClicked, this, &PopupManager::subRxButtonRightClicked);
+
+    m_txRow->setButtonLabel(0, "ANT", "CFG", false);
+    m_txRow->setButtonLabel(1, "TX", "EQ", false);
+    m_txRow->setButtonLabel(2, "LINE", "IN", false);
+    m_txRow->setButtonLabel(3, "MIC INP", "MIC CFG", true);
+    m_txRow->setButtonLabel(4, "VOX GN", "ANTIVOX", true);
+    m_txRow->setButtonLabel(5, "SSB BW", "2.8k", false);
+    m_txRow->setButtonLabel(6, "ESSB", "OFF", false);
+    connect(m_txRow, &ButtonRowPopup::closed, this, [this]() {
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setTxActive(false);
+    });
+    connect(m_txRow, &ButtonRowPopup::buttonClicked, this, &PopupManager::txButtonClicked);
+    connect(m_txRow, &ButtonRowPopup::buttonRightClicked, this, &PopupManager::txButtonRightClicked);
 
     // --- Band popup ---
     connect(m_bandPopup, &BandPopupWidget::bandSelected, this, &PopupManager::bandSelected);
@@ -143,6 +190,81 @@ void PopupManager::closeOwnedPopups() {
         if (m_bottomMenuBar)
             m_bottomMenuBar->setFnActive(false);
     }
+    if (m_mainRxRow->isVisible()) {
+        m_mainRxRow->hidePopup();
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setMainRxActive(false);
+    }
+    if (m_subRxRow->isVisible()) {
+        m_subRxRow->hidePopup();
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setSubRxActive(false);
+    }
+    if (m_txRow->isVisible()) {
+        m_txRow->hidePopup();
+        if (m_bottomMenuBar)
+            m_bottomMenuBar->setTxActive(false);
+    }
+}
+
+void PopupManager::toggleMainRx() {
+    if (!m_bottomMenuBar)
+        return;
+    const bool wasVisible = m_mainRxRow->isVisible();
+    closeOwnedPopups();
+    if (!wasVisible) {
+        m_mainRxRow->showAboveButton(m_bottomMenuBar->mainRxButton());
+        m_bottomMenuBar->setMainRxActive(true);
+    }
+}
+
+void PopupManager::toggleSubRx() {
+    if (!m_bottomMenuBar)
+        return;
+    const bool wasVisible = m_subRxRow->isVisible();
+    closeOwnedPopups();
+    if (!wasVisible) {
+        m_subRxRow->showAboveButton(m_bottomMenuBar->subRxButton());
+        m_bottomMenuBar->setSubRxActive(true);
+    }
+}
+
+void PopupManager::toggleTx() {
+    if (!m_bottomMenuBar)
+        return;
+    const bool wasVisible = m_txRow->isVisible();
+    closeOwnedPopups();
+    if (!wasVisible) {
+        m_txRow->showAboveButton(m_bottomMenuBar->txButton());
+        m_bottomMenuBar->setTxActive(true);
+    }
+}
+
+QWidget *PopupManager::mainRxPopupAnchor() const {
+    return m_mainRxRow;
+}
+
+QWidget *PopupManager::subRxPopupAnchor() const {
+    return m_subRxRow;
+}
+
+QWidget *PopupManager::txPopupAnchor() const {
+    return m_txRow;
+}
+
+void PopupManager::setMainRxButtonLabel(int index, const QString &primary, const QString &alternate,
+                                        bool alternateIsAmber) {
+    m_mainRxRow->setButtonLabel(index, primary, alternate, alternateIsAmber);
+}
+
+void PopupManager::setSubRxButtonLabel(int index, const QString &primary, const QString &alternate,
+                                       bool alternateIsAmber) {
+    m_subRxRow->setButtonLabel(index, primary, alternate, alternateIsAmber);
+}
+
+void PopupManager::setTxButtonLabel(int index, const QString &primary, const QString &alternate,
+                                    bool alternateIsAmber) {
+    m_txRow->setButtonLabel(index, primary, alternate, alternateIsAmber);
 }
 
 void PopupManager::hideMacroDialog() {

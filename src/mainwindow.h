@@ -22,7 +22,6 @@ class RightSidePanel;
 class BottomMenuBar;
 class MenuController;
 class PopupManager;
-class ButtonRowPopup;
 class RxEqPopupWidget;
 class AntennaConfigController;
 class LineOutPopupWidget;
@@ -120,6 +119,8 @@ private slots:
     void onMainRxButtonRightClicked(int index);
     void onSubRxButtonClicked(int index);
     void onSubRxButtonRightClicked(int index);
+    void onTxButtonClicked(int index);
+    void onTxButtonRightClicked(int index);
 
 private:
     void setupMenuBar();
@@ -131,7 +132,6 @@ private:
     // no behavior change. Phase 3 lifts some of these seams into dedicated
     // controller classes under src/controllers/.
     void setupControllers();
-    void setupButtonRowPopups();
     void setupEqPopups();
     void setupLinePopups();
     void setupMicPopups();
@@ -216,9 +216,6 @@ private:
     // Menu system — owned by MenuController (src/controllers/).
     MenuController *m_menuController;
     PopupManager *m_popupManager;
-    ButtonRowPopup *m_mainRxPopup;
-    ButtonRowPopup *m_subRxPopup;
-    ButtonRowPopup *m_txPopup;
     RxEqPopupWidget *m_rxEqPopup;
     RxEqPopupWidget *m_txEqPopup;
     LineOutPopupWidget *m_lineOutPopup;

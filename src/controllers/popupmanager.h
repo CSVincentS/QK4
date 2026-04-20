@@ -12,6 +12,7 @@ class BandPopupWidget;
 class DisplayPopupWidget;
 class FnPopupWidget;
 class MacroDialog;
+class ButtonRowPopup;
 class QWidget;
 
 // Owns MainWindow's primary popup family: band selector, display controls,
@@ -67,6 +68,22 @@ public:
     int bandNumberForName(const QString &bandName) const;
     void setSelectedBandByNumber(int bandNum);
 
+    // Button-row popups (Main RX, Sub RX, TX). Expose toggle + close +
+    // button-label setters. Anchor getters are TEMPORARY seams for the
+    // secondary popups (EQ, line, mic, vox, …) still owned by MainWindow —
+    // they need a QWidget to position above. Once those popups move here
+    // (PopupManager slice 3), the anchor getters should be dropped.
+    void toggleMainRx();
+    void toggleSubRx();
+    void toggleTx();
+    QWidget *mainRxPopupAnchor() const;
+    QWidget *subRxPopupAnchor() const;
+    QWidget *txPopupAnchor() const;
+    void setMainRxButtonLabel(int index, const QString &primary, const QString &alternate,
+                              bool alternateIsAmber = true);
+    void setSubRxButtonLabel(int index, const QString &primary, const QString &alternate, bool alternateIsAmber = true);
+    void setTxButtonLabel(int index, const QString &primary, const QString &alternate, bool alternateIsAmber = true);
+
 signals:
     // User picked a band from the band popup. MainWindow::onBandSelected
     // handles the band-switch logic (radio-state mutation + CAT commands).
@@ -75,6 +92,16 @@ signals:
     // Fn popup invoked a macro binding. MainWindow::executeMacro resolves
     // the binding to its CAT command and sends it.
     void macroFunctionTriggered(const QString &functionId);
+
+    // Button-row popup click events — MainWindow's app-level dispatch
+    // slots handle the per-index semantics (which secondary popup to show,
+    // which CAT command to send). PopupManager just forwards the clicks.
+    void mainRxButtonClicked(int index);
+    void mainRxButtonRightClicked(int index);
+    void subRxButtonClicked(int index);
+    void subRxButtonRightClicked(int index);
+    void txButtonClicked(int index);
+    void txButtonRightClicked(int index);
 
 private:
     RadioState *m_radioState;                 // injected, not owned
@@ -89,6 +116,9 @@ private:
     DisplayPopupWidget *m_displayPopup;
     FnPopupWidget *m_fnPopup;
     MacroDialog *m_macroDialog;
+    ButtonRowPopup *m_mainRxRow;
+    ButtonRowPopup *m_subRxRow;
+    ButtonRowPopup *m_txRow;
 
     void wireDisplayPopup();
 };
