@@ -8,12 +8,10 @@
 #include "controllers/featuremenucontroller.h"
 #include "ui/modepopupwidget.h"
 #include "ui/menuoverlay.h"
-#include "ui/bandpopupwidget.h"
-#include "ui/displaypopupwidget.h"
+#include "controllers/popupmanager.h"
+#include "models/macroids.h"
 #include "ui/buttonrowpopup.h"
-#include "ui/fnpopupwidget.h"
 #include "ui/rxeqpopupwidget.h"
-#include "ui/macrodialog.h"
 #include "ui/optionsdialog.h"
 #include "ui/notificationwidget.h"
 #include "ui/vforowwidget.h"
@@ -87,9 +85,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
         if (m_bottomMenuBar)
             m_bottomMenuBar->setMenuActive(false);
     });
-    setupBandPopup();
-    setupDisplayPopup();
-    setupFnPopup();
+    m_popupManager =
+        new PopupManager(m_radioState, m_connectionController, m_spectrumController, m_vfoA, m_vfoB, this, this);
+    connect(m_popupManager, &PopupManager::bandSelected, this, &MainWindow::onBandSelected);
+    connect(m_popupManager, &PopupManager::macroFunctionTriggered, this, &MainWindow::onFnFunctionTriggered);
     setupButtonRowPopups();
     setupEqPopups();
     m_antennaCfgController = new AntennaConfigController(m_radioState, m_connectionController, this, this);
@@ -169,227 +168,6 @@ void MainWindow::setupControllers() {
     // DX Cluster controller owns the cluster TCP client and spot cache
     m_dxClusterController = new DxClusterController(m_radioState, this);
     m_spectrumController->setDxClusterController(m_dxClusterController);
-}
-
-void MainWindow::setupBandPopup() {
-    m_bandPopup = new BandPopupWidget(this);
-    connect(m_bandPopup, &BandPopupWidget::bandSelected, this, &MainWindow::onBandSelected);
-    connect(m_bandPopup, &BandPopupWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setBandActive(false);
-        }
-    });
-}
-
-void MainWindow::setupDisplayPopup() {
-    m_displayPopup = new DisplayPopupWidget(this);
-    connect(m_displayPopup, &DisplayPopupWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setDisplayActive(false);
-        }
-    });
-    // DisplayPopup pan mode changed -> update panadapter display
-    // (K4 doesn't echo #DPM commands, so DisplayPopup notifies us directly)
-    connect(m_displayPopup, &DisplayPopupWidget::dualPanModeChanged, this, [this](int mode) {
-        switch (mode) {
-        case 0: // A only
-            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::MainOnly);
-            break;
-        case 1: // B only
-            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::SubOnly);
-            break;
-        case 2: // Dual (A+B)
-            m_spectrumController->setPanadapterMode(SpectrumController::PanadapterMode::Dual);
-            break;
-        }
-    });
-
-    // DisplayPopup CAT commands -> TcpClient
-    connect(m_displayPopup, &DisplayPopupWidget::catCommandRequested, this,
-            [this](const QString &cmd) { m_connectionController->sendCAT(cmd); });
-
-    // Averaging control +/- -> local only (not sent to K4 — our smoothing differs from K4's)
-    connect(m_displayPopup, &DisplayPopupWidget::averagingIncrementRequested, this, [this]() {
-        int current = m_radioState->averaging();
-        int next = qMin(current + 1, 20);
-        m_radioState->setAveraging(next);
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::averagingDecrementRequested, this, [this]() {
-        int current = m_radioState->averaging();
-        int next = qMax(current - 1, 1);
-        m_radioState->setAveraging(next);
-    });
-
-    // DDC NB level control +/- -> CAT commands
-    connect(m_displayPopup, &DisplayPopupWidget::nbLevelIncrementRequested, this, [this]() {
-        int current = m_radioState->ddcNbLevel();
-        int next = qMin(current + 1, 14);
-        m_connectionController->sendCAT(QString("#NBL$%1;").arg(next, 2, 10, QChar('0')));
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::nbLevelDecrementRequested, this, [this]() {
-        int current = m_radioState->ddcNbLevel();
-        int next = qMax(current - 1, 0);
-        m_connectionController->sendCAT(QString("#NBL$%1;").arg(next, 2, 10, QChar('0')));
-    });
-
-    // Waterfall height control +/- -> CAT commands (respects LCD/EXT selection)
-    // LCD controls our app's panadapter, EXT is just for external HDMI display
-    connect(m_displayPopup, &DisplayPopupWidget::waterfallHeightIncrementRequested, this, [this]() {
-        bool isExt = m_displayPopup->isExtEnabled() && !m_displayPopup->isLcdEnabled();
-        int current = isExt ? m_radioState->waterfallHeightExt() : m_radioState->waterfallHeight();
-        int next = qMin(current + 1, 90); // 1% steps, max 90%
-        QString cmd =
-            isExt ? QString("#HWFH%1;").arg(next, 2, 10, QChar('0')) : QString("#WFH%1;").arg(next, 2, 10, QChar('0'));
-        m_connectionController->sendCAT(cmd);
-        // Optimistically update RadioState and UI (K4 may not echo this command)
-        if (!isExt) {
-            m_radioState->setWaterfallHeight(next);
-            m_spectrumController->panadapterA()->setWaterfallHeight(next);
-            m_spectrumController->panadapterB()->setWaterfallHeight(next);
-            m_displayPopup->setWaterfallHeight(next);
-            m_vfoA->setMiniPanWaterfallHeight(next);
-            m_vfoB->setMiniPanWaterfallHeight(next);
-        } else {
-            m_radioState->setWaterfallHeightExt(next);
-            m_displayPopup->setWaterfallHeightExt(next);
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::waterfallHeightDecrementRequested, this, [this]() {
-        bool isExt = m_displayPopup->isExtEnabled() && !m_displayPopup->isLcdEnabled();
-        int current = isExt ? m_radioState->waterfallHeightExt() : m_radioState->waterfallHeight();
-        int next = qMax(current - 1, 10); // 1% steps, min 10%
-        QString cmd =
-            isExt ? QString("#HWFH%1;").arg(next, 2, 10, QChar('0')) : QString("#WFH%1;").arg(next, 2, 10, QChar('0'));
-        m_connectionController->sendCAT(cmd);
-        // Optimistically update RadioState and UI (K4 may not echo this command)
-        if (!isExt) {
-            m_radioState->setWaterfallHeight(next);
-            m_spectrumController->panadapterA()->setWaterfallHeight(next);
-            m_spectrumController->panadapterB()->setWaterfallHeight(next);
-            m_displayPopup->setWaterfallHeight(next);
-            m_vfoA->setMiniPanWaterfallHeight(next);
-            m_vfoB->setMiniPanWaterfallHeight(next);
-        } else {
-            m_radioState->setWaterfallHeightExt(next);
-            m_displayPopup->setWaterfallHeightExt(next);
-        }
-    });
-
-    // Span control from display popup -> CAT commands (respects A/B selection)
-    connect(m_displayPopup, &DisplayPopupWidget::spanIncrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
-        if (newSpan != currentSpan) {
-            if (vfoA) {
-                m_radioState->setSpanHz(newSpan);
-                m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
-            }
-            if (vfoB) {
-                m_radioState->setSpanHzB(newSpan);
-                m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
-            }
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::spanDecrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
-        if (newSpan != currentSpan) {
-            if (vfoA) {
-                m_radioState->setSpanHz(newSpan);
-                m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
-            }
-            if (vfoB) {
-                m_radioState->setSpanHzB(newSpan);
-                m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
-            }
-        }
-    });
-
-    // Scale control (GLOBAL - affects both panadapters, no A/B variants)
-    connect(m_displayPopup, &DisplayPopupWidget::scaleIncrementRequested, this, [this]() {
-        int currentScale = m_radioState->scale();
-        if (currentScale < 0)
-            currentScale = 75;                      // Default if not yet received
-        int newScale = qMin(currentScale + 1, 150); // Increment by 1, max 150
-        if (newScale != currentScale) {
-            m_connectionController->sendCAT(QString("#SCL%1;").arg(newScale));
-            // Optimistic update (scale is global, may not echo back)
-            m_radioState->setScale(newScale); // Also updates panadapters via signal
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::scaleDecrementRequested, this, [this]() {
-        int currentScale = m_radioState->scale();
-        if (currentScale < 0)
-            currentScale = 75;                     // Default if not yet received
-        int newScale = qMax(currentScale - 1, 10); // Decrement by 1, min 10
-        if (newScale != currentScale) {
-            m_connectionController->sendCAT(QString("#SCL%1;").arg(newScale));
-            // Optimistic update (scale is global, may not echo back)
-            m_radioState->setScale(newScale); // Also updates panadapters via signal
-        }
-    });
-
-    // Ref level control (LCD only for now, respects A/B selection)
-    // #REF for Main RX, #REF$ for Sub RX - absolute values from -200 to 60
-    connect(m_displayPopup, &DisplayPopupWidget::refLevelIncrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        if (vfoA) {
-            int currentLevel = m_radioState->refLevel();
-            int newLevel = qMin(currentLevel + 1, 60); // Increment by 1 dB, max 60
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevel(newLevel);
-                m_connectionController->sendCAT(QString("#REF%1;").arg(newLevel));
-            }
-        }
-        if (vfoB) {
-            int currentLevel = m_radioState->refLevelB();
-            int newLevel = qMin(currentLevel + 1, 60);
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevelB(newLevel);
-                m_connectionController->sendCAT(QString("#REF$%1;").arg(newLevel));
-            }
-        }
-    });
-    connect(m_displayPopup, &DisplayPopupWidget::refLevelDecrementRequested, this, [this]() {
-        bool vfoA = m_displayPopup->isVfoAEnabled();
-        bool vfoB = m_displayPopup->isVfoBEnabled();
-        if (vfoA) {
-            int currentLevel = m_radioState->refLevel();
-            int newLevel = qMax(currentLevel - 1, -200); // Decrement by 1 dB, min -200
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevel(newLevel);
-                m_connectionController->sendCAT(QString("#REF%1;").arg(newLevel));
-            }
-        }
-        if (vfoB) {
-            int currentLevel = m_radioState->refLevelB();
-            int newLevel = qMax(currentLevel - 1, -200);
-            if (newLevel != currentLevel) {
-                m_radioState->setRefLevelB(newLevel);
-                m_connectionController->sendCAT(QString("#REF$%1;").arg(newLevel));
-            }
-        }
-    });
-}
-
-void MainWindow::setupFnPopup() {
-    // Create Fn popup with dual-action buttons (macro system)
-    m_fnPopup = new FnPopupWidget(this);
-    connect(m_fnPopup, &FnPopupWidget::closed, this, [this]() {
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setFnActive(false);
-        }
-    });
-    connect(m_fnPopup, &FnPopupWidget::functionTriggered, this, &MainWindow::onFnFunctionTriggered);
-
-    // Create macro configuration dialog (full-screen overlay)
-    m_macroDialog = new MacroDialog(this);
-    m_macroDialog->hide();
 }
 
 void MainWindow::setupButtonRowPopups() {
@@ -1455,40 +1233,6 @@ void MainWindow::setupRadioStateWiring() {
         m_vfoA->setMiniPanWaterfallHeight(percent);
         m_vfoB->setMiniPanWaterfallHeight(percent);
     });
-
-    // RadioState display state -> DisplayPopup (for button face updates)
-    // Separate LCD and EXT signals
-    connect(m_radioState, &RadioState::dualPanModeLcdChanged, m_displayPopup, &DisplayPopupWidget::setDualPanModeLcd);
-    connect(m_radioState, &RadioState::dualPanModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDualPanModeExt);
-    connect(m_radioState, &RadioState::displayModeLcdChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeLcd);
-    connect(m_radioState, &RadioState::displayModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeExt);
-    connect(m_radioState, &RadioState::waterfallColorChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallColor);
-    connect(m_radioState, &RadioState::averagingChanged, m_displayPopup, &DisplayPopupWidget::setAveraging);
-    connect(m_radioState, &RadioState::averagingChanged, this, [this](int level) {
-        m_vfoA->setMiniPanAveraging(level);
-        m_vfoB->setMiniPanAveraging(level);
-    });
-    connect(m_radioState, &RadioState::peakModeChanged, m_displayPopup, &DisplayPopupWidget::setPeakMode);
-    connect(m_radioState, &RadioState::fixedTuneChanged, m_displayPopup, &DisplayPopupWidget::setFixedTuneMode);
-    connect(m_radioState, &RadioState::freezeChanged, m_displayPopup, &DisplayPopupWidget::setFreeze);
-    connect(m_radioState, &RadioState::vfoACursorChanged, m_displayPopup, &DisplayPopupWidget::setVfoACursor);
-    connect(m_radioState, &RadioState::vfoBCursorChanged, m_displayPopup, &DisplayPopupWidget::setVfoBCursor);
-    connect(m_radioState, &RadioState::autoRefLevelChanged, m_displayPopup, &DisplayPopupWidget::setAutoRefLevel);
-    connect(m_radioState, &RadioState::scaleChanged, m_displayPopup, &DisplayPopupWidget::setScale);
-    connect(m_radioState, &RadioState::ddcNbModeChanged, m_displayPopup, &DisplayPopupWidget::setDdcNbMode);
-    connect(m_radioState, &RadioState::ddcNbLevelChanged, m_displayPopup, &DisplayPopupWidget::setDdcNbLevel);
-    connect(m_radioState, &RadioState::waterfallHeightChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallHeight);
-    connect(m_radioState, &RadioState::waterfallHeightExtChanged, m_displayPopup,
-            &DisplayPopupWidget::setWaterfallHeightExt);
-    // Also update span/ref values in popup
-    connect(m_radioState, &RadioState::spanChanged, this, [this](int spanHz) {
-        m_displayPopup->setSpanValueA(spanHz / 1000.0); // Hz to kHz
-    });
-    connect(m_radioState, &RadioState::spanBChanged, this, [this](int spanHz) {
-        m_displayPopup->setSpanValueB(spanHz / 1000.0); // Hz to kHz
-    });
-    connect(m_radioState, &RadioState::refLevelChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueA);
-    connect(m_radioState, &RadioState::refLevelBChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueB);
 }
 
 void MainWindow::setupSpectrumDataRouting() {
@@ -1810,6 +1554,7 @@ void MainWindow::setupUi() {
 
     // Bottom Menu Bar
     m_bottomMenuBar = new BottomMenuBar(centralWidget);
+    m_popupManager->setBottomMenuBar(m_bottomMenuBar);
     mainLayout->addWidget(m_bottomMenuBar);
 
     // Connect side control panel icon buttons
@@ -3676,13 +3421,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 }
 
 void MainWindow::toggleDisplayPopup() {
-    bool wasVisible = m_displayPopup && m_displayPopup->isVisible();
     closeAllPopups();
-
-    if (!wasVisible && m_displayPopup && m_bottomMenuBar) {
-        m_displayPopup->showAboveButton(m_bottomMenuBar->displayButton());
-        m_bottomMenuBar->setDisplayActive(true);
-    }
+    m_popupManager->toggleDisplay();
 }
 
 void MainWindow::closeAllPopups() {
@@ -3694,29 +3434,7 @@ void MainWindow::closeAllPopups() {
         }
     }
 
-    // Close band popup
-    if (m_bandPopup && m_bandPopup->isVisible()) {
-        m_bandPopup->hidePopup();
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setBandActive(false);
-        }
-    }
-
-    // Close display popup
-    if (m_displayPopup && m_displayPopup->isVisible()) {
-        m_displayPopup->hidePopup();
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setDisplayActive(false);
-        }
-    }
-
-    // Close Fn popup
-    if (m_fnPopup && m_fnPopup->isVisible()) {
-        m_fnPopup->hidePopup();
-        if (m_bottomMenuBar) {
-            m_bottomMenuBar->setFnActive(false);
-        }
-    }
+    m_popupManager->closeOwnedPopups();
 
     // Close Main RX popup
     if (m_mainRxPopup && m_mainRxPopup->isVisible()) {
@@ -3753,23 +3471,13 @@ void MainWindow::closeAllPopups() {
 }
 
 void MainWindow::toggleBandPopup() {
-    bool wasVisible = m_bandPopup && m_bandPopup->isVisible();
     closeAllPopups();
-
-    if (!wasVisible && m_bandPopup && m_bottomMenuBar) {
-        m_bandPopup->showAboveButton(m_bottomMenuBar->bandButton());
-        m_bottomMenuBar->setBandActive(true);
-    }
+    m_popupManager->toggleBand();
 }
 
 void MainWindow::toggleFnPopup() {
-    bool wasVisible = m_fnPopup && m_fnPopup->isVisible();
     closeAllPopups();
-
-    if (!wasVisible && m_fnPopup && m_bottomMenuBar) {
-        m_fnPopup->showAboveButton(m_bottomMenuBar->fnButton());
-        m_bottomMenuBar->setFnActive(true);
-    }
+    m_popupManager->toggleFn();
 }
 
 void MainWindow::toggleMainRxPopup() {
@@ -3806,7 +3514,7 @@ void MainWindow::onBandSelected(const QString &bandName) {
     qCDebug(qk4Main) << "Band selected:" << bandName;
 
     // Get band number from name
-    int newBandNum = m_bandPopup->getBandNumber(bandName);
+    int newBandNum = m_popupManager->bandNumberForName(bandName);
 
     // GEN and MEM are special modes, not band changes (-1 returned)
     if (newBandNum < 0) {
@@ -3841,8 +3549,8 @@ void MainWindow::updateBandSelection(int bandNum) {
     m_currentBandNum = bandNum;
 
     // Update the band popup to show the current band as selected (only when not in BSET mode)
-    if (m_bandPopup && !m_radioState->bSetEnabled()) {
-        m_bandPopup->setSelectedBandByNumber(bandNum);
+    if (!m_radioState->bSetEnabled()) {
+        m_popupManager->setSelectedBandByNumber(bandNum);
     }
 }
 
@@ -3850,8 +3558,8 @@ void MainWindow::updateBandSelectionB(int bandNum) {
     m_currentBandNumB = bandNum;
 
     // Update the band popup to show the current band as selected (only when in BSET mode)
-    if (m_bandPopup && m_radioState->bSetEnabled()) {
-        m_bandPopup->setSelectedBandByNumber(bandNum);
+    if (m_radioState->bSetEnabled()) {
+        m_popupManager->setSelectedBandByNumber(bandNum);
     }
 }
 
@@ -3980,21 +3688,8 @@ void MainWindow::executeMacro(const QString &functionId) {
 }
 
 void MainWindow::openMacroDialog() {
-    if (m_macroDialog) {
-        // Close any open popups first
-        closeAllPopups();
-
-        // Size to fill the spectrum container (same as menu overlay)
-        if (m_spectrumController->spectrumContainer()) {
-            QPoint pos = m_spectrumController->spectrumContainer()->mapTo(this, QPoint(0, 0));
-            m_macroDialog->setGeometry(pos.x(), pos.y(), m_spectrumController->spectrumContainer()->width(),
-                                       m_spectrumController->spectrumContainer()->height());
-        }
-
-        m_macroDialog->show();
-        m_macroDialog->raise();
-        m_macroDialog->setFocus();
-    }
+    closeAllPopups();
+    m_popupManager->openMacroDialog();
 }
 
 // ============== MAIN RX / SUB RX Popup Slots ==============

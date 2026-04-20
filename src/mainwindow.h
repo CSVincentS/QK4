@@ -21,10 +21,8 @@ class SideControlPanel;
 class RightSidePanel;
 class BottomMenuBar;
 class MenuController;
-class BandPopupWidget;
+class PopupManager;
 class ButtonRowPopup;
-class DisplayPopupWidget;
-class FnPopupWidget;
 class RxEqPopupWidget;
 class AntennaConfigController;
 class LineOutPopupWidget;
@@ -35,7 +33,6 @@ class VoxPopupWidget;
 class SsbBwPopupWidget;
 class KeyingWeightPopupWidget;
 class TextDecodeController;
-class MacroDialog;
 class FilterIndicatorWidget;
 class FeatureMenuController;
 class ModePopupWidget;
@@ -134,9 +131,6 @@ private:
     // no behavior change. Phase 3 lifts some of these seams into dedicated
     // controller classes under src/controllers/.
     void setupControllers();
-    void setupBandPopup();
-    void setupDisplayPopup();
-    void setupFnPopup();
     void setupButtonRowPopups();
     void setupEqPopups();
     void setupLinePopups();
@@ -221,10 +215,7 @@ private:
 
     // Menu system — owned by MenuController (src/controllers/).
     MenuController *m_menuController;
-    BandPopupWidget *m_bandPopup;
-    DisplayPopupWidget *m_displayPopup;
-    FnPopupWidget *m_fnPopup;
-    MacroDialog *m_macroDialog;
+    PopupManager *m_popupManager;
     ButtonRowPopup *m_mainRxPopup;
     ButtonRowPopup *m_subRxPopup;
     ButtonRowPopup *m_txPopup;

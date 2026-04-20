@@ -1,0 +1,96 @@
+#ifndef POPUPMANAGER_H
+#define POPUPMANAGER_H
+
+#include <QObject>
+
+class RadioState;
+class ConnectionController;
+class SpectrumController;
+class VFOWidget;
+class BottomMenuBar;
+class BandPopupWidget;
+class DisplayPopupWidget;
+class FnPopupWidget;
+class MacroDialog;
+class QWidget;
+
+// Owns MainWindow's primary popup family: band selector, display controls,
+// Fn (macro trigger) popup, and the full-screen macro configuration
+// dialog. Also encapsulates the increment/decrement/toggle action handlers
+// for DisplayPopup (scale, ref level, span, averaging, waterfall height,
+// DDC NB level — ~160 LOC of inline handlers previously in MainWindow's
+// setupDisplayPopup()).
+//
+// MainWindow retains: the Fn popup's functionTriggered signal (routes to
+// MainWindow::executeMacro because macro execution is radio-state + CAT
+// logic at the app level, not a popup lifecycle concern), and the band
+// popup's bandSelected signal (routes to MainWindow::onBandSelected).
+// Both are exposed as signals on PopupManager so MainWindow connects to
+// them at construction without reaching into owned widgets.
+//
+// Secondary popups (EQ, antenna, line, mic, vox, ssb bw, keying weight,
+// mode, button-row) will move here in later Phase 3 slices.
+//
+// See PATTERNS.md → Controller Pattern.
+class PopupManager : public QObject {
+    Q_OBJECT
+
+public:
+    explicit PopupManager(RadioState *radioState, ConnectionController *connection, SpectrumController *spectrum,
+                          VFOWidget *vfoA, VFOWidget *vfoB, QWidget *parentWidget, QObject *parent = nullptr);
+    ~PopupManager() override;
+
+    // BottomMenuBar must be injected after construction because it's
+    // created by MainWindow::setupUi() AFTER controllers. Use setter.
+    void setBottomMenuBar(BottomMenuBar *bottomMenuBar);
+
+    // Task-level toggles (called from BottomMenuBar button clicks).
+    void toggleBand();
+    void toggleDisplay();
+    void toggleFn();
+
+    // Task-level macro dialog open (called from MainWindow::openMacroDialog).
+    void openMacroDialog();
+
+    // Close the popups PopupManager owns. MainWindow's closeAllPopups()
+    // calls this and then closes any popups still owned by MainWindow.
+    void closeOwnedPopups();
+
+    // Hide macro dialog without triggering close signal — used by
+    // MainWindow's closeEvent to ensure clean shutdown.
+    void hideMacroDialog();
+
+    // Band popup accessors — MainWindow::onBandSelected uses the popup's
+    // internal band-number↔band-name map (yes, that map really lives on
+    // the popup widget). Cleaner fix is a RadioUtils function, tracked as
+    // future work.
+    int bandNumberForName(const QString &bandName) const;
+    void setSelectedBandByNumber(int bandNum);
+
+signals:
+    // User picked a band from the band popup. MainWindow::onBandSelected
+    // handles the band-switch logic (radio-state mutation + CAT commands).
+    void bandSelected(const QString &bandName);
+
+    // Fn popup invoked a macro binding. MainWindow::executeMacro resolves
+    // the binding to its CAT command and sends it.
+    void macroFunctionTriggered(const QString &functionId);
+
+private:
+    RadioState *m_radioState;                 // injected, not owned
+    ConnectionController *m_connection;       // injected, not owned
+    SpectrumController *m_spectrum;           // injected, not owned
+    VFOWidget *m_vfoA;                        // injected, not owned
+    VFOWidget *m_vfoB;                        // injected, not owned
+    BottomMenuBar *m_bottomMenuBar = nullptr; // late-injected via setter
+    QWidget *m_parentWidget;
+
+    BandPopupWidget *m_bandPopup; // owned via Qt parent-ownership (parentWidget)
+    DisplayPopupWidget *m_displayPopup;
+    FnPopupWidget *m_fnPopup;
+    MacroDialog *m_macroDialog;
+
+    void wireDisplayPopup();
+};
+
+#endif // POPUPMANAGER_H
