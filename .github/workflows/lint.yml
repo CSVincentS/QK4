@@ -38,7 +38,11 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build tests
-        run: cmake --build build --target test_radiostate test_radioutils test_protocol test_catserver test_dxcluster
+        # test_catserver is the Phase 0.7 regression gate protecting the
+        # RadioState public API contract used by the CAT server (see
+        # docs/radiostate-catserver-api-contract.md). It must stay green
+        # across any RadioState refactor.
+        run: cmake --build build --target test_radiostate test_radiostate_registry test_radioutils test_protocol test_catserver test_dxcluster
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
