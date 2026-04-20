@@ -5,7 +5,7 @@
 #include "ui/rightsidepanel.h"
 #include "ui/bottommenubar.h"
 #include "controllers/featuremenucontroller.h"
-#include "ui/modepopupwidget.h"
+#include "controllers/modepopupcontroller.h"
 #include "ui/menuoverlay.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
@@ -764,62 +764,10 @@ void MainWindow::setupUi() {
     // Feature Menu Bar (popup, positioned above bottom menu bar when shown)
     m_featureMenuController = new FeatureMenuController(m_radioState, m_connectionController, this, this);
 
-    // Mode Popup Widget (popup, positioned above bottom menu bar when shown)
-    m_modePopup = new ModePopupWidget(this);
-    connect(m_modePopup, &ModePopupWidget::modeSelected, this, [this](const QString &catCmd) {
-        // Send the command to the radio
-        m_connectionController->sendCAT(catCmd);
-
-        // Optimistically update data sub-mode (K4 doesn't echo DT SET commands)
-        // Parse DT or DT$ from command like "MD6;DT1;" or "MD$6;DT$3;"
-        QRegularExpression dtRegex("DT(\\$?)(\\d)");
-        QRegularExpressionMatch match = dtRegex.match(catCmd);
-        if (match.hasMatch()) {
-            bool isSubRx = !match.captured(1).isEmpty(); // DT$ = Sub RX
-            int subMode = match.captured(2).toInt();
-            qCDebug(qk4Main) << "Optimistic DT update: isSubRx=" << isSubRx << "subMode=" << subMode;
-            if (isSubRx) {
-                m_radioState->setDataSubModeB(subMode);
-            } else {
-                m_radioState->setDataSubMode(subMode);
-            }
-        }
-    });
-    // Update mode popup when mode changes - use A or B based on B SET state
-    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
-        if (!m_radioState->bSetEnabled()) {
-            m_modePopup->setCurrentMode(static_cast<int>(mode));
-        }
-    });
-    connect(m_radioState, &RadioState::modeBChanged, this, [this](RadioState::Mode mode) {
-        if (m_radioState->bSetEnabled()) {
-            m_modePopup->setCurrentMode(static_cast<int>(mode));
-        }
-    });
-    connect(m_radioState, &RadioState::dataSubModeChanged, this, [this](int subMode) {
-        if (!m_radioState->bSetEnabled()) {
-            m_modePopup->setCurrentDataSubMode(subMode);
-        }
-    });
-    connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this](int subMode) {
-        if (m_radioState->bSetEnabled()) {
-            m_modePopup->setCurrentDataSubMode(subMode);
-        }
-    });
-    // Update B SET state for mode popup - also refresh mode/submode/frequency display
-    connect(m_radioState, &RadioState::bSetChanged, this, [this](bool enabled) {
-        m_modePopup->setBSetEnabled(enabled);
-        // Update displayed mode and frequency to match the new target VFO
-        if (enabled) {
-            m_modePopup->setFrequency(m_radioState->vfoB());
-            m_modePopup->setCurrentMode(static_cast<int>(m_radioState->modeB()));
-            m_modePopup->setCurrentDataSubMode(m_radioState->dataSubModeB());
-        } else {
-            m_modePopup->setFrequency(m_radioState->vfoA());
-            m_modePopup->setCurrentMode(static_cast<int>(m_radioState->mode()));
-            m_modePopup->setCurrentDataSubMode(m_radioState->dataSubMode());
-        }
-    });
+    // Mode popup (grid of mode buttons above the bottom menu bar) — owned
+    // by ModePopupController, which also handles CAT dispatch + optimistic
+    // DT updates + RadioState → popup sync. See controllers/modepopupcontroller.h.
+    m_modePopupController = new ModePopupController(m_radioState, m_connectionController, this, this);
 
     // B SET indicator visibility and side panel indicator color
     connect(m_radioState, &RadioState::bSetChanged, this, [this](bool enabled) {
@@ -1229,26 +1177,8 @@ void MainWindow::setupUi() {
             [this]() { m_connectionController->sendCAT("SW72;"); });
     connect(m_rightSidePanel, &RightSidePanel::spotClicked, this,
             [this]() { m_connectionController->sendCAT("SW42;"); });
-    connect(m_rightSidePanel, &RightSidePanel::modeClicked, this, [this]() {
-        // Toggle mode popup - if open, close it; otherwise show it
-        if (m_modePopup->isVisible()) {
-            m_modePopup->hidePopup();
-        } else {
-            // Update current state before showing - use A or B based on B SET
-            bool bSet = m_radioState->bSetEnabled();
-            if (bSet) {
-                m_modePopup->setFrequency(m_radioState->vfoB());
-                m_modePopup->setCurrentMode(static_cast<int>(m_radioState->modeB()));
-                m_modePopup->setCurrentDataSubMode(m_radioState->dataSubModeB());
-            } else {
-                m_modePopup->setFrequency(m_radioState->vfoA());
-                m_modePopup->setCurrentMode(static_cast<int>(m_radioState->mode()));
-                m_modePopup->setCurrentDataSubMode(m_radioState->dataSubMode());
-            }
-            m_modePopup->setBSetEnabled(bSet);
-            m_modePopup->showAboveWidget(m_bottomMenuBar);
-        }
-    });
+    connect(m_rightSidePanel, &RightSidePanel::modeClicked, this,
+            [this]() { m_modePopupController->toggleForBSet(m_bottomMenuBar); });
 
     // Secondary (right-click) signals - these show feature menus with toggle behavior
     // If same menu is open, close it; otherwise switch to the new menu
@@ -2591,33 +2521,15 @@ void MainWindow::onProcessingChangedB() {
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
-    // Handle clicks on VFO A square/mode label -> open mode popup for VFO A
+    // Clicks on VFO-A square / mode label → mode popup targeted at VFO A.
     if ((watched == m_vfoASquare || watched == m_modeALabel) && event->type() == QEvent::MouseButtonPress) {
-        // Toggle popup - close if open, otherwise show for VFO A
-        if (m_modePopup->isVisible()) {
-            m_modePopup->hidePopup();
-        } else {
-            m_modePopup->setFrequency(m_radioState->vfoA());
-            m_modePopup->setCurrentMode(static_cast<int>(m_radioState->mode()));
-            m_modePopup->setCurrentDataSubMode(m_radioState->dataSubMode());
-            m_modePopup->setBSetEnabled(false); // Commands target VFO A
-            m_modePopup->showAboveWidget(m_bottomMenuBar);
-        }
+        m_modePopupController->toggleForVfoA(m_bottomMenuBar);
         return true;
     }
 
-    // Handle clicks on VFO B square/mode label -> open mode popup for VFO B
+    // Clicks on VFO-B square / mode label → mode popup targeted at VFO B.
     if ((watched == m_vfoBSquare || watched == m_modeBLabel) && event->type() == QEvent::MouseButtonPress) {
-        // Toggle popup - close if open, otherwise show for VFO B
-        if (m_modePopup->isVisible()) {
-            m_modePopup->hidePopup();
-        } else {
-            m_modePopup->setFrequency(m_radioState->vfoB());
-            m_modePopup->setCurrentMode(static_cast<int>(m_radioState->modeB()));
-            m_modePopup->setCurrentDataSubMode(m_radioState->dataSubModeB());
-            m_modePopup->setBSetEnabled(true); // Commands target VFO B (MD$, DT$)
-            m_modePopup->showAboveWidget(m_bottomMenuBar);
-        }
+        m_modePopupController->toggleForVfoB(m_bottomMenuBar);
         return true;
     }
 
@@ -2714,8 +2626,8 @@ void MainWindow::closeNonPopupManagerPopups() {
             m_bottomMenuBar->setMenuActive(false);
     }
     m_antennaCfgController->closeAll();
-    if (m_modePopup && m_modePopup->isVisible())
-        m_modePopup->hidePopup();
+    if (m_modePopupController)
+        m_modePopupController->close();
 }
 
 void MainWindow::closeAllPopups() {

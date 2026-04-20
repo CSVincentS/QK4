@@ -26,7 +26,7 @@ class AntennaConfigController;
 class TextDecodeController;
 class FilterIndicatorWidget;
 class FeatureMenuController;
-class ModePopupWidget;
+class ModePopupController;
 class HardwareController;
 class DxClusterController;
 class KPA1500UiController;
@@ -203,7 +203,7 @@ private:
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     FeatureMenuController *m_featureMenuController;
-    ModePopupWidget *m_modePopup;
+    ModePopupController *m_modePopupController;
 
     int m_currentBandNum = -1;  // Current band number for VFO A (BN command)
     int m_currentBandNumB = -1; // Current band number for VFO B (BN$ command)
