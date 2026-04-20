@@ -11,6 +11,7 @@
 #include "controllers/buttonrowdispatcher.h"
 #include "controllers/macrocontroller.h"
 #include "controllers/processingdisplaycontroller.h"
+#include "controllers/vforowindicatorcontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -118,6 +119,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_antennaDisplayController =
         new AntennaDisplayController(m_radioState, m_txAntennaLabel, m_rxAntALabel, m_rxAntBLabel, this);
 
+    const VfoRowIndicatorController::Labels rowLabels{m_splitLabel, m_txTriangle, m_txTriangleB, m_voxLabel,
+                                                      m_qskLabel,   m_atuLabel,   m_msgBankLabel};
+    m_vfoRowIndicatorController =
+        new VfoRowIndicatorController(m_radioState, m_spectrumController, m_vfoRow, rowLabels, this);
+
     setupCatServer();
 }
 
@@ -197,9 +203,9 @@ void MainWindow::setupRadioStateWiring() {
     // RadioState signals -> UI updates (VFO A)
     connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::onFrequencyChanged);
     connect(m_radioState, &RadioState::modeChanged, this, &MainWindow::onModeChanged);
-    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode) {
-        onVoxChanged(false); // Refresh VOX display when mode changes (VOX is mode-specific)
-    });
+    // VOX label refresh on mode change is handled inside VfoRowIndicatorController
+    // (K4 VOX state is per-mode-class, so the displayed color depends on current mode).
+
     // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
     connect(m_radioState, &RadioState::dataSubModeChanged, this, [this](int) { updateModeLabels(); });
     connect(m_radioState, &RadioState::sMeterChanged, this, &MainWindow::onSMeterChanged);
@@ -428,11 +434,8 @@ void MainWindow::setupRadioStateWiring() {
     });
 
     // RadioState signals -> Center section updates
-    connect(m_radioState, &RadioState::splitChanged, this, &MainWindow::onSplitChanged);
-    connect(m_radioState, &RadioState::voxChanged, this, &MainWindow::onVoxChanged);
-    connect(m_radioState, &RadioState::qskEnabledChanged, this, &MainWindow::onQskEnabledChanged);
-    connect(m_radioState, &RadioState::testModeChanged, this, &MainWindow::onTestModeChanged);
-    connect(m_radioState, &RadioState::atuModeChanged, this, &MainWindow::onAtuModeChanged);
+    // VFO-row indicator labels (split / vox / qsk / test / atu / msg bank)
+    // are observed by VfoRowIndicatorController; see setupUi constructor.
     connect(m_radioState, &RadioState::ritXitChanged, this, [this](bool ritEnabled, bool xitEnabled, int offset) {
         if (!m_radioState->bSetEnabled()) {
             // BSET off: RIT/XIT state from VFO A
@@ -461,7 +464,6 @@ void MainWindow::setupRadioStateWiring() {
             onRitXitChanged(m_radioState->ritEnabled(), true, offset);
         }
     });
-    connect(m_radioState, &RadioState::messageBankChanged, this, &MainWindow::onMessageBankChanged);
 
     // Filter position indicators
     connect(m_radioState, &RadioState::filterPositionChanged, this,
@@ -2136,74 +2138,6 @@ void MainWindow::onDisplayFpsChanged(int fps) {
     m_menuController->setDisplayFps(fps);
 }
 
-void MainWindow::onSplitChanged(bool enabled) {
-    if (enabled) {
-        m_splitLabel->setText("SPLIT ON");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                        .arg(K4Styles::Colors::AccentAmber)
-                                        .arg(K4Styles::Dimensions::FontSizeButton));
-        // When split is on, TX goes to VFO B - clear left triangle, show right triangle
-        m_txTriangle->setText("");
-        m_txTriangleB->setText("▶");
-    } else {
-        m_splitLabel->setText("SPLIT OFF");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                        .arg(K4Styles::Colors::AccentAmber)
-                                        .arg(K4Styles::Dimensions::FontSizeButton));
-        // When split is off, TX stays on VFO A - show left triangle, clear right triangle
-        m_txTriangle->setText("◀");
-        m_txTriangleB->setText("");
-    }
-    // Split changes which VFO transmits — update TX markers
-    m_spectrumController->updateTxMarkers();
-}
-
-void MainWindow::onVoxChanged(bool enabled) {
-    Q_UNUSED(enabled)
-    // Use mode-specific VOX state (CW modes use VXC, Voice modes use VXV, Data modes use VXD)
-    bool voxOn = m_radioState->voxForCurrentMode();
-    if (voxOn) {
-        m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::AccentAmber)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-    } else {
-        m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::TextGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-    }
-}
-
-void MainWindow::onQskEnabledChanged(bool enabled) {
-    // QSK indicator: white when enabled, grey when disabled
-    if (enabled) {
-        m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::TextWhite)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-    } else {
-        m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::TextGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-    }
-}
-
-void MainWindow::onTestModeChanged(bool enabled) {
-    // TEST indicator: visible in red when test mode is on
-    m_vfoRow->setTestVisible(enabled);
-}
-
-void MainWindow::onAtuModeChanged(int mode) {
-    // ATU indicator: orange when AUTO mode (2), grey otherwise
-    if (mode == 2) {
-        m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::AccentAmber)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-    } else {
-        m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::TextGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge));
-    }
-}
-
 void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
     // Update RIT label
     if (ritEnabled) {
@@ -2249,14 +2183,6 @@ void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
 
     // Update TX marker — shows where we'll transmit when RIT/XIT splits TX from RX
     m_spectrumController->updateTxMarkers();
-}
-
-void MainWindow::onMessageBankChanged(int bank) {
-    if (bank == 1) {
-        m_msgBankLabel->setText("MSG: I");
-    } else {
-        m_msgBankLabel->setText("MSG: II");
-    }
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {

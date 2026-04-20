@@ -90,6 +90,7 @@ set(SOURCES
     src/controllers/macrocontroller.cpp
     src/controllers/processingdisplaycontroller.cpp
     src/controllers/antennadisplaycontroller.cpp
+    src/controllers/vforowindicatorcontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -187,6 +188,7 @@ set(HEADERS
     src/controllers/macrocontroller.h
     src/controllers/processingdisplaycontroller.h
     src/controllers/antennadisplaycontroller.h
+    src/controllers/vforowindicatorcontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h
