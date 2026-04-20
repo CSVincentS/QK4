@@ -9,6 +9,7 @@
 #include "ui/menuoverlay.h"
 #include "controllers/bandnavigationcontroller.h"
 #include "controllers/buttonrowdispatcher.h"
+#include "controllers/macrocontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -69,8 +70,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_popupManager =
         new PopupManager(m_radioState, m_connectionController, m_spectrumController, nullptr, nullptr, this, this);
     m_bandNavController = new BandNavigationController(m_radioState, m_connectionController, m_popupManager, this);
-    connect(m_popupManager, &PopupManager::macroFunctionTriggered, this, &MainWindow::onFnFunctionTriggered);
     connect(m_popupManager, &PopupManager::modeLabelRefreshNeeded, this, &MainWindow::updateModeLabels);
+    m_macroController = new MacroController(m_connectionController, m_popupManager, this);
+    connect(m_macroController, &MacroController::macroDialogRequested, this, [this]() {
+        closeAllPopups();
+        m_popupManager->openMacroDialog();
+    });
     m_antennaCfgController = new AntennaConfigController(m_radioState, m_connectionController, this, this);
     m_textDecodeController = new TextDecodeController(m_radioState, m_connectionController, this, this);
     m_buttonRowDispatcher = new ButtonRowDispatcher(m_radioState, m_connectionController, m_popupManager,
@@ -594,7 +599,8 @@ void MainWindow::setupHardwareController() {
     m_hardwareController = new HardwareController(m_radioState, m_connectionController, this);
 
     // KPOD button presses → macro execution
-    connect(m_hardwareController, &HardwareController::macroRequested, this, &MainWindow::executeMacro);
+    connect(m_hardwareController, &HardwareController::macroRequested, m_macroController,
+            &MacroController::executeMacro);
 
     // HaliKey footswitch PTT → TX audio + UI indicator
     connect(m_hardwareController, &HardwareController::pttRequested, this, [this](bool active) {
@@ -1224,7 +1230,7 @@ void MainWindow::setupUi() {
     connect(m_rightSidePanel, &RightSidePanel::pf1Clicked, this, [this]() {
         MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF1);
         if (!macro.command.isEmpty()) {
-            executeMacro(MacroIds::PF1);
+            m_macroController->executeMacro(MacroIds::PF1);
         } else {
             m_connectionController->sendCAT("SW153;"); // Default: K4 PF1
         }
@@ -1232,7 +1238,7 @@ void MainWindow::setupUi() {
     connect(m_rightSidePanel, &RightSidePanel::pf2Clicked, this, [this]() {
         MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF2);
         if (!macro.command.isEmpty()) {
-            executeMacro(MacroIds::PF2);
+            m_macroController->executeMacro(MacroIds::PF2);
         } else {
             m_connectionController->sendCAT("SW154;"); // Default: K4 PF2
         }
@@ -1240,7 +1246,7 @@ void MainWindow::setupUi() {
     connect(m_rightSidePanel, &RightSidePanel::pf3Clicked, this, [this]() {
         MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF3);
         if (!macro.command.isEmpty()) {
-            executeMacro(MacroIds::PF3);
+            m_macroController->executeMacro(MacroIds::PF3);
         } else {
             m_connectionController->sendCAT("SW155;"); // Default: K4 PF3
         }
@@ -1248,7 +1254,7 @@ void MainWindow::setupUi() {
     connect(m_rightSidePanel, &RightSidePanel::pf4Clicked, this, [this]() {
         MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF4);
         if (!macro.command.isEmpty()) {
-            executeMacro(MacroIds::PF4);
+            m_macroController->executeMacro(MacroIds::PF4);
         } else {
             m_connectionController->sendCAT("SW156;"); // Default: K4 PF4
         }
@@ -2603,7 +2609,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     if (event->key() >= Qt::Key_F1 && event->key() <= Qt::Key_F12) {
         int fKeyNum = event->key() - Qt::Key_F1 + 1; // 1-12
         QString functionId = QString("Keyboard-F%1").arg(fKeyNum);
-        executeMacro(functionId);
+        m_macroController->executeMacro(functionId);
         event->accept();
         return;
     }
@@ -2670,58 +2676,4 @@ void MainWindow::onErrorNotification(int errorCode, const QString &message) {
     if (m_notificationWidget) {
         m_notificationWidget->showMessage(message, 2000);
     }
-}
-
-// ============== Fn Popup / Macro Slots ==============
-
-void MainWindow::onFnFunctionTriggered(const QString &functionId) {
-    qCDebug(qk4Main) << "Fn function triggered:" << functionId;
-
-    // Handle built-in functions
-    if (functionId == MacroIds::ScrnCap) {
-        // SS0; triggers K4 screenshot (saved to internal SD card)
-        if (m_connectionController->isConnected()) {
-            m_connectionController->sendCAT("SS0;");
-            qCDebug(qk4Main) << "Screenshot captured (SS0;)";
-        }
-    } else if (functionId == MacroIds::Macros) {
-        openMacroDialog();
-    } else if (functionId == MacroIds::SwList) {
-        QMessageBox::information(this, "Coming Soon", "Software list is not yet implemented.");
-    } else if (functionId == MacroIds::Update) {
-        QMessageBox::information(this, "Coming Soon", "Update check is not yet implemented.");
-    } else if (functionId == MacroIds::DxList) {
-        QMessageBox::information(this, "Coming Soon", "DX list is not yet implemented.");
-    } else {
-        // User-configurable macro - execute CAT command
-        executeMacro(functionId);
-    }
-}
-
-void MainWindow::executeMacro(const QString &functionId) {
-    MacroEntry macro = RadioSettings::instance()->macro(functionId);
-    if (!macro.command.isEmpty()) {
-        qCDebug(qk4Main) << "Executing macro" << functionId << ":" << macro.command;
-        if (m_connectionController->isConnected()) {
-            m_connectionController->sendCAT(macro.command);
-
-            // RT1;/RT0;/SW54; are silent SET commands — K4 does not echo RT state back.
-            // Query current state so the UI stays in sync after execution.
-            const QString &cmd = macro.command;
-            if (cmd.contains("RT1") || cmd.contains("RT0") || cmd.contains("RT/") || cmd.contains("SW54")) {
-                m_connectionController->sendCAT("RT;");
-                m_connectionController->sendCAT("RT$;");
-            }
-            if (cmd.contains("XT1") || cmd.contains("XT0") || cmd.contains("XT/") || cmd.contains("SW74")) {
-                m_connectionController->sendCAT("XT;");
-            }
-        }
-    } else {
-        qCDebug(qk4Main) << "No macro configured for" << functionId;
-    }
-}
-
-void MainWindow::openMacroDialog() {
-    closeAllPopups();
-    m_popupManager->openMacroDialog();
 }

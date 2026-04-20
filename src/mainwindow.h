@@ -24,6 +24,7 @@ class MenuController;
 class PopupManager;
 class BandNavigationController;
 class ButtonRowDispatcher;
+class MacroController;
 class AntennaConfigController;
 class TextDecodeController;
 class FilterIndicatorWidget;
@@ -91,11 +92,6 @@ private slots:
 
     // Display FPS (synthetic menu item)
     void onDisplayFpsChanged(int fps);
-
-    // Fn popup / macro slots
-    void onFnFunctionTriggered(const QString &functionId);
-    void executeMacro(const QString &functionId);
-    void openMacroDialog();
 
 private:
     void setupMenuBar();
@@ -193,6 +189,7 @@ private:
     PopupManager *m_popupManager;
     BandNavigationController *m_bandNavController;
     ButtonRowDispatcher *m_buttonRowDispatcher;
+    MacroController *m_macroController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     FeatureMenuController *m_featureMenuController;
