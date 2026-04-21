@@ -95,6 +95,7 @@ set(SOURCES
     src/controllers/modelabelcontroller.cpp
     src/controllers/vfofrequencycontroller.cpp
     src/controllers/subdivindicatorcontroller.cpp
+    src/controllers/txstatecontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -197,6 +198,7 @@ set(HEADERS
     src/controllers/modelabelcontroller.h
     src/controllers/vfofrequencycontroller.h
     src/controllers/subdivindicatorcontroller.h
+    src/controllers/txstatecontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

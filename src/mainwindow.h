@@ -30,6 +30,7 @@ class RitXitController;
 class ModeLabelController;
 class VfoFrequencyController;
 class SubDivIndicatorController;
+class TxStateController;
 class AntennaConfigController;
 class AntennaDisplayController;
 class TextDecodeController;
@@ -184,6 +185,7 @@ private:
     ModeLabelController *m_modeLabelController;
     VfoFrequencyController *m_vfoFrequencyController;
     SubDivIndicatorController *m_subDivIndicatorController;
+    TxStateController *m_txStateController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     AntennaDisplayController *m_antennaDisplayController;

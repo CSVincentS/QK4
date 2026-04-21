@@ -16,6 +16,7 @@
 #include "controllers/modelabelcontroller.h"
 #include "controllers/vfofrequencycontroller.h"
 #include "controllers/subdivindicatorcontroller.h"
+#include "controllers/txstatecontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -136,6 +137,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_subDivIndicatorController = new SubDivIndicatorController(m_radioState, m_spectrumController, m_vfoB, m_subLabel,
                                                                 m_divLabel, m_modeBLabel, this);
 
+    m_txStateController =
+        new TxStateController(m_radioState, m_statusBarController, m_sideControlPanel, m_vfoFrequencyController, m_vfoA,
+                              m_vfoB, m_txIndicator, m_txTriangle, m_txTriangleB, this);
+
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
     // RIT offset shifts rendered VFO frequency — refresh displays on any
@@ -251,67 +256,8 @@ void MainWindow::setupRadioStateWiring() {
     // Error/notification messages from K4 (ERxx: format) -> show notification popup
     connect(m_radioState, &RadioState::errorNotificationReceived, this, &MainWindow::onErrorNotification);
 
-    // TX Meter data -> update power displays and VFO multifunction meters during TX
-    connect(m_radioState, &RadioState::txMeterChanged, this, [this](int alc, int comp, double fwdPower, double swr) {
-        m_statusBarController->setForwardPower(fwdPower);
-        // Update side panel power reading
-        m_sideControlPanel->setPowerReading(fwdPower);
-
-        // Calculate PA drain current (Id) from forward power and supply voltage
-        // Formula: Id = ForwardPower / (Voltage × Efficiency)
-        // K4 PA efficiency is approximately 34% (measured: 80W @ 17A @ 13.8V)
-        double voltage = m_radioState->supplyVoltage();
-        double paCurrent = 0.0;
-        if (voltage > 0 && fwdPower > 0) {
-            constexpr double K4_PA_EFFICIENCY = 0.34; // Measured: 80W @ 17A @ 13.8V
-            paCurrent = fwdPower / (voltage * K4_PA_EFFICIENCY);
-        }
-
-        // Update TX meters only on the active TX VFO
-        // SPLIT OFF: VFO A transmits, SPLIT ON: VFO B transmits
-        if (m_radioState->splitEnabled()) {
-            m_vfoB->setTxMeters(alc, comp, fwdPower, swr);
-            m_vfoB->setTxMeterCurrent(paCurrent);
-        } else {
-            m_vfoA->setTxMeters(alc, comp, fwdPower, swr);
-            m_vfoA->setTxMeterCurrent(paCurrent);
-        }
-    });
-
-    // TX state changes -> switch VFO meters between S-meter (RX) and Po (TX) mode
-    // Also change TX indicator color to red when transmitting
-    connect(m_radioState, &RadioState::transmitStateChanged, this, [this](bool transmitting) {
-        // Only the active TX VFO switches to TX meter mode
-        // SPLIT OFF: VFO A transmits, SPLIT ON: VFO B transmits
-        // The non-TX VFO stays in S-meter mode (showing received signal)
-        if (m_radioState->splitEnabled()) {
-            m_vfoA->setTransmitting(false); // VFO A stays in RX mode
-            m_vfoB->setTransmitting(transmitting);
-        } else {
-            m_vfoA->setTransmitting(transmitting);
-            m_vfoB->setTransmitting(false); // VFO B stays in RX mode
-        }
-
-        // TX indicator and triangles turn red when transmitting
-        QString color = transmitting ? K4Styles::Colors::TxRed : K4Styles::Colors::AccentAmber;
-        m_txIndicator->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                         .arg(color)
-                                         .arg(K4Styles::Dimensions::FontSizeIndicator));
-        m_txTriangle->setStyleSheet(
-            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
-        m_txTriangleB->setStyleSheet(
-            QString("color: %1; font-size: %2px;").arg(color).arg(K4Styles::Dimensions::FontSizeIndicator));
-
-        // When XIT is active, show the actual TX frequency on the TX VFO display
-        // No split: VFO A displays TX freq; Split: VFO B displays TX freq
-        // On return to RX, restore the normal RX frequency display
-        if (m_radioState->xitEnabled()) {
-            if (m_radioState->splitEnabled())
-                m_vfoFrequencyController->refreshVfoB();
-            else
-                m_vfoFrequencyController->refreshVfoA();
-        }
-    });
+    // TX meter data + TX state (indicator colors, VFO meter-mode flip,
+    // XIT-aware frequency refresh, PA current calc) owned by TxStateController.
 
     // SUB / DIV indicator styling + VFO B dim-state + auto-hide mini pan B
     // are owned by SubDivIndicatorController (created later in constructor).
