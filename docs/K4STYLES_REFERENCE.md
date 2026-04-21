@@ -152,6 +152,7 @@ rg '^\s*const QString &\w+' src/ui/k4styles.h        # Dialog:: cached-QString h
 | `DialogBorder` | `#333333` | Dialog borders and separators |
 | `PanelBorder` | `#444444` | Subtle frame border for panadapter / VFO panels |
 | `ErrorRed` | `#FF6666` | Error / not-connected status indicators |
+| `ErrorBgDark` | `#331111` | Muted dark-red background for error toasts (pairs with `ErrorRed`) |
 
 ### Filter Indicator
 
@@ -498,6 +499,7 @@ Dialog / Panel Borders:
   #333333 ████ DialogBorder
   #444444 ████ PanelBorder
   #FF6666 ████ ErrorRed
+  #331111 ████ ErrorBgDark (muted red error-toast background)
 
 Filter Indicator:
   #FFD040 ████ FilterIndicatorGold

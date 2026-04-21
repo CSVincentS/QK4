@@ -192,12 +192,15 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
 
     // --- Background panel shading (only when connected) ---
     if (m_connected) {
+        // Alpha-channel overlays for the mini-panel connected-state look. Base color (white or
+        // black) is semantic only — the alpha is the actual value. Not palette entries.
+        constexpr int kPanelTintAlpha = 18;   // Subtle light fill over dark theme
+        constexpr int kPanelBorderAlpha = 35; // Thin panel border
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(255, 255, 255, 18)); // Subtle light tint over dark theme
+        p.setBrush(QColor(255, 255, 255, kPanelTintAlpha));
         p.drawRoundedRect(0, 0, w, h, 6, 6);
 
-        // Thin border
-        p.setPen(QColor(255, 255, 255, 35));
+        p.setPen(QColor(255, 255, 255, kPanelBorderAlpha));
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(0, 0, w - 1, h - 1, 6, 6);
     }
@@ -309,11 +312,15 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         int cardH = LED_ROW_HEIGHT * 2 + 4; // 2 rows + vertical padding
         int cardPad = 3;                    // Internal padding
 
+        // Alpha-channel overlays for mini-card visual style. Alpha, not palette.
+        constexpr int kCardBorderAlpha = 20; // White border at low alpha
+        constexpr int kCardShadeAlpha = 40;  // Black shade fill
+
         // Helper: draw a mini-card background
         auto drawCard = [&](int cardIdx) -> int {
             int x = cx + cardIdx * (cardW + cardGap);
-            p.setPen(QColor(255, 255, 255, 20));
-            p.setBrush(QColor(0, 0, 0, 40));
+            p.setPen(QColor(255, 255, 255, kCardBorderAlpha));
+            p.setBrush(QColor(0, 0, 0, kCardShadeAlpha));
             p.drawRoundedRect(x, gridY, cardW, cardH, 3, 3);
             return x;
         };
