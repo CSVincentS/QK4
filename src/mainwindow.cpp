@@ -221,22 +221,28 @@ void MainWindow::setupRadioStateWiring() {
     // TX button-row mode-dependent labels are observed by ButtonRowDispatcher.
     // VOX label refresh on mode change is handled by VfoRowIndicatorController
     // (K4 VOX state is per-mode-class, so the displayed color depends on current mode).
-    connect(m_radioState, &RadioState::sMeterChanged, this, &MainWindow::onSMeterChanged);
-    connect(m_radioState, &RadioState::sMeterBChanged, this, &MainWindow::onSMeterBChanged);
-    // Auto-hide mini pan B when VFOs move to different bands (and SUB RX is off)
+    // Direct-observation wires — RadioState → widget setter, no MainWindow slot.
+    connect(m_radioState, &RadioState::sMeterChanged, m_vfoA, &VFOWidget::setSMeterValue);
+    connect(m_radioState, &RadioState::sMeterBChanged, m_vfoB, &VFOWidget::setSMeterValue);
+    // Auto-hide mini pan B when VFOs move to different bands (and SUB RX is off).
     connect(m_radioState, &RadioState::frequencyChanged, m_spectrumController,
             &SpectrumController::checkAndHideMiniPanB);
     connect(m_radioState, &RadioState::frequencyBChanged, m_spectrumController,
             &SpectrumController::checkAndHideMiniPanB);
 
-    // RadioState signals -> Status bar updates
-    connect(m_radioState, &RadioState::rfPowerChanged, this, &MainWindow::onRfPowerChanged);
-    connect(m_radioState, &RadioState::supplyVoltageChanged, this, &MainWindow::onSupplyVoltageChanged);
-    connect(m_radioState, &RadioState::supplyCurrentChanged, this, &MainWindow::onSupplyCurrentChanged);
-    connect(m_radioState, &RadioState::swrChanged, this, &MainWindow::onSwrChanged);
+    // RadioState signals -> status / side-panel readings (direct-observation).
+    // rfPowerChanged carries (watts, isQrp) but we only need the QRP flag — lambda
+    // propagates it to both VFO TX meters so their scale matches the radio.
+    connect(m_radioState, &RadioState::rfPowerChanged, this, [this](double, bool isQrp) {
+        m_vfoA->setTxMeterQrp(isQrp);
+        m_vfoB->setTxMeterQrp(isQrp);
+    });
+    connect(m_radioState, &RadioState::supplyVoltageChanged, m_sideControlPanel, &SideControlPanel::setVoltage);
+    connect(m_radioState, &RadioState::supplyCurrentChanged, m_sideControlPanel, &SideControlPanel::setCurrent);
+    connect(m_radioState, &RadioState::swrChanged, m_sideControlPanel, &SideControlPanel::setSwr);
 
-    // Display FPS (synthetic menu item)
-    connect(m_radioState, &RadioState::displayFpsChanged, this, &MainWindow::onDisplayFpsChanged);
+    // Synthetic "Display FPS" menu item value tracks the radio's echoed FPS.
+    connect(m_radioState, &RadioState::displayFpsChanged, m_menuController, &MenuController::setDisplayFps);
 
     // Error/notification messages from K4 (ERxx: format) -> show notification popup
     connect(m_radioState, &RadioState::errorNotificationReceived, this, &MainWindow::onErrorNotification);
@@ -1879,14 +1885,6 @@ void MainWindow::onCatResponse(const QString &response) {
     }
 }
 
-void MainWindow::onSMeterChanged(double value) {
-    m_vfoA->setSMeterValue(value);
-}
-
-void MainWindow::onSMeterBChanged(double value) {
-    m_vfoB->setSMeterValue(value);
-}
-
 void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
     switch (state) {
     case TcpClient::Disconnected:
@@ -1968,30 +1966,6 @@ void MainWindow::resetUiForDisconnect() {
 
     // VFO B dim — SUB off state.
     m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
-}
-
-void MainWindow::onRfPowerChanged(double watts, bool isQrp) {
-    Q_UNUSED(watts)
-    // Propagate QRP mode to TX meter widgets so they use the correct scale
-    m_vfoA->setTxMeterQrp(isQrp);
-    m_vfoB->setTxMeterQrp(isQrp);
-}
-
-void MainWindow::onSupplyVoltageChanged(double volts) {
-    m_sideControlPanel->setVoltage(volts);
-}
-
-void MainWindow::onSupplyCurrentChanged(double amps) {
-    m_sideControlPanel->setCurrent(amps);
-}
-
-void MainWindow::onSwrChanged(double swr) {
-    m_sideControlPanel->setSwr(swr);
-}
-
-void MainWindow::onDisplayFpsChanged(int fps) {
-    // Update synthetic menu item value with whatever the radio reports
-    m_menuController->setDisplayFps(fps);
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {

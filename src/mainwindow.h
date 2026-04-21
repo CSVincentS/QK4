@@ -61,12 +61,6 @@ private slots:
     void onRadioReady();
     void onAuthFailed();
     void onCatResponse(const QString &response);
-    void onSMeterChanged(double value);
-    void onSMeterBChanged(double value);
-    void onRfPowerChanged(double watts, bool isQrp);
-    void onSupplyVoltageChanged(double volts);
-    void onSupplyCurrentChanged(double amps);
-    void onSwrChanged(double swr);
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
     void toggleDisplayPopup();
@@ -81,7 +75,6 @@ private slots:
     void onErrorNotification(int errorCode, const QString &message);
 
     // Display FPS (synthetic menu item)
-    void onDisplayFpsChanged(int fps);
 
 private:
     void setupMenuBar();
