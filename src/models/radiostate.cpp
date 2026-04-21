@@ -1224,3 +1224,81 @@ void RadioState::handleMN(const QString &cmd) {
 void RadioState::handleER(const QString &cmd) {
     RxTxMeterHandlers::handleER(m_rxTxMeterState, *this, cmd);
 }
+
+// Mode-dispatched accessors/setters.
+// The K4 partitions several settings (monitor level, VOX, QSK/VOX delay) into
+// CW / DATA / Voice buckets; these helpers select the right bucket based on
+// the current operating mode so callers don't reimplement the switch.
+int RadioState::monitorLevelForCurrentMode() const {
+    switch (mode()) {
+    case CW:
+    case CW_R:
+        return m_audioEffectsState.monitorLevelCW;
+    case DATA:
+    case DATA_R:
+        return m_audioEffectsState.monitorLevelData;
+    default:
+        return m_audioEffectsState.monitorLevelVoice;
+    }
+}
+
+int RadioState::monitorModeCode() const {
+    switch (mode()) {
+    case CW:
+    case CW_R:
+        return 0;
+    case DATA:
+    case DATA_R:
+        return 1;
+    default:
+        return 2;
+    }
+}
+
+bool RadioState::voxForCurrentMode() const {
+    switch (mode()) {
+    case CW:
+    case CW_R:
+        return m_audioEffectsState.voxCW;
+    case DATA:
+    case DATA_R:
+        return m_audioEffectsState.voxData;
+    default:
+        return m_audioEffectsState.voxVoice;
+    }
+}
+
+int RadioState::delayForCurrentMode() const {
+    switch (mode()) {
+    case CW:
+    case CW_R:
+        return m_qskDelayCW;
+    case DATA:
+    case DATA_R:
+        return m_qskDelayData;
+    default:
+        return m_qskDelayVoice;
+    }
+}
+
+void RadioState::setDelayForCurrentMode(int delay) {
+    delay = qBound(0, delay, 255);
+    int *target = nullptr;
+    switch (mode()) {
+    case CW:
+    case CW_R:
+        target = &m_qskDelayCW;
+        break;
+    case DATA:
+    case DATA_R:
+        target = &m_qskDelayData;
+        break;
+    default:
+        target = &m_qskDelayVoice;
+        break;
+    }
+    if (*target != delay) {
+        *target = delay;
+        emit qskDelayChanged(delay);
+    }
+}

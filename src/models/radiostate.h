@@ -260,31 +260,9 @@ public:
     int monitorLevelCW() const { return m_audioEffectsState.monitorLevelCW; }
     int monitorLevelData() const { return m_audioEffectsState.monitorLevelData; }
     int monitorLevelVoice() const { return m_audioEffectsState.monitorLevelVoice; }
-    int monitorLevelForCurrentMode() const {
-        switch (mode()) {
-        case CW:
-        case CW_R:
-            return m_audioEffectsState.monitorLevelCW;
-        case DATA:
-        case DATA_R:
-            return m_audioEffectsState.monitorLevelData;
-        default: // LSB, USB, AM, FM = Voice modes
-            return m_audioEffectsState.monitorLevelVoice;
-        }
-    }
+    int monitorLevelForCurrentMode() const;
     // Returns the ML mode code (0/1/2) for the current operating mode
-    int monitorModeCode() const {
-        switch (mode()) {
-        case CW:
-        case CW_R:
-            return 0;
-        case DATA:
-        case DATA_R:
-            return 1;
-        default: // LSB, USB, AM, FM = Voice modes
-            return 2;
-        }
-    }
+    int monitorModeCode() const;
 
     // Audio mix routing (MX command) - how main/sub maps to L/R when SUB is on
     int audioMixLeft() const { return m_audioEffectsState.audioMixLeft; }   // MixSource left
@@ -301,63 +279,17 @@ public:
     void setMonitorLevel(int mode, int level);
 
     // Returns VOX state for current operating mode
-    bool voxForCurrentMode() const {
-        switch (mode()) {
-        case CW:
-        case CW_R:
-            return m_audioEffectsState.voxCW;
-        case DATA:
-        case DATA_R:
-            return m_audioEffectsState.voxData;
-        default: // LSB, USB, AM, FM = Voice modes
-            return m_audioEffectsState.voxVoice;
-        }
-    }
+    bool voxForCurrentMode() const;
 
     // QSK/VOX Delay (in 10ms increments)
     int qskDelayCW() const { return m_qskDelayCW; }
     int qskDelayVoice() const { return m_qskDelayVoice; }
     int qskDelayData() const { return m_qskDelayData; }
     // Returns delay for current operating mode (in 10ms increments)
-    int delayForCurrentMode() const {
-        switch (mode()) {
-        case CW:
-        case CW_R:
-            return m_qskDelayCW;
-        case DATA:
-        case DATA_R:
-            return m_qskDelayData;
-        default: // LSB, USB, AM, FM = Voice modes
-            return m_qskDelayVoice;
-        }
-    }
+    int delayForCurrentMode() const;
 
-    // Optimistic setters for QSK/VOX delay (in 10ms increments, 0-255)
-    void setDelayForCurrentMode(int delay) {
-        delay = qBound(0, delay, 255);
-        switch (mode()) {
-        case CW:
-        case CW_R:
-            if (m_qskDelayCW != delay) {
-                m_qskDelayCW = delay;
-                emit qskDelayChanged(delay);
-            }
-            break;
-        case DATA:
-        case DATA_R:
-            if (m_qskDelayData != delay) {
-                m_qskDelayData = delay;
-                emit qskDelayChanged(delay);
-            }
-            break;
-        default: // LSB, USB, AM, FM = Voice modes
-            if (m_qskDelayVoice != delay) {
-                m_qskDelayVoice = delay;
-                emit qskDelayChanged(delay);
-            }
-            break;
-        }
-    }
+    // Optimistic setter for QSK/VOX delay (in 10ms increments, 0-255)
+    void setDelayForCurrentMode(int delay);
 
     // Panadapter REF level (Main)
     int refLevel() const { return m_spectrumDisplayState.refLevel; }
