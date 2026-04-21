@@ -1803,4 +1803,3 @@ void MainWindow::toggleTxPopup() {
     closeNonPopupManagerPopups();
     m_popupManager->toggleTx();
 }
-

@@ -242,12 +242,7 @@ void RadioState::reset() {
     m_streamingLatency = -1;
 
     // Text Decode
-    m_textDecodeMode = -1;
-    m_textDecodeThreshold = -1;
-    m_textDecodeLines = -1;
-    m_textDecodeModeB = -1;
-    m_textDecodeThresholdB = -1;
-    m_textDecodeLinesB = -1;
+    m_textDecodeState.reset();
 }
 
 void RadioState::parseCATCommand(const QString &command) {
@@ -816,54 +811,26 @@ void RadioState::setMicRearBias(int bias) {
     }
 }
 
-// Text Decode optimistic setters - Main RX
+// Text Decode optimistic setters — delegate into the TextDecodeHandlers
+// namespace (see models/radiostate/textdecodestate.cpp). Public API shape
+// preserved; the struct holds the state and the handler fns mutate it.
 void RadioState::setTextDecodeMode(int mode) {
-    mode = qBound(0, mode, 4);
-    if (mode != m_textDecodeMode) {
-        m_textDecodeMode = mode;
-        emit textDecodeChanged();
-    }
+    TextDecodeHandlers::setMode(m_textDecodeState, *this, mode);
 }
-
 void RadioState::setTextDecodeThreshold(int threshold) {
-    threshold = qBound(0, threshold, 9);
-    if (threshold != m_textDecodeThreshold) {
-        m_textDecodeThreshold = threshold;
-        emit textDecodeChanged();
-    }
+    TextDecodeHandlers::setThreshold(m_textDecodeState, *this, threshold);
 }
-
 void RadioState::setTextDecodeLines(int lines) {
-    lines = qBound(1, lines, 10);
-    if (lines != m_textDecodeLines) {
-        m_textDecodeLines = lines;
-        emit textDecodeChanged();
-    }
+    TextDecodeHandlers::setLines(m_textDecodeState, *this, lines);
 }
-
-// Text Decode optimistic setters - Sub RX
 void RadioState::setTextDecodeModeB(int mode) {
-    mode = qBound(0, mode, 4);
-    if (mode != m_textDecodeModeB) {
-        m_textDecodeModeB = mode;
-        emit textDecodeBChanged();
-    }
+    TextDecodeHandlers::setModeB(m_textDecodeState, *this, mode);
 }
-
 void RadioState::setTextDecodeThresholdB(int threshold) {
-    threshold = qBound(0, threshold, 9);
-    if (threshold != m_textDecodeThresholdB) {
-        m_textDecodeThresholdB = threshold;
-        emit textDecodeBChanged();
-    }
+    TextDecodeHandlers::setThresholdB(m_textDecodeState, *this, threshold);
 }
-
 void RadioState::setTextDecodeLinesB(int lines) {
-    lines = qBound(1, lines, 10);
-    if (lines != m_textDecodeLinesB) {
-        m_textDecodeLinesB = lines;
-        emit textDecodeBChanged();
-    }
+    TextDecodeHandlers::setLinesB(m_textDecodeState, *this, lines);
 }
 
 // VOX Gain optimistic setters
@@ -2511,70 +2478,18 @@ void RadioState::handleRO(const QString &cmd) {
 // Individual Command Handlers - Text Decode
 // =============================================================================
 
+// Text decode CAT handlers — delegate to TextDecodeHandlers namespace.
 void RadioState::handleTD(const QString &cmd) {
-    if (cmd.length() < 5)
-        return;
-    int mode = cmd.mid(2, 1).toInt();
-    int threshold = cmd.mid(3, 1).toInt();
-    int lines = cmd.mid(4, 1).toInt();
-    bool changed = false;
-    if (mode != m_textDecodeMode) {
-        m_textDecodeMode = mode;
-        changed = true;
-    }
-    if (threshold != m_textDecodeThreshold) {
-        m_textDecodeThreshold = threshold;
-        changed = true;
-    }
-    if (lines != m_textDecodeLines && lines >= 1 && lines <= 9) {
-        m_textDecodeLines = lines;
-        changed = true;
-    }
-    if (changed)
-        emit textDecodeChanged();
+    TextDecodeHandlers::handleTD(m_textDecodeState, *this, cmd);
 }
-
 void RadioState::handleTDSub(const QString &cmd) {
-    if (cmd.length() < 6)
-        return;
-    int mode = cmd.mid(3, 1).toInt();
-    int threshold = cmd.mid(4, 1).toInt();
-    int lines = cmd.mid(5, 1).toInt();
-    bool changed = false;
-    if (mode != m_textDecodeModeB) {
-        m_textDecodeModeB = mode;
-        changed = true;
-    }
-    if (threshold != m_textDecodeThresholdB) {
-        m_textDecodeThresholdB = threshold;
-        changed = true;
-    }
-    if (lines != m_textDecodeLinesB && lines >= 1 && lines <= 9) {
-        m_textDecodeLinesB = lines;
-        changed = true;
-    }
-    if (changed)
-        emit textDecodeBChanged();
+    TextDecodeHandlers::handleTDSub(m_textDecodeState, *this, cmd);
 }
-
 void RadioState::handleTB(const QString &cmd) {
-    if (cmd.length() < 5)
-        return;
-    QString text = cmd.mid(5);
-    if (text.endsWith(';'))
-        text.chop(1);
-    if (!text.isEmpty())
-        emit textBufferReceived(text, false);
+    TextDecodeHandlers::handleTB(*this, cmd);
 }
-
 void RadioState::handleTBSub(const QString &cmd) {
-    if (cmd.length() < 6)
-        return;
-    QString text = cmd.mid(6);
-    if (text.endsWith(';'))
-        text.chop(1);
-    if (!text.isEmpty())
-        emit textBufferReceived(text, true);
+    TextDecodeHandlers::handleTBSub(*this, cmd);
 }
 
 // =============================================================================

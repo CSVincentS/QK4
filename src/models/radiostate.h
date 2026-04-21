@@ -8,6 +8,8 @@
 #include <QVector>
 #include <functional>
 
+#include "radiostate/textdecodestate.h"
+
 /**
  * @brief Central K4 state hub. Parses inbound CAT responses, stores every visible radio property,
  *        and emits fine-grained `*Changed` signals for the UI.
@@ -551,15 +553,17 @@ public:
     void setMicRearPreamp(int preamp);
     void setMicRearBias(int bias);
 
-    // Text Decode (TD$ command) - Main RX
-    int textDecodeMode() const { return m_textDecodeMode; }           // 0=off, 2-4=CW WPM ranges, 1=DATA/SSB on
-    int textDecodeThreshold() const { return m_textDecodeThreshold; } // 0=AUTO, 1-9 (CW only)
-    int textDecodeLines() const { return m_textDecodeLines; }         // 1-10 lines
+    // Text Decode (TD$ command) - Main RX. Backed by m_textDecodeState (see
+    // models/radiostate/textdecodestate.h). Public getters unchanged — Phase 1
+    // subsystem split preserves the external API byte-for-byte.
+    int textDecodeMode() const { return m_textDecodeState.textDecodeMode; }           // 0=off, 2-4=CW WPM
+    int textDecodeThreshold() const { return m_textDecodeState.textDecodeThreshold; } // 0=AUTO, 1-9
+    int textDecodeLines() const { return m_textDecodeState.textDecodeLines; }         // 1-10 lines
 
     // Text Decode (TD$$ command) - Sub RX
-    int textDecodeModeB() const { return m_textDecodeModeB; }
-    int textDecodeThresholdB() const { return m_textDecodeThresholdB; }
-    int textDecodeLinesB() const { return m_textDecodeLinesB; }
+    int textDecodeModeB() const { return m_textDecodeState.textDecodeModeB; }
+    int textDecodeThresholdB() const { return m_textDecodeState.textDecodeThresholdB; }
+    int textDecodeLinesB() const { return m_textDecodeState.textDecodeLinesB; }
 
     // Optimistic setters for Text Decode
     void setTextDecodeMode(int mode);
@@ -989,15 +993,10 @@ private:
     bool m_essbEnabled = false; // 0=SSB, 1=ESSB
     int m_ssbTxBw = -1;         // 30-45 (3.0-4.5 kHz in 100Hz units)
 
-    // Text Decode (TD$ command) - Main RX
-    int m_textDecodeMode = -1;      // 0=off, 2=8-45WPM, 3=8-60WPM, 4=8-90WPM, 1=DATA/SSB on
-    int m_textDecodeThreshold = -1; // 0=AUTO, 1-9 (CW only)
-    int m_textDecodeLines = -1;     // 1-10 lines
-
-    // Text Decode (TD$$ command) - Sub RX
-    int m_textDecodeModeB = -1;
-    int m_textDecodeThresholdB = -1;
-    int m_textDecodeLinesB = -1;
+    // Text Decode state (TD / TD$ / TD$$ + TB / TB$) — Phase 1 subsystem.
+    // See models/radiostate/textdecodestate.h for the field layout and the
+    // handler functions that mutate it.
+    TextDecodeState m_textDecodeState;
 
     // =========================================================================
     // Command Handler Registry
