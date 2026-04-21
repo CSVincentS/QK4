@@ -9,10 +9,8 @@ RadioState::RadioState(QObject *parent) : QObject(parent) {
 }
 
 void RadioState::reset() {
-    // Frequency and VFO
-    m_frequency = 0;
-    m_vfoA = 0;
-    m_vfoB = 0;
+    // Frequency / VFO / RIT/XIT state — subsystem struct handles split + offsets too.
+    m_frequencyVfoState.reset();
     m_tuningStep = -1;
     m_tuningStepB = -1;
 
@@ -58,7 +56,7 @@ void RadioState::reset() {
     m_isTransmitting = false;
     m_subReceiverEnabled = false;
     m_diversityEnabled = false;
-    m_splitEnabled = false;
+    // splitEnabled reset via m_frequencyVfoState.reset() above.
 
     // Processing state (NB/NR/PA/RA/GT + NA/NM for both VFOs).
     m_processingState.reset();
@@ -66,12 +64,7 @@ void RadioState::reset() {
     // Antenna
     m_antennaState.reset();
 
-    // RIT/XIT
-    m_ritEnabled = false;
-    m_xitEnabled = false;
-    m_ritXitOffset = 0;
-    m_ritEnabledB = false;
-    m_ritXitOffsetB = 0;
+    // RIT/XIT state reset via m_frequencyVfoState.reset() above.
 
     // Message bank
     m_messageBank = -1;
@@ -954,26 +947,10 @@ void RadioState::registerCommandHandlers() {
     //   - BSET + RIT                   → offset lives in `RO$` (VFO B)
     // We update `m_ritXitOffsetB` and emit the `B`-variant signal so the VFO B display tracks.
     // See `~/.claude/projects/.../memory/MEMORY.md` → "K4 RIT/XIT Offset Registers".
-    m_commandHandlers.append({"RO$", [this](const QString &c) {
-                                  if (c.length() < 4)
-                                      return;
-                                  bool ok;
-                                  int offset = c.mid(3).toInt(&ok);
-                                  if (ok && offset != m_ritXitOffsetB) {
-                                      m_ritXitOffsetB = offset;
-                                      emit ritXitBChanged(m_ritEnabledB, m_ritXitOffsetB);
-                                  }
-                              }});
-    // RT$ — inline (custom multi-arg signal)
-    m_commandHandlers.append({"RT$", [this](const QString &c) {
-                                  if (c.length() < 4 || (c.at(3) != '0' && c.at(3) != '1'))
-                                      return;
-                                  bool enabled = (c.at(3) == '1');
-                                  if (enabled != m_ritEnabledB) {
-                                      m_ritEnabledB = enabled;
-                                      emit ritXitBChanged(m_ritEnabledB, m_ritXitOffsetB);
-                                  }
-                              }});
+    m_commandHandlers.append(
+        {"RO$", [this](const QString &c) { FrequencyVfoHandlers::handleROSub(m_frequencyVfoState, *this, c); }});
+    m_commandHandlers.append(
+        {"RT$", [this](const QString &c) { FrequencyVfoHandlers::handleRTSub(m_frequencyVfoState, *this, c); }});
 
     // 3-char commands
     m_commandHandlers.append({"ACN", [this](const QString &c) { handleACN(c); }});
@@ -1110,37 +1087,15 @@ void RadioState::registerCommandHandlers() {
 // Individual Command Handlers - VFO/Frequency
 // =============================================================================
 
+// Frequency / VFO CAT handlers — delegate to FrequencyVfoHandlers namespace.
 void RadioState::handleFA(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    quint64 freq = cmd.mid(2).toULongLong(&ok);
-    if (ok && m_vfoA != freq) {
-        m_vfoA = freq;
-        m_frequency = freq;
-        emit frequencyChanged(freq);
-    }
+    FrequencyVfoHandlers::handleFA(m_frequencyVfoState, *this, cmd);
 }
-
 void RadioState::handleFB(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    quint64 freq = cmd.mid(2).toULongLong(&ok);
-    if (ok && m_vfoB != freq) {
-        m_vfoB = freq;
-        emit frequencyBChanged(freq);
-    }
+    FrequencyVfoHandlers::handleFB(m_frequencyVfoState, *this, cmd);
 }
-
 void RadioState::handleFT(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool newSplit = (cmd.mid(2) == "1");
-    if (newSplit != m_splitEnabled) {
-        m_splitEnabled = newSplit;
-        emit splitChanged(m_splitEnabled);
-    }
+    FrequencyVfoHandlers::handleFT(m_frequencyVfoState, *this, cmd);
 }
 
 // =============================================================================
@@ -1968,35 +1923,15 @@ void RadioState::handleACT(const QString &cmd) {
 // Individual Command Handlers - RIT/XIT
 // =============================================================================
 
+// RIT / XIT CAT handlers — delegate to FrequencyVfoHandlers namespace.
 void RadioState::handleRT(const QString &cmd) {
-    if (cmd.length() < 3 || (cmd.at(2) != '0' && cmd.at(2) != '1'))
-        return;
-    bool enabled = (cmd.at(2) == '1');
-    if (enabled != m_ritEnabled) {
-        m_ritEnabled = enabled;
-        emit ritXitChanged(m_ritEnabled, m_xitEnabled, m_ritXitOffset);
-    }
+    FrequencyVfoHandlers::handleRT(m_frequencyVfoState, *this, cmd);
 }
-
 void RadioState::handleXT(const QString &cmd) {
-    if (cmd.length() < 3 || (cmd.at(2) != '0' && cmd.at(2) != '1'))
-        return;
-    bool enabled = (cmd.at(2) == '1');
-    if (enabled != m_xitEnabled) {
-        m_xitEnabled = enabled;
-        emit ritXitChanged(m_ritEnabled, m_xitEnabled, m_ritXitOffset);
-    }
+    FrequencyVfoHandlers::handleXT(m_frequencyVfoState, *this, cmd);
 }
-
 void RadioState::handleRO(const QString &cmd) {
-    if (cmd.length() < 3)
-        return;
-    bool ok;
-    int offset = cmd.mid(2).toInt(&ok);
-    if (ok && offset != m_ritXitOffset) {
-        m_ritXitOffset = offset;
-        emit ritXitChanged(m_ritEnabled, m_xitEnabled, m_ritXitOffset);
-    }
+    FrequencyVfoHandlers::handleRO(m_frequencyVfoState, *this, cmd);
 }
 
 // =============================================================================

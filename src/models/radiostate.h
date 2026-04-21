@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "radiostate/antennastate.h"
+#include "radiostate/frequencyvfostate.h"
 #include "radiostate/processingstate.h"
 #include "radiostate/textdecodestate.h"
 
@@ -58,10 +59,10 @@ public:
      */
     void parseCATCommand(const QString &command);
 
-    // Frequency and VFO
-    quint64 frequency() const { return m_frequency; }
-    quint64 vfoA() const { return m_vfoA; }
-    quint64 vfoB() const { return m_vfoB; }
+    // Frequency and VFO — backed by m_frequencyVfoState.
+    quint64 frequency() const { return m_frequencyVfoState.frequency; }
+    quint64 vfoA() const { return m_frequencyVfoState.vfoA; }
+    quint64 vfoB() const { return m_frequencyVfoState.vfoB; }
     int tuningStep() const { return m_tuningStep; }
     int tuningStepB() const { return m_tuningStepB; }
 
@@ -142,7 +143,7 @@ public:
     bool isTransmitting() const { return m_isTransmitting; }
     bool subReceiverEnabled() const { return m_subReceiverEnabled; }
     bool diversityEnabled() const { return m_diversityEnabled; }
-    bool splitEnabled() const { return m_splitEnabled; }
+    bool splitEnabled() const { return m_frequencyVfoState.splitEnabled; }
 
     // Processing (NB/NR/PA/RA/GT + NA/NM) — backed by m_processingState.
     int noiseBlankerLevel() const { return m_processingState.noiseBlankerLevel; }
@@ -197,12 +198,12 @@ public:
     QString rxAntennaMainName() const { return antennaName(m_antennaState.receiveAntenna); }
     QString rxAntennaSubName() const { return antennaName(m_antennaState.receiveAntennaSub); }
 
-    // RIT/XIT
-    bool ritEnabled() const { return m_ritEnabled; }
-    bool xitEnabled() const { return m_xitEnabled; }
-    int ritXitOffset() const { return m_ritXitOffset; }
-    bool ritEnabledB() const { return m_ritEnabledB; }
-    int ritXitOffsetB() const { return m_ritXitOffsetB; }
+    // RIT/XIT — backed by m_frequencyVfoState.
+    bool ritEnabled() const { return m_frequencyVfoState.ritEnabled; }
+    bool xitEnabled() const { return m_frequencyVfoState.xitEnabled; }
+    int ritXitOffset() const { return m_frequencyVfoState.ritXitOffset; }
+    bool ritEnabledB() const { return m_frequencyVfoState.ritEnabledB; }
+    int ritXitOffsetB() const { return m_frequencyVfoState.ritXitOffsetB; }
 
     // Message bank
     int messageBank() const { return m_messageBank; }
@@ -731,10 +732,10 @@ signals:
     void textBufferReceived(const QString &text, bool isSubRx); // TB$ decoded text
 
 private:
-    // Frequency and VFO
-    quint64 m_frequency = 0;
-    quint64 m_vfoA = 0;
-    quint64 m_vfoB = 0;
+    // Frequency / VFO / split / RIT/XIT state — see radiostate/frequencyvfostate.h.
+    FrequencyVfoState m_frequencyVfoState;
+    // Tuning step stays on RadioState for now (VT command — will land with
+    // DataControlState extraction in a later commit).
     int m_tuningStep = -1;
     int m_tuningStepB = -1;
 
@@ -780,7 +781,7 @@ private:
     bool m_isTransmitting = false;
     bool m_subReceiverEnabled = false;
     bool m_diversityEnabled = false;
-    bool m_splitEnabled = false;
+    // splitEnabled lives on m_frequencyVfoState.
 
     // Processing state (NB/NR/PA/RA/GT/NA/NM) — see models/radiostate/processingstate.h.
     ProcessingState m_processingState;
@@ -788,12 +789,7 @@ private:
     // Antenna state — see models/radiostate/antennastate.h.
     AntennaState m_antennaState;
 
-    // RIT/XIT
-    bool m_ritEnabled = false;
-    bool m_xitEnabled = false;
-    int m_ritXitOffset = 0;
-    bool m_ritEnabledB = false;
-    int m_ritXitOffsetB = 0;
+    // RIT/XIT state lives on m_frequencyVfoState.
 
     // Message bank
     int m_messageBank = -1;
