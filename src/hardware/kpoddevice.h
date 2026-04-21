@@ -53,6 +53,7 @@ public:
 signals:
     void deviceConnected();
     void deviceDisconnected();
+    void deviceInfoReady(); // Fired once after async detectDevice() completes at startup
     void encoderRotated(int ticks);
     void rockerPositionChanged(RockerPosition position);
     void buttonTapped(int buttonNumber); // Button 1-8 brief press
@@ -60,6 +61,10 @@ signals:
     void pollError(const QString &error);
 
 private slots:
+    // Deferred from the constructor via QTimer::singleShot(0) — runs detectDevice()
+    // after the event loop starts so the 400ms hid_open_path retry loop does not
+    // freeze app startup. Emits deviceInfoReady() on completion.
+    void initialize();
     void poll();
     void onDeviceArrived();
     void onDeviceRemoved();

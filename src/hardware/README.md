@@ -4,7 +4,7 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 
 ## Files
 
-- `kpoddevice.{cpp,h}` — KPOD tuning knob via hidapi. Main-thread (timing not critical).
+- `kpoddevice.{cpp,h}` — KPOD tuning knob via hidapi. Main-thread (timing not critical). Device detection runs asynchronously at startup via `QTimer::singleShot(0, ...)` so the app window appears immediately; consumers observe `deviceInfoReady()` before reading `isDetected()`.
 - `halikeydevice.{cpp,h}` — HaliKey CW paddle. Delegates to one of 3 platform workers; owns its own `m_workerThread`.
 - `halikeyworkerbase.{cpp,h}` — Abstract base for platform workers. `prepareShutdown()` is the escape hatch for the Linux variant's blocking ioctl.
 - `halikeyv14worker.{cpp,h}` — V1.4 hardware-protocol worker (serial).

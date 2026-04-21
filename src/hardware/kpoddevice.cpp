@@ -20,7 +20,6 @@ KpodDevice::KpodDevice(QObject *parent)
     // Initialize hidapi once — exit in destructor. Avoids repeated init/exit
     // cycles on macOS/Windows (was per-call before; Linux already did this).
     hid_init();
-    m_deviceInfo = detectDevice();
 
     // Setup poll timer
     m_pollTimer->setInterval(POLL_INTERVAL_MS);
@@ -28,6 +27,19 @@ KpodDevice::KpodDevice(QObject *parent)
 
     // Setup hotplug monitoring for device arrival/removal
     setupHotplugMonitoring();
+
+    // WHY: detectDevice() contains a hid_open_path retry loop with QThread::msleep (up to
+    // 400ms total). Running it synchronously in the constructor — which is called on the
+    // main thread from HardwareController — froze the UI during startup. Deferring via a
+    // zero-delay timer pushes it to the first event-loop iteration; callers must observe
+    // deviceInfoReady() instead of assuming isDetected() returns the final value
+    // immediately after construction.
+    QTimer::singleShot(0, this, &KpodDevice::initialize);
+}
+
+void KpodDevice::initialize() {
+    m_deviceInfo = detectDevice();
+    emit deviceInfoReady();
 }
 
 KpodDevice::~KpodDevice() {

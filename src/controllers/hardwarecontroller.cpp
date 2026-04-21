@@ -38,10 +38,16 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(RadioSettings::instance(), &RadioSettings::kpodEnabledChanged, this,
             &HardwareController::onKpodEnabledChanged);
 
-    // Start polling if enabled and detected
-    if (RadioSettings::instance()->kpodEnabled() && m_kpodDevice->isDetected()) {
-        m_kpodDevice->startPolling();
-    }
+    // WHY: KpodDevice::detectDevice() is deferred to the first event-loop tick (see
+    // kpoddevice.cpp constructor note) to keep the 400ms hid_open_path retry off the
+    // main thread at startup. isDetected() is false at this point; the deviceInfoReady
+    // signal fires after detection completes and is the correct point to auto-start
+    // polling if the user had KPOD enabled.
+    connect(m_kpodDevice, &KpodDevice::deviceInfoReady, this, [this]() {
+        if (RadioSettings::instance()->kpodEnabled() && m_kpodDevice->isDetected() && !m_kpodDevice->isPolling()) {
+            m_kpodDevice->startPolling();
+        }
+    });
 
     // =========================================================================
     // HaliKey CW paddle device
