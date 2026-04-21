@@ -39,10 +39,7 @@ void RadioState::reset() {
     // QSK (full break-in) + per-mode delays. (TEST/B SET live on m_rxTxMeterState.)
     m_qskControlState.reset();
 
-    // VFO Link/Lock
-    m_vfoLink = false;
-    m_lockA = false;
-    m_lockB = false;
+    // VFO link + lock A/B reset via m_frequencyVfoState.reset() above.
 
     // Panadapter / display state (REF, SPN, SCL, MP, DPM, DSM, FPS, WFC, WFH,
     // AVG, PKM, FXT, FXA, FRZ, VFA, VFB, AR, NB$, NBL$ + EXT variants).
@@ -562,9 +559,8 @@ void RadioState::registerCommandHandlers() {
                               }});
     m_commandHandlers.append({"NM$", [this](const QString &c) { handleNMSub(c); }});
     m_commandHandlers.append({"AP$", [this](const QString &c) { handleAPSub(c); }});
-    // LK$ — deduplicated via handleBoolPairVal
     m_commandHandlers.append(
-        {"LK$", [this](const QString &c) { handleBoolPairVal(c, 3, m_lockB, &RadioState::lockBChanged); }});
+        {"LK$", [this](const QString &c) { FrequencyVfoHandlers::handleLKSub(m_frequencyVfoState, *this, c); }});
     // VT$ — deduplicated inline (takes .left(1), qBound)
     m_commandHandlers.append(
         {"VT$", [this](const QString &c) { DataControlHandlers::handleVTSub(m_dataControlState, *this, c); }});
@@ -638,7 +634,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"LN", [this](const QString &c) { handleLN(c); }});
     // LK — deduplicated via handleBoolPairVal
     m_commandHandlers.append(
-        {"LK", [this](const QString &c) { handleBoolPairVal(c, 2, m_lockA, &RadioState::lockAChanged); }});
+        {"LK", [this](const QString &c) { FrequencyVfoHandlers::handleLK(m_frequencyVfoState, *this, c); }});
     m_commandHandlers.append({"LO", [this](const QString &c) { handleLO(c); }});
     m_commandHandlers.append({"LI", [this](const QString &c) { handleLI(c); }});
     // VT — deduplicated inline (takes .left(1), qBound)
@@ -860,18 +856,7 @@ void RadioState::handleAPSub(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleLN(const QString &cmd) {
-    // LN - VFO Link
-    if (cmd.length() < 3)
-        return;
-    bool ok;
-    int ln = cmd.mid(2).toInt(&ok);
-    if (ok) {
-        bool linked = (ln == 1);
-        if (linked != m_vfoLink) {
-            m_vfoLink = linked;
-            emit vfoLinkChanged(m_vfoLink);
-        }
-    }
+    FrequencyVfoHandlers::handleLN(m_frequencyVfoState, *this, cmd);
 }
 
 // =============================================================================

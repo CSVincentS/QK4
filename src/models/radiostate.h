@@ -251,11 +251,11 @@ public:
     int apfBandwidthB() const { return m_audioEffectsState.apfBandwidthB; } // Sub RX: 0=30Hz, 1=50Hz, 2=150Hz
 
     // VFO Lock (LK/LK$ commands)
-    bool lockA() const { return m_lockA; }
-    bool lockB() const { return m_lockB; }
+    bool lockA() const { return m_frequencyVfoState.lockA; }
+    bool lockB() const { return m_frequencyVfoState.lockB; }
 
     // VFO Link (LN command)
-    bool vfoLink() const { return m_vfoLink; }
+    bool vfoLink() const { return m_frequencyVfoState.vfoLink; }
 
     // Monitor Level (ML command) - sidetone/speech monitor
     // mode: 0=CW, 1=AF data, 2=voice
@@ -688,11 +688,9 @@ private:
     // m_audioEffectsState.
 
     // VFO Link (LN command)
-    bool m_vfoLink = false;
 
     // VFO Lock (LK/LK$ commands)
-    bool m_lockA = false;
-    bool m_lockB = false;
+    // VFO link and per-VFO lock (LN / LK / LK$) live on m_frequencyVfoState.
 
     // Panadapter / display state (#REF, #SPN, #SCL, #MP, #DPM, #DSM, #FPS,
     // #WFC, #WFH, #AVG, #PKM, #FXT, #FXA, #FRZ, #VFA, #VFB, #AR, #NB$,

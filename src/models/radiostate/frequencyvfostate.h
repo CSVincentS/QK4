@@ -26,6 +26,11 @@ struct FrequencyVfoState {
     bool ritEnabledB = false;
     int ritXitOffsetB = 0;
 
+    // VFO link (LN) and per-VFO lock (LK / LK$).
+    bool vfoLink = false;
+    bool lockA = false;
+    bool lockB = false;
+
     void reset();
 };
 
@@ -39,6 +44,9 @@ void handleRTSub(FrequencyVfoState &state, RadioState &owner, const QString &cmd
 void handleXT(FrequencyVfoState &state, RadioState &owner, const QString &cmd);
 void handleRO(FrequencyVfoState &state, RadioState &owner, const QString &cmd);
 void handleROSub(FrequencyVfoState &state, RadioState &owner, const QString &cmd);
+void handleLN(FrequencyVfoState &state, RadioState &owner, const QString &cmd);
+void handleLK(FrequencyVfoState &state, RadioState &owner, const QString &cmd);
+void handleLKSub(FrequencyVfoState &state, RadioState &owner, const QString &cmd);
 
 } // namespace FrequencyVfoHandlers
 
