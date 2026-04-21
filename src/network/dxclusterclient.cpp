@@ -3,6 +3,8 @@
 #include <QDebug>
 #include <QtMath>
 
+Q_LOGGING_CATEGORY(netDxCluster, "net.dxcluster")
+
 // "DX de K3GMQ-#:  14031.00  K0RX           CW    18 dB  24 WPM  CQ      1902Z"
 const QRegularExpression
     DxClusterClient::s_spotRegex(R"(^DX\s+de\s+(\S+):\s+(\d+\.?\d*)\s+(\S+)\s+(.*?)\s+(\d{4}Z)\s*$)");
@@ -45,7 +47,7 @@ bool DxClusterClient::parseSpotLine(const QString &line, DxSpot &spot) {
 }
 
 void DxClusterClient::connectToHost(const QString &host, quint16 port, const QString &callsign) {
-    qDebug() << "[DxCluster] connectToHost:" << host << port << "callsign:" << callsign;
+    qCDebug(netDxCluster) << "connectToHost:" << host << port << "callsign:" << callsign;
     if (m_state != Disconnected)
         disconnectFromHost();
 
@@ -72,7 +74,7 @@ void DxClusterClient::disconnectFromHost() {
 }
 
 void DxClusterClient::onSocketConnected() {
-    qDebug() << "[DxCluster] TCP socket connected, waiting for login prompt...";
+    qCDebug(netDxCluster) << "TCP socket connected, waiting for login prompt...";
 }
 
 void DxClusterClient::onSocketDisconnected() {
@@ -82,7 +84,7 @@ void DxClusterClient::onSocketDisconnected() {
 
 void DxClusterClient::onReadyRead() {
     m_receiveBuffer += QString::fromUtf8(m_socket->readAll());
-    qDebug() << "[DxCluster] onReadyRead, state:" << m_state << "buffer:" << m_receiveBuffer.left(200);
+    qCDebug(netDxCluster) << "onReadyRead, state:" << m_state << "buffer:" << m_receiveBuffer.left(200);
 
     // Process complete lines
     int newlinePos;
@@ -97,9 +99,9 @@ void DxClusterClient::onReadyRead() {
     // Login prompts typically don't end with a newline (the server waits for
     // input on the same line), so check the partial buffer for a prompt too.
     if (m_state == Connecting && !m_receiveBuffer.isEmpty()) {
-        qDebug() << "[DxCluster] Checking partial buffer for login prompt:" << m_receiveBuffer;
+        qCDebug(netDxCluster) << "Checking partial buffer for login prompt:" << m_receiveBuffer;
         if (s_loginRegex.match(m_receiveBuffer).hasMatch()) {
-            qDebug() << "[DxCluster] Login prompt detected, sending callsign:" << m_callsign;
+            qCDebug(netDxCluster) << "Login prompt detected, sending callsign:" << m_callsign;
             if (!m_callsign.isEmpty()) {
                 m_socket->write((m_callsign + "\r\n").toUtf8());
                 m_receiveBuffer.clear();
@@ -112,7 +114,7 @@ void DxClusterClient::onReadyRead() {
 void DxClusterClient::onSocketError(QAbstractSocket::SocketError error) {
     Q_UNUSED(error)
     QString errorMsg = m_socket->errorString();
-    qDebug() << "[DxCluster] Socket error:" << errorMsg;
+    qCDebug(netDxCluster) << "Socket error:" << errorMsg;
     setState(Disconnected);
     emit errorOccurred(errorMsg);
 }

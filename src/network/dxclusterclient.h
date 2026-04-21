@@ -2,10 +2,13 @@
 #define DXCLUSTERCLIENT_H
 
 #include <QDateTime>
+#include <QLoggingCategory>
 #include <QObject>
 #include <QRegularExpression>
 #include <QString>
 #include <QTcpSocket>
+
+Q_DECLARE_LOGGING_CATEGORY(netDxCluster)
 
 /**
  * @brief Parsed representation of a single DX cluster spot (spotter, spotted, frequency, mode,

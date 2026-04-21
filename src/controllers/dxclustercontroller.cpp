@@ -66,7 +66,7 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
             emit clusterLineReceived(index, line);
         });
         connect(inst.client, &DxClusterClient::spotReceived, this, [this](const DxSpot &spot) {
-            qDebug() << "[DxCluster] Spot received:" << spot.spottedCall << spot.frequencyHz << spot.mode;
+            qCDebug(netDxCluster) << "Spot received:" << spot.spottedCall << spot.frequencyHz << spot.mode;
             // Deduplicate: same callsign within 500 Hz replaces older entry
             for (int i = 0; i < m_spots.size(); ++i) {
                 if (m_spots[i].spottedCall == spot.spottedCall &&
@@ -101,7 +101,7 @@ void DxClusterController::destroyInstance(int index) {
 }
 
 void DxClusterController::connectCluster(int index, const QString &host, quint16 port, const QString &callsign) {
-    qDebug() << "[DxCluster] connectCluster index:" << index << host << port << callsign;
+    qCDebug(netDxCluster) << "connectCluster index:" << index << host << port << callsign;
     auto &inst = ensureInstance(index);
     QMetaObject::invokeMethod(inst.client, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, host),
                               Q_ARG(quint16, port), Q_ARG(QString, callsign));
