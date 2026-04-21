@@ -101,7 +101,4 @@ TcpClient::ConnectionState ConnectionController::connectionState() const {
 
 void ConnectionController::onStateChanged(TcpClient::ConnectionState state) {
     emit connectionStateChanged(state);
-    if (state == TcpClient::Disconnected) {
-        emit connectionLost();
-    }
 }

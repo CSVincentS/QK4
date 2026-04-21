@@ -1,10 +1,11 @@
 #include "hardwarecontroller.h"
+#include "audio/sidetonegenerator.h"
 #include "connectioncontroller.h"
 #include "hardware/halikeydevice.h"
 #include "hardware/iambickeyer.h"
 #include "hardware/kpoddevice.h"
-#include "audio/sidetonegenerator.h"
 #include "models/radiostate.h"
+#include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 #include <QLoggingCategory>
@@ -207,9 +208,12 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(m_connectionController, &ConnectionController::radioReady, this, [this]() {
         QMetaObject::invokeMethod(m_iambicKeyer, "setEnabled", Qt::QueuedConnection, Q_ARG(bool, true));
     });
-    connect(m_connectionController, &ConnectionController::connectionLost, this, [this]() {
-        QMetaObject::invokeMethod(m_iambicKeyer, "setEnabled", Qt::QueuedConnection, Q_ARG(bool, false));
-    });
+    connect(m_connectionController, &ConnectionController::connectionStateChanged, this,
+            [this](TcpClient::ConnectionState state) {
+                if (state == TcpClient::Disconnected) {
+                    QMetaObject::invokeMethod(m_iambicKeyer, "setEnabled", Qt::QueuedConnection, Q_ARG(bool, false));
+                }
+            });
 
     // Stop keyer when HaliKey disconnects (prevents runaway keying
     // if paddle was held when disconnected — Note Off never arrives)

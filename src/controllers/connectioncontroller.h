@@ -49,10 +49,10 @@ public:
 
 signals:
     void radioReady();                                             // Auth succeeded, K4 is live
-    void connectionLost();                                         // Disconnected (clean or error)
     void connectionError(const QString &error);                    // Connection error
     void authFailed();                                             // Authentication failed
     void connectionStateChanged(TcpClient::ConnectionState state); // Any state transition
+    // (Observe connectionStateChanged(TcpClient::Disconnected) for the disconnect event.)
 
     // Re-emitted Protocol signals (eliminates tcpClient()->protocol() chains from callers)
     void catResponseReceived(const QString &response);
