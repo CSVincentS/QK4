@@ -81,3 +81,9 @@ void TxStateController::onTxMeterChanged(int alc, int comp, double fwdPower, dou
         m_vfoA->setTxMeterCurrent(paCurrent);
     }
 }
+
+void TxStateController::reset() {
+    // RX-state defaults: left triangle points at A, right triangle empty.
+    m_txTriangle->setText(QStringLiteral("◀"));
+    m_txTriangleB->setText(QString());
+}

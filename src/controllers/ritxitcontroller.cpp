@@ -121,3 +121,17 @@ void RitXitController::applyDisplay(bool ritEnabled, bool xitEnabled, int offset
     m_spectrum->updatePanadapterPassbands();
     m_spectrum->updateTxMarkers();
 }
+
+void RitXitController::reset() {
+    // WHY: disconnect-state styling preserves MainWindow's historical look
+    // (Large-size bold, not Medium used by applyDisplay's inactive path).
+    const QString disabledLarge = QString("color: %1; font-size: %2px; font-weight: bold;")
+                                      .arg(K4Styles::Colors::InactiveGray)
+                                      .arg(K4Styles::Dimensions::FontSizeLarge);
+    m_ritLabel->setStyleSheet(disabledLarge);
+    m_xitLabel->setStyleSheet(disabledLarge);
+    m_ritXitValueLabel->setText("+0.00");
+    m_ritXitValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                          .arg(K4Styles::Colors::InactiveGray)
+                                          .arg(K4Styles::Dimensions::FontSizePopup));
+}

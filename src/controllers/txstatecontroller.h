@@ -35,6 +35,9 @@ public:
                                QLabel *txTriangleB, QObject *parent = nullptr);
     ~TxStateController() override;
 
+    // Resets the TX triangles to their RX-state default on K4 disconnect.
+    void reset();
+
 private slots:
     void onTransmitStateChanged(bool transmitting);
     void onTxMeterChanged(int alc, int comp, double fwdPower, double swr);

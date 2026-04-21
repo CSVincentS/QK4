@@ -38,3 +38,11 @@ void ModeLabelController::refresh() {
         modeB += "+";
     m_modeBLabel->setText(modeB);
 }
+
+void ModeLabelController::reset() {
+    // Clears text only. The disabled-style for VFO B's mode label is applied
+    // by SubDivIndicatorController::reset() (via setVfoBDimmed), which also
+    // handles the matching VFO B frequency color.
+    m_modeALabel->setText(QString());
+    m_modeBLabel->setText(QString());
+}

@@ -31,6 +31,10 @@ public:
                               QLabel *ritLabel, QLabel *xitLabel, QLabel *ritXitValueLabel, QObject *parent = nullptr);
     ~RitXitController() override;
 
+    // Resets RIT/XIT indicator labels to their disconnected defaults:
+    // value display "+0.00" and both RIT/XIT labels in disabled styling.
+    void reset();
+
     // Event-handler entry points called from MainWindow::eventFilter.
     // Each returns true if the event was consumed.
     bool handleRitLabelClick();

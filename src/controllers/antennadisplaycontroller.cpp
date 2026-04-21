@@ -90,3 +90,9 @@ void AntennaDisplayController::onAntennaChanged(int txAnt, int rxAntMain, int rx
 void AntennaDisplayController::refreshLabels() {
     onAntennaChanged(m_radioState->txAntenna(), m_radioState->rxAntennaMain(), m_radioState->rxAntennaSub());
 }
+
+void AntennaDisplayController::reset() {
+    m_txAntennaLabel->setText(QString());
+    m_rxAntALabel->setText(QString());
+    m_rxAntBLabel->setText(QString());
+}

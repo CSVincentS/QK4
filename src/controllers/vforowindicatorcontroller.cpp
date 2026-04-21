@@ -83,3 +83,17 @@ void VfoRowIndicatorController::onAtuModeChanged(int mode) {
 void VfoRowIndicatorController::onMessageBankChanged(int bank) {
     m_labels.msgBankLabel->setText(bank == 1 ? "MSG: I" : "MSG: II");
 }
+
+void VfoRowIndicatorController::reset() {
+    const QString amberButton = QString("color: %1; font-size: %2px;")
+                                    .arg(K4Styles::Colors::AccentAmber)
+                                    .arg(K4Styles::Dimensions::FontSizeButton);
+    m_labels.splitLabel->setText("SPLIT OFF");
+    m_labels.splitLabel->setStyleSheet(amberButton);
+    m_labels.msgBankLabel->setText("MSG: I");
+    m_labels.msgBankLabel->setStyleSheet(amberButton);
+    m_labels.atuLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextGray));
+    m_labels.voxLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextGray));
+    m_labels.qskLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextGray));
+    m_vfoRow->setTestVisible(false);
+}

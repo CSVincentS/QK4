@@ -28,6 +28,10 @@ public:
     // an optimistic ESSB toggle before the radio's ES echo arrives).
     void refresh();
 
+    // Clears both labels on disconnect. RadioState::reset() does not emit
+    // signals, so controllers must explicitly re-render.
+    void reset();
+
 private:
     RadioState *m_radioState; // injected, not owned
     QLabel *m_modeALabel;     // injected, not owned

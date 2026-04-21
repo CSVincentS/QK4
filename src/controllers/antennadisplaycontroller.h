@@ -22,6 +22,9 @@ public:
                                       QLabel *rxAntBLabel, QObject *parent = nullptr);
     ~AntennaDisplayController() override;
 
+    // Clears all three antenna labels on K4 disconnect.
+    void reset();
+
 private slots:
     void refreshLabels();
     void onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub);

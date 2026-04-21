@@ -74,3 +74,9 @@ void SubDivIndicatorController::setVfoBDimmed(bool dimmed) {
     m_modeBLabel->setStyleSheet(
         QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(K4Styles::Dimensions::FontSizeLarge));
 }
+
+void SubDivIndicatorController::reset() {
+    setSubLabelActive(false);
+    setDivLabelActive(false);
+    setVfoBDimmed(true);
+}

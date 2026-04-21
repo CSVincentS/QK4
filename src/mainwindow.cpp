@@ -1609,10 +1609,8 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
     }
 }
 
-// WHY: split out from updateConnectionState so the Disconnected branch is
-// scannable. Each owning controller / widget absorbs its own subset of the
-// reset; this helper covers only the labels MainWindow still owns directly
-// (mode / antenna / split / bset / sub-div / RIT-XIT / ATU / VOX-QSK / msg).
+// Disconnect-path helper. Each owning controller's reset() absorbs the
+// label writes that used to live here directly.
 void MainWindow::resetUiForDisconnect() {
     m_audioController->stopAudio();
     m_spectrumController->clearDisplays();
@@ -1620,60 +1618,24 @@ void MainWindow::resetUiForDisconnect() {
     m_vfoB->resetToDefaults();
     m_vfoRow->setLockA(false);
     m_vfoRow->setLockB(false);
-    m_vfoRow->setTestVisible(false);
     m_sideControlPanel->resetToDefaults();
     m_filterAWidget->resetToDefaults();
     m_filterBWidget->resetToDefaults();
     m_statusBarController->clearReadings();
     m_menuController->menuModel()->clear();
     m_kpa1500UiController->disconnectFromHost();
-    m_radioState->reset();
 
-    // MainWindow-owned labels that no controller has absorbed yet.
-    m_modeALabel->setText("");
-    m_modeBLabel->setText("");
-    m_txAntennaLabel->setText("");
-    m_rxAntALabel->setText("");
-    m_rxAntBLabel->setText("");
-    m_txTriangle->setText("◀");
-    m_txTriangleB->setText("");
+    m_modeLabelController->reset();
+    m_antennaDisplayController->reset();
+    m_txStateController->reset();
+    m_vfoRowIndicatorController->reset();
+    m_subDivIndicatorController->reset();
+    m_ritXitController->reset();
+
+    // Residual MainWindow-only label (no owning controller for B SET).
     m_bSetLabel->setVisible(false);
-    m_ritXitValueLabel->setText("+0.00");
-    m_msgBankLabel->setText("MSG: I");
-    m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                      .arg(K4Styles::Colors::AccentAmber)
-                                      .arg(K4Styles::Dimensions::FontSizeButton));
-    m_splitLabel->setText("SPLIT OFF");
-    m_splitLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                    .arg(K4Styles::Colors::AccentAmber)
-                                    .arg(K4Styles::Dimensions::FontSizeButton));
 
-    // Disabled / inactive styling for state labels.
-    const QString disabledLarge = QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::InactiveGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge);
-    const QString greyedLarge = QString("color: %1; font-size: %2px; font-weight: bold;")
-                                    .arg(K4Styles::Colors::TextGray)
-                                    .arg(K4Styles::Dimensions::FontSizeLarge);
-    m_modeBLabel->setStyleSheet(disabledLarge);
-    m_ritLabel->setStyleSheet(disabledLarge);
-    m_xitLabel->setStyleSheet(disabledLarge);
-    m_atuLabel->setStyleSheet(greyedLarge);
-    m_voxLabel->setStyleSheet(greyedLarge);
-    m_qskLabel->setStyleSheet(greyedLarge);
-    m_ritXitValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                          .arg(K4Styles::Colors::InactiveGray)
-                                          .arg(K4Styles::Dimensions::FontSizePopup));
-
-    const QString subDivDisabled =
-        QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
-            .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-            .arg(K4Styles::Dimensions::FontSizeNormal);
-    m_subLabel->setStyleSheet(subDivDisabled);
-    m_divLabel->setStyleSheet(subDivDisabled);
-
-    // VFO B dim — SUB off state.
-    m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
+    m_radioState->reset();
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {

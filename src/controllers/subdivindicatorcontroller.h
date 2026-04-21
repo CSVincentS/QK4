@@ -27,6 +27,11 @@ public:
                                        QObject *parent = nullptr);
     ~SubDivIndicatorController() override;
 
+    // Forces SUB/DIV badges to disabled styling and dims VFO B (also styles
+    // the VFO B mode label and sets the frequency-display color) on K4
+    // disconnect. Same visual state as "SUB RX off, DIV off".
+    void reset();
+
 private slots:
     void onSubRxEnabledChanged(bool enabled);
     void onDiversityChanged(bool enabled);
