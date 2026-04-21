@@ -293,7 +293,7 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
 }
 
 void HardwareController::onKpodPollError(const QString &error) {
-    qWarning() << "KPOD error:" << error;
+    qCWarning(qk4Hardware) << "KPOD error:" << error;
 }
 
 void HardwareController::onKpodEnabledChanged(bool enabled) {

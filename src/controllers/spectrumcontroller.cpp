@@ -12,8 +12,11 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLoggingCategory>
 #include <QPushButton>
 #include <QResizeEvent>
+
+Q_LOGGING_CATEGORY(qk4Spectrum, "qk4.spectrum")
 
 // ============== SpectrumController Implementation ==============
 
@@ -229,9 +232,9 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
 
     // Debug: Connect to renderFailed signal to diagnose QRhiWidget issues
     connect(m_panadapterA, &QRhiWidget::renderFailed, this,
-            []() { qCritical() << "!!! PanadapterA renderFailed() emitted - QRhi could not be obtained !!!"; });
+            []() { qCCritical(qk4Spectrum) << "PanadapterA renderFailed() — QRhi could not be obtained"; });
     connect(m_panadapterB, &QRhiWidget::renderFailed, this,
-            []() { qCritical() << "!!! PanadapterB renderFailed() emitted - QRhi could not be obtained !!!"; });
+            []() { qCCritical(qk4Spectrum) << "PanadapterB renderFailed() — QRhi could not be obtained"; });
 
     // RadioState display properties → panadapter configuration
     connect(m_radioState, &RadioState::refLevelChanged, this, [this](int level) { m_panadapterA->setRefLevel(level); });
@@ -878,8 +881,8 @@ void SpectrumController::updateSpotOverlays() {
             m_spotOverlayA->setFrequencyRange(center, span);
             m_spotOverlayA->setSpots(spots);
             if (!spots.isEmpty())
-                qDebug() << "[DxSpot] Overlay A:" << spots.size() << "spots in range" << startFreq << "-" << endFreq
-                         << "overlay size:" << m_spotOverlayA->size();
+                qCDebug(qk4Spectrum) << "Overlay A:" << spots.size() << "spots in range" << startFreq << "-" << endFreq
+                                     << "overlay size:" << m_spotOverlayA->size();
         }
     }
 

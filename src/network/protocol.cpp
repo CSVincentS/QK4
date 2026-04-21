@@ -12,7 +12,7 @@ void Protocol::parse(const QByteArray &data) {
 
     // Prevent unbounded buffer growth from malformed data
     if (m_buffer.size() > K4Protocol::MAX_BUFFER_SIZE) {
-        qWarning() << "Protocol buffer overflow (" << m_buffer.size() << "bytes), clearing";
+        qCWarning(catRx) << "Protocol buffer overflow (" << m_buffer.size() << "bytes), clearing";
         m_buffer.clear();
         return;
     }
@@ -58,7 +58,7 @@ void Protocol::parse(const QByteArray &data) {
         QByteArray endMarker = m_buffer.mid(totalPacketSize - 4, 4);
         if (endMarker != K4Protocol::END_MARKER) {
             // Invalid packet, skip past the start marker and try again
-            qWarning() << "Invalid K4 packet: bad end marker";
+            qCWarning(catRx) << "Invalid K4 packet: bad end marker";
             m_buffer = m_buffer.mid(4);
             continue;
         }

@@ -122,7 +122,7 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
                 return;
 
             if (info.error() != QHostInfo::NoError || info.addresses().isEmpty()) {
-                qWarning() << "mDNS resolution failed for" << m_host << ":" << info.errorString();
+                qCWarning(netTcp) << "mDNS resolution failed for" << m_host << ":" << info.errorString();
                 emit errorOccurred(QString("Could not resolve %1: %2").arg(m_host, info.errorString()));
                 setState(Disconnected);
                 return;
@@ -243,7 +243,7 @@ void TcpClient::sendCAT(const QString &command) {
         m_socket->flush();
         qCDebug(catTx) << "sent:" << command << "(" << packet.size() << "bytes)";
     } else {
-        qWarning() << "[CAT TX] DROPPED (state=" << m_state << "):" << command;
+        qCWarning(catTx) << "DROPPED (state=" << m_state << "):" << command;
     }
 }
 

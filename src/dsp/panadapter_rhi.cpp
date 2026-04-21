@@ -2,12 +2,15 @@
 #include "panadapter_constants.h"
 #include "rhi_utils.h"
 #include "ui/styling/k4styles.h"
+#include <QLoggingCategory>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>
 #include <QtMath>
 #include <cmath>
 #include <cstring>
+
+Q_LOGGING_CATEGORY(qk4Dsp, "qk4.dsp")
 
 // Transparent overlay widget for dBm/S-unit scale labels
 class DbmScaleOverlay : public QWidget {
@@ -345,7 +348,7 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
 
     m_rhi = rhi();
     if (!m_rhi) {
-        qWarning() << "QRhi is NULL - GPU backend failed to initialize";
+        qCWarning(qk4Dsp) << "QRhi is NULL - GPU backend failed to initialize";
         return;
     }
 
