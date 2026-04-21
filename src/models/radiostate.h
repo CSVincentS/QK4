@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "radiostate/antennastate.h"
+#include "radiostate/datacontrolstate.h"
 #include "radiostate/frequencyvfostate.h"
 #include "radiostate/processingstate.h"
 #include "radiostate/textdecodestate.h"
@@ -63,8 +64,8 @@ public:
     quint64 frequency() const { return m_frequencyVfoState.frequency; }
     quint64 vfoA() const { return m_frequencyVfoState.vfoA; }
     quint64 vfoB() const { return m_frequencyVfoState.vfoB; }
-    int tuningStep() const { return m_tuningStep; }
-    int tuningStepB() const { return m_tuningStepB; }
+    int tuningStep() const { return m_dataControlState.tuningStep; }
+    int tuningStepB() const { return m_dataControlState.tuningStepB; }
 
     // Mode and filter
     Mode mode() const { return m_mode; }
@@ -235,7 +236,7 @@ public:
     void toggleBSet() { setBSetEnabled(!m_bSetEnabled); }
 
     // Streaming Latency (SL command)
-    int streamingLatency() const { return m_streamingLatency; }
+    int streamingLatency() const { return m_dataControlState.streamingLatency; }
 
     // Audio Effects (FX command)
     int afxMode() const { return m_afxMode; } // 0=off, 1=delay, 2=pitch-map
@@ -451,12 +452,12 @@ public:
     int ddcNbLevel() const { return m_ddcNbLevel; } // #NBL$: 0-14
 
     // Data sub-mode (DT command): 0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D
-    int dataSubMode() const { return m_dataSubMode; }
-    int dataSubModeB() const { return m_dataSubModeB; }
+    int dataSubMode() const { return m_dataControlState.dataSubMode; }
+    int dataSubModeB() const { return m_dataControlState.dataSubModeB; }
 
     // Data rate (DR command): 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
-    int dataRate() const { return m_dataRate; }
-    int dataRateB() const { return m_dataRateB; }
+    int dataRate() const { return m_dataControlState.dataRate; }
+    int dataRateB() const { return m_dataControlState.dataRateB; }
 
     // RX Graphic Equalizer (RE command) - 8 bands, -16 to +16 dB
     // Bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz
@@ -734,10 +735,8 @@ signals:
 private:
     // Frequency / VFO / split / RIT/XIT state — see radiostate/frequencyvfostate.h.
     FrequencyVfoState m_frequencyVfoState;
-    // Tuning step stays on RadioState for now (VT command — will land with
-    // DataControlState extraction in a later commit).
-    int m_tuningStep = -1;
-    int m_tuningStepB = -1;
+    // Data-mode + tuning step + streaming latency — see radiostate/datacontrolstate.h.
+    DataControlState m_dataControlState;
 
     // Mode and filter
     Mode m_mode = Unknown;
@@ -814,7 +813,7 @@ private:
     int m_qskDelayData = -1;
 
     // Streaming Latency (SL command)
-    int m_streamingLatency = -1; // 0-7, -1 = not yet received
+    // m_streamingLatency lives on m_dataControlState.
 
     // Audio effects (FX command)
     int m_afxMode = 0; // 0=off, 1=delay, 2=pitch-map
@@ -893,19 +892,7 @@ private:
     int m_ddcNbMode = -1;          // #NB$: 0=off, 1=on, 2=auto
     int m_ddcNbLevel = -1;         // #NBL$: 0-14
 
-    // Data sub-mode (DT command): 0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D
-    int m_dataSubMode = -1;  // Main RX
-    int m_dataSubModeB = -1; // Sub RX
-
-    // Data rate (DR command): 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
-    int m_dataRate = -1;  // Main RX
-    int m_dataRateB = -1; // Sub RX
-
-    // Timestamps for optimistic update cooldown (ignore echoes briefly after sending)
-    qint64 m_dataSubModeOptimisticTime = 0;
-    qint64 m_dataSubModeBOptimisticTime = 0;
-    qint64 m_dataRateOptimisticTime = 0;
-    qint64 m_dataRateBOptimisticTime = 0;
+    // Data sub-mode + rate + optimistic cooldown timestamps live on m_dataControlState.
 
     // RX Graphic Equalizer (8 bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz)
     // Range: -16 to +16 dB, init to 0 (flat)

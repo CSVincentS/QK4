@@ -11,8 +11,8 @@ RadioState::RadioState(QObject *parent) : QObject(parent) {
 void RadioState::reset() {
     // Frequency / VFO / RIT/XIT state — subsystem struct handles split + offsets too.
     m_frequencyVfoState.reset();
-    m_tuningStep = -1;
-    m_tuningStepB = -1;
+    // Data-mode + tuning step + streaming latency.
+    m_dataControlState.reset();
 
     // Mode and filter
     m_mode = Unknown;
@@ -144,17 +144,7 @@ void RadioState::reset() {
     m_ddcNbMode = -1;
     m_ddcNbLevel = -1;
 
-    // Data sub-mode
-    m_dataSubMode = -1;
-    m_dataSubModeB = -1;
-    m_dataSubModeOptimisticTime = 0;
-    m_dataSubModeBOptimisticTime = 0;
-
-    // Data rate
-    m_dataRate = -1;
-    m_dataRateB = -1;
-    m_dataRateOptimisticTime = 0;
-    m_dataRateBOptimisticTime = 0;
+    // Data-mode + rate + optimistic cooldowns reset via m_dataControlState.reset().
 
     // EQ bands
     std::fill(std::begin(m_rxEqBands), std::end(m_rxEqBands), 0);
@@ -190,8 +180,7 @@ void RadioState::reset() {
     m_essbEnabled = false;
     m_ssbTxBw = -1;
 
-    // Streaming Latency
-    m_streamingLatency = -1;
+    // Streaming latency reset via m_dataControlState.reset().
 
     // Text Decode
     m_textDecodeState.reset();
@@ -295,7 +284,7 @@ QString RadioState::dataSubModeToString(int subMode) {
 QString RadioState::modeStringFull() const {
     // For DATA/DATA-R modes, show the sub-mode instead
     if (m_mode == DATA || m_mode == DATA_R) {
-        return dataSubModeToString(m_dataSubMode);
+        return dataSubModeToString(m_dataControlState.dataSubMode);
     }
     return modeToString(m_mode);
 }
@@ -303,7 +292,7 @@ QString RadioState::modeStringFull() const {
 QString RadioState::modeStringFullB() const {
     // For DATA/DATA-R modes, show the sub-mode instead
     if (m_modeB == DATA || m_modeB == DATA_R) {
-        return dataSubModeToString(m_dataSubModeB);
+        return dataSubModeToString(m_dataControlState.dataSubModeB);
     }
     return modeToString(m_modeB);
 }
@@ -466,40 +455,18 @@ void RadioState::setManualNotchPitchB(int pitch) {
     ProcessingHandlers::setManualNotchPitchB(m_processingState, *this, pitch);
 }
 
+// Data mode optimistic setters — delegate to DataControlHandlers namespace.
 void RadioState::setDataSubMode(int subMode) {
-    subMode = qBound(0, subMode, 3);
-    if (m_dataSubMode != subMode) {
-        m_dataSubMode = subMode;
-        m_dataSubModeOptimisticTime = QDateTime::currentMSecsSinceEpoch();
-        emit dataSubModeChanged(subMode);
-    }
+    DataControlHandlers::setDataSubMode(m_dataControlState, *this, subMode);
 }
-
 void RadioState::setDataSubModeB(int subMode) {
-    subMode = qBound(0, subMode, 3);
-    if (m_dataSubModeB != subMode) {
-        m_dataSubModeB = subMode;
-        m_dataSubModeBOptimisticTime = QDateTime::currentMSecsSinceEpoch();
-        emit dataSubModeBChanged(subMode);
-    }
+    DataControlHandlers::setDataSubModeB(m_dataControlState, *this, subMode);
 }
-
 void RadioState::setDataRate(int rate) {
-    rate = qBound(0, rate, 1);
-    if (m_dataRate != rate) {
-        m_dataRate = rate;
-        m_dataRateOptimisticTime = QDateTime::currentMSecsSinceEpoch();
-        emit dataRateChanged(rate);
-    }
+    DataControlHandlers::setDataRate(m_dataControlState, *this, rate);
 }
-
 void RadioState::setDataRateB(int rate) {
-    rate = qBound(0, rate, 1);
-    if (m_dataRateB != rate) {
-        m_dataRateB = rate;
-        m_dataRateBOptimisticTime = QDateTime::currentMSecsSinceEpoch();
-        emit dataRateBChanged(rate);
-    }
+    DataControlHandlers::setDataRateB(m_dataControlState, *this, rate);
 }
 
 void RadioState::setMiniPanAEnabled(bool enabled) {
@@ -924,19 +891,8 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append(
         {"LK$", [this](const QString &c) { handleBoolPairVal(c, 3, m_lockB, &RadioState::lockBChanged); }});
     // VT$ — deduplicated inline (takes .left(1), qBound)
-    m_commandHandlers.append({"VT$", [this](const QString &c) {
-                                  if (c.length() <= 3)
-                                      return;
-                                  bool ok;
-                                  int step = c.mid(3).left(1).toInt(&ok);
-                                  if (ok) {
-                                      int ns = qBound(0, step, 5);
-                                      if (ns != m_tuningStepB) {
-                                          m_tuningStepB = ns;
-                                          emit tuningStepBChanged(m_tuningStepB);
-                                      }
-                                  }
-                              }});
+    m_commandHandlers.append(
+        {"VT$", [this](const QString &c) { DataControlHandlers::handleVTSub(m_dataControlState, *this, c); }});
     // AR$ — deduplicated inline (3-arg signal)
     m_commandHandlers.append(
         {"AR$", [this](const QString &c) { AntennaHandlers::handleARSub(m_antennaState, *this, c); }});
@@ -1034,19 +990,8 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"LO", [this](const QString &c) { handleLO(c); }});
     m_commandHandlers.append({"LI", [this](const QString &c) { handleLI(c); }});
     // VT — deduplicated inline (takes .left(1), qBound)
-    m_commandHandlers.append({"VT", [this](const QString &c) {
-                                  if (c.length() <= 2)
-                                      return;
-                                  bool ok;
-                                  int step = c.mid(2).left(1).toInt(&ok);
-                                  if (ok) {
-                                      int ns = qBound(0, step, 5);
-                                      if (ns != m_tuningStep) {
-                                          m_tuningStep = ns;
-                                          emit tuningStepChanged(m_tuningStep);
-                                      }
-                                  }
-                              }});
+    m_commandHandlers.append(
+        {"VT", [this](const QString &c) { DataControlHandlers::handleVT(m_dataControlState, *this, c); }});
     m_commandHandlers.append({"VX", [this](const QString &c) { handleVX(c); }});
     m_commandHandlers.append({"VG", [this](const QString &c) { handleVG(c); }});
     m_commandHandlers.append({"VI", [this](const QString &c) { handleVI(c); }});
@@ -1838,17 +1783,7 @@ void RadioState::handleSD(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleSL(const QString &cmd) {
-    // SL - Streaming Latency: SL0 through SL7
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int tier = cmd.mid(2).toInt(&ok);
-    if (!ok || tier < 0 || tier > 7)
-        return;
-    if (tier != m_streamingLatency) {
-        m_streamingLatency = tier;
-        emit streamingLatencyChanged(m_streamingLatency);
-    }
+    DataControlHandlers::handleSL(m_dataControlState, *this, cmd);
 }
 
 void RadioState::handleSB(const QString &cmd) {
@@ -1957,69 +1892,16 @@ void RadioState::handleTBSub(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleDT(const QString &cmd) {
-    if (cmd.length() < 3)
-        return;
-    bool ok;
-    int subMode = cmd.mid(2).toInt(&ok);
-    if (!ok || subMode < 0 || subMode > 3)
-        return;
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - m_dataSubModeOptimisticTime < 500)
-        return;
-    if (subMode != m_dataSubMode) {
-        m_dataSubMode = subMode;
-        emit dataSubModeChanged(m_dataSubMode);
-    }
+    DataControlHandlers::handleDT(m_dataControlState, *this, cmd);
 }
-
 void RadioState::handleDTSub(const QString &cmd) {
-    if (cmd.length() < 4)
-        return;
-    bool ok;
-    int subMode = cmd.mid(3).toInt(&ok);
-    if (!ok || subMode < 0 || subMode > 3)
-        return;
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - m_dataSubModeBOptimisticTime < 500)
-        return;
-    if (subMode != m_dataSubModeB) {
-        m_dataSubModeB = subMode;
-        emit dataSubModeBChanged(m_dataSubModeB);
-    }
+    DataControlHandlers::handleDTSub(m_dataControlState, *this, cmd);
 }
-
 void RadioState::handleDR(const QString &cmd) {
-    // DR0; or DR1;
-    if (cmd.length() < 3)
-        return;
-    bool ok;
-    int rate = cmd.mid(2).toInt(&ok);
-    if (!ok || rate < 0 || rate > 1)
-        return;
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - m_dataRateOptimisticTime < 500)
-        return;
-    if (rate != m_dataRate) {
-        m_dataRate = rate;
-        emit dataRateChanged(m_dataRate);
-    }
+    DataControlHandlers::handleDR(m_dataControlState, *this, cmd);
 }
-
 void RadioState::handleDRSub(const QString &cmd) {
-    // DR$0; or DR$1;
-    if (cmd.length() < 4)
-        return;
-    bool ok;
-    int rate = cmd.mid(3).toInt(&ok);
-    if (!ok || rate < 0 || rate > 1)
-        return;
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - m_dataRateBOptimisticTime < 500)
-        return;
-    if (rate != m_dataRateB) {
-        m_dataRateB = rate;
-        emit dataRateBChanged(m_dataRateB);
-    }
+    DataControlHandlers::handleDRSub(m_dataControlState, *this, cmd);
 }
 
 // =============================================================================
