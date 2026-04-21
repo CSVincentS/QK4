@@ -55,14 +55,10 @@ public:
     QVector<MenuItem *> filterByName(const QString &pattern);
     QStringList getCategories() const;
 
-    // Get count
     int count() const { return m_items.size(); }
-
-    // Clear all
     void clear();
 
-    // Parse MEDF line from RDY response
-    // Format: MEDF0007,AGC Hold Time,RX AGC,DEC,1,0,200,0,0,1;
+    // MEDF line format: MEDF0007,AGC Hold Time,RX AGC,DEC,1,0,200,0,0,1;
     bool parseMEDF(const QString &medfLine);
 
     // Parse ME value update

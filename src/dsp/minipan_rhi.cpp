@@ -910,7 +910,6 @@ void MiniPanRhiWidget::clear() {
     m_ifShift = 50;
     m_cwPitch = 600;
 
-    // Clear frequency labels
     if (m_leftFreqLabel)
         m_leftFreqLabel->setText("");
     if (m_rightFreqLabel)

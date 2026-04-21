@@ -185,7 +185,6 @@ bool MenuModel::parseMEDF(const QString &medfLine) {
         item.options.append(urlDecode(parts[i]));
     }
 
-    // Add to model
     addMenuItem(item);
 
     return true;
