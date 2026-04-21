@@ -36,13 +36,8 @@ void RadioState::reset() {
     // Audio pipeline state (VOX/FX/AP/mix/balance/ML/LO/LI/MI/MS/RE/TE/VG/VI/ES).
     m_audioEffectsState.reset();
 
-    // QSK (TEST/B SET live on m_rxTxMeterState)
-    m_qskEnabled = false;
-
-    // QSK/VOX Delay
-    m_qskDelayCW = -1;
-    m_qskDelayVoice = -1;
-    m_qskDelayData = -1;
+    // QSK (full break-in) + per-mode delays. (TEST/B SET live on m_rxTxMeterState.)
+    m_qskControlState.reset();
 
     // VFO Link/Lock
     m_vfoLink = false;
@@ -924,46 +919,7 @@ void RadioState::handleES(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleSD(const QString &cmd) {
-    // SD - QSK/VOX Delay: SDxMzzz where x=QSK flag, M=mode, zzz=delay
-    if (cmd.length() < 7)
-        return;
-    QChar qskFlag = cmd.at(2);
-    QChar modeChar = cmd.at(3);
-    bool ok;
-    int delay = cmd.mid(4, 3).toInt(&ok);
-    if (!ok)
-        return;
-
-    // Update QSK enabled state (only meaningful for CW mode)
-    if (modeChar == 'C') {
-        bool qskOn = (qskFlag == '1');
-        if (qskOn != m_qskEnabled) {
-            m_qskEnabled = qskOn;
-            emit qskEnabledChanged(m_qskEnabled);
-        }
-    }
-
-    bool isCurrentMode = false;
-    const Mode current = mode();
-    if (modeChar == 'C') {
-        if (m_qskDelayCW != delay) {
-            m_qskDelayCW = delay;
-            isCurrentMode = (current == CW || current == CW_R);
-        }
-    } else if (modeChar == 'V') {
-        if (m_qskDelayVoice != delay) {
-            m_qskDelayVoice = delay;
-            isCurrentMode = (current == LSB || current == USB || current == AM || current == FM);
-        }
-    } else if (modeChar == 'D') {
-        if (m_qskDelayData != delay) {
-            m_qskDelayData = delay;
-            isCurrentMode = (current == DATA || current == DATA_R);
-        }
-    }
-    if (isCurrentMode) {
-        emit qskDelayChanged(delay);
-    }
+    QskHandlers::handleSD(m_qskControlState, *this, cmd);
 }
 
 // =============================================================================
@@ -1155,12 +1111,12 @@ int RadioState::delayForCurrentMode() const {
     switch (mode()) {
     case CW:
     case CW_R:
-        return m_qskDelayCW;
+        return m_qskControlState.qskDelayCW;
     case DATA:
     case DATA_R:
-        return m_qskDelayData;
+        return m_qskControlState.qskDelayData;
     default:
-        return m_qskDelayVoice;
+        return m_qskControlState.qskDelayVoice;
     }
 }
 
@@ -1170,14 +1126,14 @@ void RadioState::setDelayForCurrentMode(int delay) {
     switch (mode()) {
     case CW:
     case CW_R:
-        target = &m_qskDelayCW;
+        target = &m_qskControlState.qskDelayCW;
         break;
     case DATA:
     case DATA_R:
-        target = &m_qskDelayData;
+        target = &m_qskControlState.qskDelayData;
         break;
     default:
-        target = &m_qskDelayVoice;
+        target = &m_qskControlState.qskDelayVoice;
         break;
     }
     if (*target != delay) {

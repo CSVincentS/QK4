@@ -15,6 +15,7 @@
 #include "radiostate/levelsstate.h"
 #include "radiostate/modefilterstate.h"
 #include "radiostate/processingstate.h"
+#include "radiostate/qskcontrolstate.h"
 #include "radiostate/rxtxmeterstate.h"
 #include "radiostate/spectrumdisplaystate.h"
 #include "radiostate/textdecodestate.h"
@@ -223,7 +224,7 @@ public:
     }
 
     // QSK (full break-in)
-    bool qskEnabled() const { return m_qskEnabled; }
+    bool qskEnabled() const { return m_qskControlState.qskEnabled; }
 
     // TEST mode (TX test)
     bool testMode() const { return m_rxTxMeterState.testMode; }
@@ -283,9 +284,9 @@ public:
     bool voxForCurrentMode() const;
 
     // QSK/VOX Delay (in 10ms increments)
-    int qskDelayCW() const { return m_qskDelayCW; }
-    int qskDelayVoice() const { return m_qskDelayVoice; }
-    int qskDelayData() const { return m_qskDelayData; }
+    int qskDelayCW() const { return m_qskControlState.qskDelayCW; }
+    int qskDelayVoice() const { return m_qskControlState.qskDelayVoice; }
+    int qskDelayData() const { return m_qskControlState.qskDelayData; }
     // Returns delay for current operating mode (in 10ms increments)
     int delayForCurrentMode() const;
 
@@ -673,14 +674,12 @@ private:
     // VOX flags / gain / anti-VOX live on m_audioEffectsState.
 
     // QSK (full break-in) - extracted from SD command x flag
-    bool m_qskEnabled = false;
+    // QSK (full break-in) state and per-mode delays — see radiostate/qskcontrolstate.h.
+    QskControlState m_qskControlState;
 
     // TEST / B SET live on m_rxTxMeterState.
 
     // QSK/VOX Delay per mode (in 10ms increments)
-    int m_qskDelayCW = -1;
-    int m_qskDelayVoice = -1;
-    int m_qskDelayData = -1;
 
     // Streaming Latency (SL command)
     // m_streamingLatency lives on m_dataControlState.

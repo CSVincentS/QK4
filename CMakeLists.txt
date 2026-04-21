@@ -120,6 +120,7 @@ set(SOURCES
     src/models/radiostate/levelsstate.cpp
     src/models/radiostate/modefilterstate.cpp
     src/models/radiostate/processingstate.cpp
+    src/models/radiostate/qskcontrolstate.cpp
     src/models/radiostate/rxtxmeterstate.cpp
     src/models/radiostate/spectrumdisplaystate.cpp
     src/models/radiostate/textdecodestate.cpp
@@ -234,6 +235,7 @@ set(HEADERS
     src/models/radiostate/levelsstate.h
     src/models/radiostate/modefilterstate.h
     src/models/radiostate/processingstate.h
+    src/models/radiostate/qskcontrolstate.h
     src/models/radiostate/textdecodestate.h
     src/models/menumodel.h
     src/models/macroids.h
