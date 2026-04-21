@@ -6,6 +6,8 @@
 #include <QDebug>
 #include <RtMidi.h>
 
+Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey")
+
 HalikeyDevice::HalikeyDevice(QObject *parent) : QObject(parent) {
     // Debounce timers — single-shot, fire once after DEBOUNCE_MS of stable state
     m_ditDebounceTimer = new QTimer(this);
@@ -116,7 +118,7 @@ bool HalikeyDevice::openPort(const QString &portName) {
         emit connected();
     });
     connect(m_worker, &HaliKeyWorkerBase::errorOccurred, this, [this](const QString &error) {
-        qWarning() << "HalikeyDevice: Worker error -" << error;
+        qCWarning(hwHalikey) << "HalikeyDevice: Worker error -" << error;
         closePort();
         emit connectionError(error);
     });
@@ -218,7 +220,7 @@ QStringList HalikeyDevice::availableMidiDevices() {
             }
         }
     } catch (RtMidiError &error) {
-        qWarning() << "HalikeyDevice: MIDI enumeration failed:" << QString::fromStdString(error.getMessage());
+        qCWarning(hwHalikey) << "HalikeyDevice: MIDI enumeration failed:" << QString::fromStdString(error.getMessage());
     }
     return devices;
 }

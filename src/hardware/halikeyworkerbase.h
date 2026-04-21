@@ -1,9 +1,13 @@
 #ifndef HALIKEYWORKERBASE_H
 #define HALIKEYWORKERBASE_H
 
+#include <QLoggingCategory>
 #include <QObject>
 #include <QString>
 #include <atomic>
+
+// Shared logging category for HaliKey device + workers. Definition in halikeydevice.cpp.
+Q_DECLARE_LOGGING_CATEGORY(hwHalikey)
 
 /**
  * @brief Base class for HaliKey paddle-input workers. Concrete workers (one per platform) live on

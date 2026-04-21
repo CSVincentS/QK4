@@ -1,4 +1,5 @@
 #include "halikeyv14worker.h"
+#include "halikeyworkerbase.h"
 #include <QDebug>
 
 #ifdef Q_OS_WIN
@@ -45,7 +46,7 @@ bool HaliKeyV14Worker::openNativePort() {
     if (m_handle == INVALID_HANDLE_VALUE) {
         m_handle = nullptr;
         QString error = "Failed to open port " + m_portName;
-        qWarning() << "HaliKeyV14Worker:" << error;
+        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
         emit errorOccurred(error);
         return false;
     }
@@ -55,7 +56,7 @@ bool HaliKeyV14Worker::openNativePort() {
     dcb.DCBlength = sizeof(DCB);
     if (!GetCommState(m_handle, &dcb)) {
         QString error = "Failed to get port state for " + m_portName;
-        qWarning() << "HaliKeyV14Worker:" << error;
+        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
         emit errorOccurred(error);
         return false;
@@ -68,7 +69,7 @@ bool HaliKeyV14Worker::openNativePort() {
     dcb.fRtsControl = RTS_CONTROL_ENABLE;
     if (!SetCommState(m_handle, &dcb)) {
         QString error = "Failed to configure port " + m_portName;
-        qWarning() << "HaliKeyV14Worker:" << error;
+        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
         emit errorOccurred(error);
         return false;
@@ -77,7 +78,7 @@ bool HaliKeyV14Worker::openNativePort() {
     // Set up event mask for CTS and DSR changes
     if (!SetCommMask(m_handle, EV_CTS | EV_DSR)) {
         QString error = "Failed to set comm mask for " + m_portName;
-        qWarning() << "HaliKeyV14Worker:" << error;
+        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
         emit errorOccurred(error);
         return false;
@@ -104,7 +105,7 @@ bool HaliKeyV14Worker::openNativePort() {
     m_fd = ::open(devPath.constData(), O_RDONLY | O_NOCTTY | O_NONBLOCK);
     if (m_fd < 0) {
         QString error = QString("Failed to open port %1: %2").arg(m_portName, QString::fromLocal8Bit(strerror(errno)));
-        qWarning() << "HaliKeyV14Worker:" << error;
+        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
         emit errorOccurred(error);
         return false;
     }
@@ -113,7 +114,7 @@ bool HaliKeyV14Worker::openNativePort() {
     struct termios tio = {};
     if (tcgetattr(m_fd, &tio) < 0) {
         QString error = QString("Failed to get port attributes for %1").arg(m_portName);
-        qWarning() << "HaliKeyV14Worker:" << error;
+        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
         emit errorOccurred(error);
         return false;
@@ -194,7 +195,7 @@ void HaliKeyV14Worker::monitorLoop() {
             if (errno == EINTR)
                 continue;
             QString error = QString("HaliKey monitor error: %1").arg(QString::fromLocal8Bit(strerror(errno)));
-            qWarning() << "HaliKeyV14Worker:" << error;
+            qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
             emit errorOccurred(error);
             return;
         }
@@ -208,7 +209,7 @@ void HaliKeyV14Worker::monitorLoop() {
             if (!m_running)
                 break;
             QString error = "Failed to read pin state";
-            qWarning() << "HaliKeyV14Worker:" << error;
+            qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
             emit errorOccurred(error);
             return;
         }
@@ -330,7 +331,7 @@ void HaliKeyV14Worker::monitorLoop() {
             if (!m_running)
                 break;
             QString error = QString("HaliKey monitor error: %1").arg(QString::fromLocal8Bit(strerror(errno)));
-            qWarning() << "HaliKeyV14Worker:" << error;
+            qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
             emit errorOccurred(error);
             return;
         }
