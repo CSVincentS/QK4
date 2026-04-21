@@ -58,10 +58,8 @@ void RadioState::reset() {
     // Message bank
     m_messageBank = -1;
 
-    // VOX
-    m_voxCW = false;
-    m_voxVoice = false;
-    m_voxData = false;
+    // Audio pipeline state (VOX/FX/AP/mix/balance/ML/LO/LI/MI/MS/RE/TE/VG/VI/ES).
+    m_audioEffectsState.reset();
 
     // QSK / TEST / B SET
     m_qskEnabled = false;
@@ -73,28 +71,10 @@ void RadioState::reset() {
     m_qskDelayVoice = -1;
     m_qskDelayData = -1;
 
-    // Audio effects
-    m_afxMode = 0;
-    m_apfEnabled = false;
-    m_apfBandwidth = 0;
-    m_apfEnabledB = false;
-    m_apfBandwidthB = 0;
-
     // VFO Link/Lock
     m_vfoLink = false;
     m_lockA = false;
     m_lockB = false;
-
-    // Audio mix/balance
-    m_audioMixLeft = -1;
-    m_audioMixRight = -1;
-    m_balanceMode = -1;
-    m_balanceOffset = -99;
-
-    // Monitor Level
-    m_monitorLevelCW = -1;
-    m_monitorLevelData = -1;
-    m_monitorLevelVoice = -1;
 
     // Panadapter
     m_refLevel = -110;
@@ -135,39 +115,10 @@ void RadioState::reset() {
 
     // Data-mode + rate + optimistic cooldowns reset via m_dataControlState.reset().
 
-    // EQ bands
-    std::fill(std::begin(m_rxEqBands), std::end(m_rxEqBands), 0);
-    std::fill(std::begin(m_txEqBands), std::end(m_txEqBands), 0);
+    // EQ bands / Line In/Out / Mic Input/Setup / VOX Gain / Anti-VOX / ESSB
+    // are reset via m_audioEffectsState.reset() above.
 
-    // Antenna config masks
-    // Antenna masks reset as part of m_antennaState.reset() above.
-
-    // Line Out
-    m_lineOutLeft = -1;
-    m_lineOutRight = -1;
-    m_lineOutRightEqualsLeft = false;
-
-    // Line In
-    m_lineInSoundCard = -1;
-    m_lineInJack = -1;
-    m_lineInSource = -1;
-
-    // Mic Input/Setup
-    m_micInput = -1;
-    m_micFrontPreamp = -1;
-    m_micFrontBias = -1;
-    m_micFrontButtons = -1;
-    m_micRearPreamp = -1;
-    m_micRearBias = -1;
-
-    // VOX Gain / Anti-VOX
-    m_voxGainVoice = -1;
-    m_voxGainData = -1;
-    m_antiVox = -1;
-
-    // ESSB
-    m_essbEnabled = false;
-    m_ssbTxBw = -1;
+    // Antenna config masks reset as part of m_antennaState.reset() above.
 
     // Streaming latency reset via m_dataControlState.reset().
 
@@ -364,35 +315,11 @@ void RadioState::setCompression(int level) {
 }
 
 void RadioState::setBalance(int mode, int offset) {
-    mode = qBound(0, mode, 1);
-    offset = qBound(-50, offset, 50);
-    if (m_balanceMode != mode || m_balanceOffset != offset) {
-        m_balanceMode = mode;
-        m_balanceOffset = offset;
-        emit balanceChanged(mode, offset);
-    }
+    AudioEffectsHandlers::setBalance(m_audioEffectsState, *this, mode, offset);
 }
 
 void RadioState::setMonitorLevel(int mode, int level) {
-    level = qBound(0, level, 100);
-    int *target = nullptr;
-    switch (mode) {
-    case 0:
-        target = &m_monitorLevelCW;
-        break;
-    case 1:
-        target = &m_monitorLevelData;
-        break;
-    case 2:
-        target = &m_monitorLevelVoice;
-        break;
-    default:
-        return;
-    }
-    if (*target != level) {
-        *target = level;
-        emit monitorLevelChanged(mode, level);
-    }
+    AudioEffectsHandlers::setMonitorLevel(m_audioEffectsState, *this, mode, level);
 }
 
 // Processing optimistic setters — delegate to ProcessingHandlers namespace.
@@ -474,51 +401,19 @@ void RadioState::setAveraging(int value) {
 }
 
 void RadioState::setRxEqBand(int index, int dB) {
-    if (index < 0 || index >= 8)
-        return;
-    dB = qBound(-16, dB, 16);
-    if (m_rxEqBands[index] != dB) {
-        m_rxEqBands[index] = dB;
-        emit rxEqChanged();
-    }
+    AudioEffectsHandlers::setRxEqBand(m_audioEffectsState, *this, index, dB);
 }
 
 void RadioState::setRxEqBands(const QVector<int> &bands) {
-    bool changed = false;
-    for (int i = 0; i < qMin(bands.size(), 8); i++) {
-        int dB = qBound(-16, bands[i], 16);
-        if (m_rxEqBands[i] != dB) {
-            m_rxEqBands[i] = dB;
-            changed = true;
-        }
-    }
-    if (changed) {
-        emit rxEqChanged();
-    }
+    AudioEffectsHandlers::setRxEqBands(m_audioEffectsState, *this, bands);
 }
 
 void RadioState::setTxEqBand(int index, int dB) {
-    if (index < 0 || index >= 8)
-        return;
-    dB = qBound(-16, dB, 16);
-    if (m_txEqBands[index] != dB) {
-        m_txEqBands[index] = dB;
-        emit txEqChanged();
-    }
+    AudioEffectsHandlers::setTxEqBand(m_audioEffectsState, *this, index, dB);
 }
 
 void RadioState::setTxEqBands(const QVector<int> &bands) {
-    bool changed = false;
-    for (int i = 0; i < qMin(bands.size(), 8); i++) {
-        int dB = qBound(-16, bands[i], 16);
-        if (m_txEqBands[i] != dB) {
-            m_txEqBands[i] = dB;
-            changed = true;
-        }
-    }
-    if (changed) {
-        emit txEqChanged();
-    }
+    AudioEffectsHandlers::setTxEqBands(m_audioEffectsState, *this, bands);
 }
 
 // Antenna config setters — delegate to AntennaHandlers namespace.
@@ -533,93 +428,53 @@ void RadioState::setTxAntConfig(bool displayAll, const QVector<bool> &mask) {
 }
 
 void RadioState::setLineOutLeft(int level) {
-    level = qBound(0, level, 40);
-    if (level != m_lineOutLeft) {
-        m_lineOutLeft = level;
-        emit lineOutChanged();
-    }
+    AudioEffectsHandlers::setLineOutLeft(m_audioEffectsState, *this, level);
 }
 
 void RadioState::setLineOutRight(int level) {
-    level = qBound(0, level, 40);
-    if (level != m_lineOutRight) {
-        m_lineOutRight = level;
-        emit lineOutChanged();
-    }
+    AudioEffectsHandlers::setLineOutRight(m_audioEffectsState, *this, level);
 }
 
 void RadioState::setLineOutRightEqualsLeft(bool enabled) {
-    if (enabled != m_lineOutRightEqualsLeft) {
-        m_lineOutRightEqualsLeft = enabled;
-        emit lineOutChanged();
-    }
+    AudioEffectsHandlers::setLineOutRightEqualsLeft(m_audioEffectsState, *this, enabled);
 }
 
 // Line In optimistic setters
 void RadioState::setLineInSoundCard(int level) {
-    level = qBound(0, level, 250);
-    if (level != m_lineInSoundCard) {
-        m_lineInSoundCard = level;
-        emit lineInChanged();
-    }
+    AudioEffectsHandlers::setLineInSoundCard(m_audioEffectsState, *this, level);
 }
 
 void RadioState::setLineInJack(int level) {
-    level = qBound(0, level, 250);
-    if (level != m_lineInJack) {
-        m_lineInJack = level;
-        emit lineInChanged();
-    }
+    AudioEffectsHandlers::setLineInJack(m_audioEffectsState, *this, level);
 }
 
 void RadioState::setLineInSource(int source) {
-    if ((source == 0 || source == 1) && source != m_lineInSource) {
-        m_lineInSource = source;
-        emit lineInChanged();
-    }
+    AudioEffectsHandlers::setLineInSource(m_audioEffectsState, *this, source);
 }
 
 // Mic Input/Setup optimistic setters
 void RadioState::setMicInput(int input) {
-    if (input >= 0 && input <= 4 && input != m_micInput) {
-        m_micInput = input;
-        emit micInputChanged(m_micInput);
-    }
+    AudioEffectsHandlers::setMicInput(m_audioEffectsState, *this, input);
 }
 
 void RadioState::setMicFrontPreamp(int preamp) {
-    if (preamp >= 0 && preamp <= 2 && preamp != m_micFrontPreamp) {
-        m_micFrontPreamp = preamp;
-        emit micSetupChanged();
-    }
+    AudioEffectsHandlers::setMicFrontPreamp(m_audioEffectsState, *this, preamp);
 }
 
 void RadioState::setMicFrontBias(int bias) {
-    if ((bias == 0 || bias == 1) && bias != m_micFrontBias) {
-        m_micFrontBias = bias;
-        emit micSetupChanged();
-    }
+    AudioEffectsHandlers::setMicFrontBias(m_audioEffectsState, *this, bias);
 }
 
 void RadioState::setMicFrontButtons(int buttons) {
-    if ((buttons == 0 || buttons == 1) && buttons != m_micFrontButtons) {
-        m_micFrontButtons = buttons;
-        emit micSetupChanged();
-    }
+    AudioEffectsHandlers::setMicFrontButtons(m_audioEffectsState, *this, buttons);
 }
 
 void RadioState::setMicRearPreamp(int preamp) {
-    if ((preamp == 0 || preamp == 1) && preamp != m_micRearPreamp) {
-        m_micRearPreamp = preamp;
-        emit micSetupChanged();
-    }
+    AudioEffectsHandlers::setMicRearPreamp(m_audioEffectsState, *this, preamp);
 }
 
 void RadioState::setMicRearBias(int bias) {
-    if ((bias == 0 || bias == 1) && bias != m_micRearBias) {
-        m_micRearBias = bias;
-        emit micSetupChanged();
-    }
+    AudioEffectsHandlers::setMicRearBias(m_audioEffectsState, *this, bias);
 }
 
 // Text Decode optimistic setters — delegate into the TextDecodeHandlers
@@ -644,44 +499,25 @@ void RadioState::setTextDecodeLinesB(int lines) {
     TextDecodeHandlers::setLinesB(m_textDecodeState, *this, lines);
 }
 
-// VOX Gain optimistic setters
+// VOX Gain / Anti-VOX / ESSB optimistic setters — delegate into AudioEffectsHandlers.
 void RadioState::setVoxGainVoice(int gain) {
-    gain = qBound(0, gain, 60);
-    if (gain != m_voxGainVoice) {
-        m_voxGainVoice = gain;
-        emit voxGainChanged(0, gain);
-    }
+    AudioEffectsHandlers::setVoxGainVoice(m_audioEffectsState, *this, gain);
 }
 
 void RadioState::setVoxGainData(int gain) {
-    gain = qBound(0, gain, 60);
-    if (gain != m_voxGainData) {
-        m_voxGainData = gain;
-        emit voxGainChanged(1, gain);
-    }
+    AudioEffectsHandlers::setVoxGainData(m_audioEffectsState, *this, gain);
 }
 
 void RadioState::setAntiVox(int level) {
-    level = qBound(0, level, 60);
-    if (level != m_antiVox) {
-        m_antiVox = level;
-        emit antiVoxChanged(level);
-    }
+    AudioEffectsHandlers::setAntiVox(m_audioEffectsState, *this, level);
 }
 
 void RadioState::setEssbEnabled(bool enabled) {
-    if (enabled != m_essbEnabled) {
-        m_essbEnabled = enabled;
-        emit essbChanged(m_essbEnabled, m_ssbTxBw);
-    }
+    AudioEffectsHandlers::setEssbEnabled(m_audioEffectsState, *this, enabled);
 }
 
 void RadioState::setSsbTxBw(int bw) {
-    bw = qBound(30, bw, 45);
-    if (bw != m_ssbTxBw) {
-        m_ssbTxBw = bw;
-        emit essbChanged(m_essbEnabled, m_ssbTxBw);
-    }
+    AudioEffectsHandlers::setSsbTxBw(m_audioEffectsState, *this, bw);
 }
 
 // =============================================================================
@@ -1037,96 +873,15 @@ void RadioState::handleCP(const QString &cmd) {
 }
 
 void RadioState::handleML(const QString &cmd) {
-    // Monitor Level - MLmnnn where m=mode (0=CW, 1=Data, 2=Voice), nnn=000-100
-    if (cmd.length() < 5)
-        return;
-    bool ok;
-    int mode = cmd.mid(2, 1).toInt(&ok);
-    if (!ok || mode < 0 || mode > 2)
-        return;
-
-    int level = cmd.mid(3).toInt(&ok);
-    if (!ok || level < 0 || level > 100)
-        return;
-
-    int *target = nullptr;
-    switch (mode) {
-    case 0:
-        target = &m_monitorLevelCW;
-        break;
-    case 1:
-        target = &m_monitorLevelData;
-        break;
-    case 2:
-        target = &m_monitorLevelVoice;
-        break;
-    }
-    if (target && *target != level) {
-        *target = level;
-        emit monitorLevelChanged(mode, level);
-    }
+    AudioEffectsHandlers::handleML(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleBL(const QString &cmd) {
-    // Balance - BLm±nn where m=mode (0=NOR, 1=BAL), ±nn=offset (-50 to +50)
-    // Examples: BL0+00, BL0+02, BL0-03, BL1+00, BL1-01
-    if (cmd.length() < 5)
-        return;
-    int mode = cmd[2].digitValue();
-    if (mode < 0 || mode > 1)
-        return;
-    QChar sign = cmd[3];
-    bool ok;
-    int nn = cmd.mid(4).toInt(&ok);
-    if (!ok)
-        return;
-    int offset = (sign == '-') ? -nn : nn;
-    offset = qBound(-50, offset, 50);
-    if (m_balanceMode != mode || m_balanceOffset != offset) {
-        m_balanceMode = mode;
-        m_balanceOffset = offset;
-        emit balanceChanged(mode, offset);
-    }
+    AudioEffectsHandlers::handleBL(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleMX(const QString &cmd) {
-    // Audio Mix routing - MXL.R where L and R are component strings
-    // Format: "MX" followed by "left.right" e.g. "MXA.B", "MXAB.AB", "MXA.-A"
-    // Components: A=main(0), B=sub(1), AB=main+sub(2), -A=neg main(3)
-    if (cmd.length() < 5)
-        return;
-
-    QString body = cmd.mid(2); // e.g. "A.B", "AB.AB", "A.-A"
-    int dotPos = body.indexOf('.');
-    if (dotPos < 1 || dotPos >= body.length() - 1)
-        return;
-
-    QString leftStr = body.left(dotPos);
-    QString rightStr = body.mid(dotPos + 1);
-
-    // Map component string to MixSource value
-    auto mapComponent = [](const QString &s) -> int {
-        if (s == "A")
-            return 0; // MixA
-        if (s == "B")
-            return 1; // MixB
-        if (s == "AB")
-            return 2; // MixAB
-        if (s == "-A")
-            return 3; // MixNegA
-        return -1;
-    };
-
-    int left = mapComponent(leftStr);
-    int right = mapComponent(rightStr);
-    if (left < 0 || right < 0)
-        return;
-
-    if (m_audioMixLeft != left || m_audioMixRight != right) {
-        m_audioMixLeft = left;
-        m_audioMixRight = right;
-        emit audioMixChanged(left, right);
-    }
+    AudioEffectsHandlers::handleMX(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handlePC(const QString &cmd) {
@@ -1332,57 +1087,15 @@ void RadioState::handleNMSub(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleFX(const QString &cmd) {
-    // FX - Audio Effects: FXn where n=0(off)/1(delay)/2(pitch-map)
-    if (cmd.length() < 3)
-        return;
-    bool ok;
-    int fx = cmd.mid(2).toInt(&ok);
-    if (ok && fx >= 0 && fx <= 2 && fx != m_afxMode) {
-        m_afxMode = fx;
-        emit afxModeChanged(m_afxMode);
-    }
+    AudioEffectsHandlers::handleFX(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleAP(const QString &cmd) {
-    // AP - Audio Peak Filter Main: APmb where m=enabled, b=bandwidth
-    if (cmd.length() < 4)
-        return;
-    bool ok;
-    int m = cmd.mid(2, 1).toInt(&ok);
-    if (!ok)
-        return;
-    int b = cmd.mid(3, 1).toInt(&ok);
-    if (!ok)
-        return;
-
-    bool enabled = (m == 1);
-    int bandwidth = qBound(0, b, 2);
-    if (enabled != m_apfEnabled || bandwidth != m_apfBandwidth) {
-        m_apfEnabled = enabled;
-        m_apfBandwidth = bandwidth;
-        emit apfChanged(m_apfEnabled, m_apfBandwidth);
-    }
+    AudioEffectsHandlers::handleAP(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleAPSub(const QString &cmd) {
-    // AP$ - Audio Peak Filter Sub
-    if (cmd.length() < 5)
-        return;
-    bool ok;
-    int m = cmd.mid(3, 1).toInt(&ok);
-    if (!ok)
-        return;
-    int b = cmd.mid(4, 1).toInt(&ok);
-    if (!ok)
-        return;
-
-    bool enabled = (m == 1);
-    int bandwidth = qBound(0, b, 2);
-    if (enabled != m_apfEnabledB || bandwidth != m_apfBandwidthB) {
-        m_apfEnabledB = enabled;
-        m_apfBandwidthB = bandwidth;
-        emit apfBChanged(m_apfEnabledB, m_apfBandwidthB);
-    }
+    AudioEffectsHandlers::handleAPSub(m_audioEffectsState, *this, cmd);
 }
 
 // =============================================================================
@@ -1409,55 +1122,15 @@ void RadioState::handleLN(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleVX(const QString &cmd) {
-    // VX - VOX Enable: VXmn where m=mode (C/V/D), n=0/1
-    if (cmd.length() < 4)
-        return;
-    QChar mode = cmd.at(2);
-    bool enabled = (cmd.at(3) == '1');
-    bool changed = false;
-    if (mode == 'C' && m_voxCW != enabled) {
-        m_voxCW = enabled;
-        changed = true;
-    } else if (mode == 'V' && m_voxVoice != enabled) {
-        m_voxVoice = enabled;
-        changed = true;
-    } else if (mode == 'D' && m_voxData != enabled) {
-        m_voxData = enabled;
-        changed = true;
-    }
-    if (changed) {
-        emit voxChanged(voxEnabled());
-    }
+    AudioEffectsHandlers::handleVX(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleVG(const QString &cmd) {
-    // VG - VOX Gain: VGmnnn where m=V(voice)/D(data), nnn=000-060
-    if (cmd.length() < 5)
-        return;
-    QChar modeChar = cmd.at(2);
-    bool ok;
-    int gain = cmd.mid(3, 3).toInt(&ok);
-    if (ok && gain >= 0 && gain <= 60) {
-        if (modeChar == 'V' && gain != m_voxGainVoice) {
-            m_voxGainVoice = gain;
-            emit voxGainChanged(0, gain);
-        } else if (modeChar == 'D' && gain != m_voxGainData) {
-            m_voxGainData = gain;
-            emit voxGainChanged(1, gain);
-        }
-    }
+    AudioEffectsHandlers::handleVG(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleVI(const QString &cmd) {
-    // VI - Anti-VOX: VInnn where nnn=000-060
-    if (cmd.length() < 5)
-        return;
-    bool ok;
-    int level = cmd.mid(2, 3).toInt(&ok);
-    if (ok && level >= 0 && level <= 60 && level != m_antiVox) {
-        m_antiVox = level;
-        emit antiVoxChanged(level);
-    }
+    AudioEffectsHandlers::handleVI(m_audioEffectsState, *this, cmd);
 }
 
 // =============================================================================
@@ -1465,139 +1138,23 @@ void RadioState::handleVI(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleLO(const QString &cmd) {
-    // LO - Line Out: LOlllrrrm where lll=left, rrr=right, m=mode
-    if (cmd.length() < 9)
-        return;
-    bool okL, okR;
-    int left = cmd.mid(2, 3).toInt(&okL);
-    int right = cmd.mid(5, 3).toInt(&okR);
-    int mode = cmd.mid(8, 1).toInt();
-
-    if (okL && okR && left >= 0 && left <= 40 && right >= 0 && right <= 40) {
-        bool changed = false;
-        if (left != m_lineOutLeft) {
-            m_lineOutLeft = left;
-            changed = true;
-        }
-        if (right != m_lineOutRight) {
-            m_lineOutRight = right;
-            changed = true;
-        }
-        if ((mode == 1) != m_lineOutRightEqualsLeft) {
-            m_lineOutRightEqualsLeft = (mode == 1);
-            changed = true;
-        }
-        if (changed)
-            emit lineOutChanged();
-    }
+    AudioEffectsHandlers::handleLO(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleLI(const QString &cmd) {
-    // LI - Line In: LIuuullls where uuu=soundcard, lll=linein, s=source
-    if (cmd.length() < 9)
-        return;
-    bool okS, okL;
-    int soundCard = cmd.mid(2, 3).toInt(&okS);
-    int lineIn = cmd.mid(5, 3).toInt(&okL);
-    int source = cmd.mid(8, 1).toInt();
-
-    if (okS && okL && soundCard >= 0 && soundCard <= 250 && lineIn >= 0 && lineIn <= 250 &&
-        (source == 0 || source == 1)) {
-        bool changed = false;
-        if (soundCard != m_lineInSoundCard) {
-            m_lineInSoundCard = soundCard;
-            changed = true;
-        }
-        if (lineIn != m_lineInJack) {
-            m_lineInJack = lineIn;
-            changed = true;
-        }
-        if (source != m_lineInSource) {
-            m_lineInSource = source;
-            changed = true;
-        }
-        if (changed)
-            emit lineInChanged();
-    }
+    AudioEffectsHandlers::handleLI(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleMI(const QString &cmd) {
-    // MI - Mic Input Select
-    if (cmd.length() < 3)
-        return;
-    int input = cmd.mid(2, 1).toInt();
-    if (input >= 0 && input <= 4 && input != m_micInput) {
-        m_micInput = input;
-        emit micInputChanged(m_micInput);
-    }
+    AudioEffectsHandlers::handleMI(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleMS(const QString &cmd) {
-    // MS - Mic Setup: MSabcde
-    if (cmd.length() < 7)
-        return;
-    int frontPreamp = cmd.mid(2, 1).toInt();
-    int frontBias = cmd.mid(3, 1).toInt();
-    int frontButtons = cmd.mid(4, 1).toInt();
-    int rearPreamp = cmd.mid(5, 1).toInt();
-    int rearBias = cmd.mid(6, 1).toInt();
-
-    bool changed = false;
-    if (frontPreamp >= 0 && frontPreamp <= 2 && frontPreamp != m_micFrontPreamp) {
-        m_micFrontPreamp = frontPreamp;
-        changed = true;
-    }
-    if ((frontBias == 0 || frontBias == 1) && frontBias != m_micFrontBias) {
-        m_micFrontBias = frontBias;
-        changed = true;
-    }
-    if ((frontButtons == 0 || frontButtons == 1) && frontButtons != m_micFrontButtons) {
-        m_micFrontButtons = frontButtons;
-        changed = true;
-    }
-    if ((rearPreamp == 0 || rearPreamp == 1) && rearPreamp != m_micRearPreamp) {
-        m_micRearPreamp = rearPreamp;
-        changed = true;
-    }
-    if ((rearBias == 0 || rearBias == 1) && rearBias != m_micRearBias) {
-        m_micRearBias = rearBias;
-        changed = true;
-    }
-    if (changed)
-        emit micSetupChanged();
+    AudioEffectsHandlers::handleMS(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleES(const QString &cmd) {
-    // ES - ESSB: ESnbb where n=0/1, bb=bandwidth
-    if (cmd.length() < 4)
-        return;
-    bool ok;
-    int modeVal = cmd.mid(2, 1).toInt(&ok);
-    if (!ok || (modeVal != 0 && modeVal != 1))
-        return;
-
-    bool newEssb = (modeVal == 1);
-    int newBw = m_ssbTxBw;
-
-    if (cmd.length() >= 5) {
-        newBw = cmd.mid(3, 2).toInt(&ok);
-        if (!ok || newBw < 24 || newBw > 45) {
-            newBw = m_ssbTxBw;
-        }
-    }
-
-    bool changed = false;
-    if (newEssb != m_essbEnabled) {
-        m_essbEnabled = newEssb;
-        changed = true;
-    }
-    if (newBw >= 24 && newBw <= 45 && newBw != m_ssbTxBw) {
-        m_ssbTxBw = newBw;
-        changed = true;
-    }
-    if (changed) {
-        emit essbChanged(m_essbEnabled, m_ssbTxBw);
-    }
+    AudioEffectsHandlers::handleES(m_audioEffectsState, *this, cmd);
 }
 
 // =============================================================================
@@ -1778,35 +1335,11 @@ void RadioState::handleDRSub(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleRE(const QString &cmd) {
-    if (cmd.length() < 26)
-        return;
-    bool changed = false;
-    for (int i = 0; i < 8; i++) {
-        bool ok;
-        int val = cmd.mid(2 + i * 3, 3).toInt(&ok);
-        if (ok && val >= -16 && val <= 16 && val != m_rxEqBands[i]) {
-            m_rxEqBands[i] = val;
-            changed = true;
-        }
-    }
-    if (changed)
-        emit rxEqChanged();
+    AudioEffectsHandlers::handleRE(m_audioEffectsState, *this, cmd);
 }
 
 void RadioState::handleTE(const QString &cmd) {
-    if (cmd.length() < 26)
-        return;
-    bool changed = false;
-    for (int i = 0; i < 8; i++) {
-        bool ok;
-        int val = cmd.mid(2 + i * 3, 3).toInt(&ok);
-        if (ok && val >= -16 && val <= 16 && val != m_txEqBands[i]) {
-            m_txEqBands[i] = val;
-            changed = true;
-        }
-    }
-    if (changed)
-        emit txEqChanged();
+    AudioEffectsHandlers::handleTE(m_audioEffectsState, *this, cmd);
 }
 
 // =============================================================================

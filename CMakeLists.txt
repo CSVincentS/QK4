@@ -114,6 +114,7 @@ set(SOURCES
     src/settings/radiosettings.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
+    src/models/radiostate/audioeffectsstate.cpp
     src/models/radiostate/datacontrolstate.cpp
     src/models/radiostate/frequencyvfostate.cpp
     src/models/radiostate/modefilterstate.cpp

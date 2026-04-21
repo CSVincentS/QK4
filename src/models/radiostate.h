@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "radiostate/antennastate.h"
+#include "radiostate/audioeffectsstate.h"
 #include "radiostate/datacontrolstate.h"
 #include "radiostate/frequencyvfostate.h"
 #include "radiostate/modefilterstate.h"
@@ -211,10 +212,12 @@ public:
     int messageBank() const { return m_messageBank; }
 
     // VOX
-    bool voxCW() const { return m_voxCW; }
-    bool voxVoice() const { return m_voxVoice; }
-    bool voxData() const { return m_voxData; }
-    bool voxEnabled() const { return m_voxCW || m_voxVoice || m_voxData; }
+    bool voxCW() const { return m_audioEffectsState.voxCW; }
+    bool voxVoice() const { return m_audioEffectsState.voxVoice; }
+    bool voxData() const { return m_audioEffectsState.voxData; }
+    bool voxEnabled() const {
+        return m_audioEffectsState.voxCW || m_audioEffectsState.voxVoice || m_audioEffectsState.voxData;
+    }
 
     // QSK (full break-in)
     bool qskEnabled() const { return m_qskEnabled; }
@@ -240,13 +243,13 @@ public:
     int streamingLatency() const { return m_dataControlState.streamingLatency; }
 
     // Audio Effects (FX command)
-    int afxMode() const { return m_afxMode; } // 0=off, 1=delay, 2=pitch-map
+    int afxMode() const { return m_audioEffectsState.afxMode; } // 0=off, 1=delay, 2=pitch-map
 
     // Audio Peak Filter (AP/AP$ commands, CW mode only)
-    bool apfEnabled() const { return m_apfEnabled; }      // Main RX
-    int apfBandwidth() const { return m_apfBandwidth; }   // Main RX: 0=30Hz, 1=50Hz, 2=150Hz
-    bool apfEnabledB() const { return m_apfEnabledB; }    // Sub RX
-    int apfBandwidthB() const { return m_apfBandwidthB; } // Sub RX: 0=30Hz, 1=50Hz, 2=150Hz
+    bool apfEnabled() const { return m_audioEffectsState.apfEnabled; }      // Main RX
+    int apfBandwidth() const { return m_audioEffectsState.apfBandwidth; }   // Main RX: 0=30Hz, 1=50Hz, 2=150Hz
+    bool apfEnabledB() const { return m_audioEffectsState.apfEnabledB; }    // Sub RX
+    int apfBandwidthB() const { return m_audioEffectsState.apfBandwidthB; } // Sub RX: 0=30Hz, 1=50Hz, 2=150Hz
 
     // VFO Lock (LK/LK$ commands)
     bool lockA() const { return m_lockA; }
@@ -257,19 +260,19 @@ public:
 
     // Monitor Level (ML command) - sidetone/speech monitor
     // mode: 0=CW, 1=AF data, 2=voice
-    int monitorLevelCW() const { return m_monitorLevelCW; }
-    int monitorLevelData() const { return m_monitorLevelData; }
-    int monitorLevelVoice() const { return m_monitorLevelVoice; }
+    int monitorLevelCW() const { return m_audioEffectsState.monitorLevelCW; }
+    int monitorLevelData() const { return m_audioEffectsState.monitorLevelData; }
+    int monitorLevelVoice() const { return m_audioEffectsState.monitorLevelVoice; }
     int monitorLevelForCurrentMode() const {
         switch (mode()) {
         case CW:
         case CW_R:
-            return m_monitorLevelCW;
+            return m_audioEffectsState.monitorLevelCW;
         case DATA:
         case DATA_R:
-            return m_monitorLevelData;
+            return m_audioEffectsState.monitorLevelData;
         default: // LSB, USB, AM, FM = Voice modes
-            return m_monitorLevelVoice;
+            return m_audioEffectsState.monitorLevelVoice;
         }
     }
     // Returns the ML mode code (0/1/2) for the current operating mode
@@ -287,12 +290,12 @@ public:
     }
 
     // Audio mix routing (MX command) - how main/sub maps to L/R when SUB is on
-    int audioMixLeft() const { return m_audioMixLeft; }   // MixSource value for left output
-    int audioMixRight() const { return m_audioMixRight; } // MixSource value for right output
+    int audioMixLeft() const { return m_audioEffectsState.audioMixLeft; }   // MixSource left
+    int audioMixRight() const { return m_audioEffectsState.audioMixRight; } // MixSource right
 
     // Audio balance (BL command) - MAIN/SUB balance
-    int balanceMode() const { return m_balanceMode; }     // 0=NOR, 1=BAL
-    int balanceOffset() const { return m_balanceOffset; } // -50 to +50
+    int balanceMode() const { return m_audioEffectsState.balanceMode; }     // 0=NOR, 1=BAL
+    int balanceOffset() const { return m_audioEffectsState.balanceOffset; } // -50 to +50
 
     // Optimistic setter for balance (radio doesn't echo BL SET commands)
     void setBalance(int mode, int offset);
@@ -305,12 +308,12 @@ public:
         switch (mode()) {
         case CW:
         case CW_R:
-            return m_voxCW;
+            return m_audioEffectsState.voxCW;
         case DATA:
         case DATA_R:
-            return m_voxData;
+            return m_audioEffectsState.voxData;
         default: // LSB, USB, AM, FM = Voice modes
-            return m_voxVoice;
+            return m_audioEffectsState.voxVoice;
         }
     }
 
@@ -463,8 +466,10 @@ public:
     // RX Graphic Equalizer (RE command) - 8 bands, -16 to +16 dB
     // Bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz
     // Note: Main RX and Sub RX share the same EQ settings
-    int rxEqBand(int index) const { return (index >= 0 && index < 8) ? m_rxEqBands[index] : 0; }
-    QVector<int> rxEqBands() const { return QVector<int>(m_rxEqBands, m_rxEqBands + 8); }
+    int rxEqBand(int index) const { return (index >= 0 && index < 8) ? m_audioEffectsState.rxEqBands[index] : 0; }
+    QVector<int> rxEqBands() const {
+        return QVector<int>(m_audioEffectsState.rxEqBands, m_audioEffectsState.rxEqBands + 8);
+    }
 
     // Optimistic setter for RX EQ bands (radio doesn't echo)
     void setRxEqBand(int index, int dB);
@@ -472,8 +477,10 @@ public:
 
     // TX Graphic Equalizer (TE command) - 8 bands, -16 to +16 dB
     // Bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz
-    int txEqBand(int index) const { return (index >= 0 && index < 8) ? m_txEqBands[index] : 0; }
-    QVector<int> txEqBands() const { return QVector<int>(m_txEqBands, m_txEqBands + 8); }
+    int txEqBand(int index) const { return (index >= 0 && index < 8) ? m_audioEffectsState.txEqBands[index] : 0; }
+    QVector<int> txEqBands() const {
+        return QVector<int>(m_audioEffectsState.txEqBands, m_audioEffectsState.txEqBands + 8);
+    }
 
     // Optimistic setter for TX EQ bands (radio doesn't echo)
     void setTxEqBand(int index, int dB);
@@ -506,9 +513,9 @@ public:
     void setTxAntConfig(bool displayAll, const QVector<bool> &mask);
 
     // Line Out levels (LO command)
-    int lineOutLeft() const { return m_lineOutLeft; }
-    int lineOutRight() const { return m_lineOutRight; }
-    bool lineOutRightEqualsLeft() const { return m_lineOutRightEqualsLeft; }
+    int lineOutLeft() const { return m_audioEffectsState.lineOutLeft; }
+    int lineOutRight() const { return m_audioEffectsState.lineOutRight; }
+    bool lineOutRightEqualsLeft() const { return m_audioEffectsState.lineOutRightEqualsLeft; }
 
     // Optimistic setters for Line Out
     void setLineOutLeft(int level);
@@ -516,9 +523,9 @@ public:
     void setLineOutRightEqualsLeft(bool enabled);
 
     // Line In levels and source (LI command)
-    int lineInSoundCard() const { return m_lineInSoundCard; }
-    int lineInJack() const { return m_lineInJack; }
-    int lineInSource() const { return m_lineInSource; } // 0=SoundCard, 1=LineInJack
+    int lineInSoundCard() const { return m_audioEffectsState.lineInSoundCard; }
+    int lineInJack() const { return m_audioEffectsState.lineInJack; }
+    int lineInSource() const { return m_audioEffectsState.lineInSource; } // 0=SoundCard, 1=LineInJack
 
     // Optimistic setters for Line In
     void setLineInSoundCard(int level);
@@ -526,26 +533,29 @@ public:
     void setLineInSource(int source);
 
     // Mic Input (MI command) - 0=front, 1=rear, 2=line in, 3=front+line in, 4=rear+line in
-    int micInput() const { return m_micInput; }
+    int micInput() const { return m_audioEffectsState.micInput; }
 
     // Mic Setup (MS command) - preamp, bias, buttons configuration
-    int micFrontPreamp() const { return m_micFrontPreamp; }   // 0=0dB, 1=10dB, 2=20dB
-    int micFrontBias() const { return m_micFrontBias; }       // 0=OFF, 1=ON
-    int micFrontButtons() const { return m_micFrontButtons; } // 0=disabled, 1=UP/DN enabled
-    int micRearPreamp() const { return m_micRearPreamp; }     // 0=0dB, 1=14dB
-    int micRearBias() const { return m_micRearBias; }         // 0=OFF, 1=ON
+    int micFrontPreamp() const { return m_audioEffectsState.micFrontPreamp; }   // 0=0dB, 1=10dB, 2=20dB
+    int micFrontBias() const { return m_audioEffectsState.micFrontBias; }       // 0=OFF, 1=ON
+    int micFrontButtons() const { return m_audioEffectsState.micFrontButtons; } // 0=disabled, 1=UP/DN enabled
+    int micRearPreamp() const { return m_audioEffectsState.micRearPreamp; }     // 0=0dB, 1=14dB
+    int micRearBias() const { return m_audioEffectsState.micRearBias; }         // 0=OFF, 1=ON
 
     // VOX Gain (VG command) - per mode (0=voice, 1=data)
-    int voxGainVoice() const { return m_voxGainVoice; } // 0-60
-    int voxGainData() const { return m_voxGainData; }   // 0-60
-    int voxGainForCurrentMode() const { return (mode() == DATA || mode() == DATA_R) ? m_voxGainData : m_voxGainVoice; }
+    int voxGainVoice() const { return m_audioEffectsState.voxGainVoice; } // 0-60
+    int voxGainData() const { return m_audioEffectsState.voxGainData; }   // 0-60
+    int voxGainForCurrentMode() const {
+        return (mode() == DATA || mode() == DATA_R) ? m_audioEffectsState.voxGainData
+                                                    : m_audioEffectsState.voxGainVoice;
+    }
 
     // Anti-VOX (VI command) - voice modes only
-    int antiVox() const { return m_antiVox; } // 0-60
+    int antiVox() const { return m_audioEffectsState.antiVox; } // 0-60
 
     // ESSB and SSB TX Bandwidth (ES command)
-    bool essbEnabled() const { return m_essbEnabled; } // 0=SSB, 1=ESSB
-    int ssbTxBw() const { return m_ssbTxBw; }          // 30-45 (3.0-4.5 kHz in 100Hz units)
+    bool essbEnabled() const { return m_audioEffectsState.essbEnabled; } // 0=SSB, 1=ESSB
+    int ssbTxBw() const { return m_audioEffectsState.ssbTxBw; }          // 30-45 (3.0-4.5 kHz in 100Hz units)
 
     // Optimistic setters for VOX Gain/Anti-VOX/ESSB
     void setVoxGainVoice(int gain);
@@ -778,15 +788,16 @@ private:
     // Antenna state — see models/radiostate/antennastate.h.
     AntennaState m_antennaState;
 
+    // Audio pipeline state (FX/AP/VX/VG/VI/ES/RE/TE/LO/LI/MI/MS/ML/MX/BL) —
+    // see models/radiostate/audioeffectsstate.h.
+    AudioEffectsState m_audioEffectsState;
+
     // RIT/XIT state lives on m_frequencyVfoState.
 
     // Message bank
     int m_messageBank = -1;
 
-    // VOX
-    bool m_voxCW = false;
-    bool m_voxVoice = false;
-    bool m_voxData = false;
+    // VOX flags / gain / anti-VOX live on m_audioEffectsState.
 
     // QSK (full break-in) - extracted from SD command x flag
     bool m_qskEnabled = false;
@@ -805,14 +816,8 @@ private:
     // Streaming Latency (SL command)
     // m_streamingLatency lives on m_dataControlState.
 
-    // Audio effects (FX command)
-    int m_afxMode = 0; // 0=off, 1=delay, 2=pitch-map
-
-    // Audio Peak Filter (AP/AP$ commands, CW mode only)
-    bool m_apfEnabled = false;  // Main RX
-    int m_apfBandwidth = 0;     // Main RX: 0=30Hz, 1=50Hz, 2=150Hz
-    bool m_apfEnabledB = false; // Sub RX
-    int m_apfBandwidthB = 0;    // Sub RX: 0=30Hz, 1=50Hz, 2=150Hz
+    // Audio effects / APF / mix routing / balance / monitor level all live on
+    // m_audioEffectsState.
 
     // VFO Link (LN command)
     bool m_vfoLink = false;
@@ -820,20 +825,6 @@ private:
     // VFO Lock (LK/LK$ commands)
     bool m_lockA = false;
     bool m_lockB = false;
-
-    // Audio mix routing (MX command) - default A.B (main left, sub right)
-    // Values are MixSource enum: 0=A(main), 1=B(sub), 2=AB(main+sub), 3=-A(neg main)
-    int m_audioMixLeft = -1;
-    int m_audioMixRight = -1;
-
-    // Audio balance (BL command) - MAIN/SUB balance
-    int m_balanceMode = -1;
-    int m_balanceOffset = -99; // sentinel outside valid range (-50 to +50)
-
-    // Monitor Level (ML command) - sidetone/speech monitor (0-100)
-    int m_monitorLevelCW = -1;    // CW sidetone level
-    int m_monitorLevelData = -1;  // Data monitor level
-    int m_monitorLevelVoice = -1; // Voice monitor level
 
     // Panadapter REF level (Main)
     int m_refLevel = -110; // Default -110 dBm
@@ -884,46 +875,10 @@ private:
 
     // Data sub-mode + rate + optimistic cooldown timestamps live on m_dataControlState.
 
-    // RX Graphic Equalizer (8 bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz)
-    // Range: -16 to +16 dB, init to 0 (flat)
-    int m_rxEqBands[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-
-    // TX Graphic Equalizer (8 bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz)
-    // Range: -16 to +16 dB, init to 0 (flat)
-    int m_txEqBands[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    // RX/TX graphic EQ, Line In/Out levels, Mic Input/Setup, VOX gain/anti-VOX,
+    // and ESSB state all live on m_audioEffectsState (declared above).
 
     // Antenna config masks live on m_antennaState (declared above).
-
-    // Line Out levels (LO command)
-    int m_lineOutLeft = -1;  // 0-40, init to -1 to ensure first emit
-    int m_lineOutRight = -1; // 0-40
-    bool m_lineOutRightEqualsLeft = false;
-
-    // Line In levels and source (LI command)
-    int m_lineInSoundCard = -1; // 0-250, init to -1 to ensure first emit
-    int m_lineInJack = -1;      // 0-250
-    int m_lineInSource = -1;    // 0=SoundCard, 1=LineInJack
-
-    // Mic Input (MI command)
-    int m_micInput = -1; // 0=front, 1=rear, 2=line in, 3=front+line, 4=rear+line
-
-    // Mic Setup (MS command)
-    int m_micFrontPreamp = -1;  // 0=0dB, 1=10dB, 2=20dB
-    int m_micFrontBias = -1;    // 0=OFF, 1=ON
-    int m_micFrontButtons = -1; // 0=disabled, 1=UP/DN enabled
-    int m_micRearPreamp = -1;   // 0=0dB, 1=14dB
-    int m_micRearBias = -1;     // 0=OFF, 1=ON
-
-    // VOX Gain (VG command)
-    int m_voxGainVoice = -1; // 0-60
-    int m_voxGainData = -1;  // 0-60
-
-    // Anti-VOX (VI command)
-    int m_antiVox = -1; // 0-60
-
-    // ESSB (ES command)
-    bool m_essbEnabled = false; // 0=SSB, 1=ESSB
-    int m_ssbTxBw = -1;         // 30-45 (3.0-4.5 kHz in 100Hz units)
 
     // Text Decode state (TD / TD$ / TD$$ + TB / TB$) — Phase 1 subsystem.
     // See models/radiostate/textdecodestate.h for the field layout and the
