@@ -63,7 +63,7 @@ public:
     int frameSamples() const { return m_frameSamples.load(std::memory_order_relaxed); }
 
     // Microphone settings
-    void setMicGain(float gain); // 0.0 to 1.0
+    Q_INVOKABLE void setMicGain(float gain); // 0.0 to 1.0
     float micGain() const { return m_micGain.load(std::memory_order_relaxed); }
 
     Q_INVOKABLE void setMicDevice(const QString &deviceId);

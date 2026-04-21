@@ -4,17 +4,17 @@
 #include <QWidget>
 #include <QComboBox>
 
-class AudioEngine;
+class AudioController;
 
 /**
  * @brief OptionsDialog "Audio Output" tab. Selects the system speaker device; writes selection
- *        back to AudioEngine via the AudioController.
+ *        back to AudioEngine via AudioController's task-level API.
  */
 class AudioOutputPage : public QWidget {
     Q_OBJECT
 
 public:
-    explicit AudioOutputPage(AudioEngine *audioEngine, QWidget *parent = nullptr);
+    explicit AudioOutputPage(AudioController *audioController, QWidget *parent = nullptr);
 
     void refresh();
 
@@ -24,7 +24,7 @@ private slots:
 private:
     void populateSpeakerDevices();
 
-    AudioEngine *m_audioEngine;
+    AudioController *m_audioController;
     QComboBox *m_speakerDeviceCombo = nullptr;
 };
 

@@ -171,6 +171,21 @@ void AudioController::setSubMuted(bool muted) {
         m_audioEngine->setSubMuted(muted);
 }
 
+void AudioController::setMicDevice(const QString &deviceId) {
+    if (m_audioEngine)
+        QMetaObject::invokeMethod(m_audioEngine, "setMicDevice", Qt::QueuedConnection, Q_ARG(QString, deviceId));
+}
+
+void AudioController::setOutputDevice(const QString &deviceId) {
+    if (m_audioEngine)
+        QMetaObject::invokeMethod(m_audioEngine, "setOutputDevice", Qt::QueuedConnection, Q_ARG(QString, deviceId));
+}
+
+void AudioController::setMicGain(float gain) {
+    if (m_audioEngine)
+        QMetaObject::invokeMethod(m_audioEngine, "setMicGain", Qt::QueuedConnection, Q_ARG(float, gain));
+}
+
 void AudioController::onMicrophoneFrame(const QByteArray &s16leData) {
     // Only transmit when PTT is active and connected
     if (!m_pttActive || !m_connectionController->isConnected()) {

@@ -112,11 +112,11 @@ void OptionsDialog::ensurePageCreated(int index) {
     QWidget *page = nullptr;
     switch (index) {
     case PageAudioInput:
-        m_audioInputPage = new AudioInputPage(m_audioController->audioEngine(), this);
+        m_audioInputPage = new AudioInputPage(m_audioController, this);
         page = m_audioInputPage;
         break;
     case PageAudioOutput:
-        m_audioOutputPage = new AudioOutputPage(m_audioController->audioEngine(), this);
+        m_audioOutputPage = new AudioOutputPage(m_audioController, this);
         page = m_audioOutputPage;
         break;
     case PageRigControl:

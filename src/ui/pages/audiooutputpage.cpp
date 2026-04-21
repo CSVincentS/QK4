@@ -1,14 +1,14 @@
 #include "ui/pages/audiooutputpage.h"
 #include "ui/styling/k4styles.h"
 #include "audio/audioengine.h"
+#include "controllers/audiocontroller.h"
 #include "settings/radiosettings.h"
-#include <QVBoxLayout>
 #include <QFrame>
 #include <QLabel>
-#include <QMetaObject>
+#include <QVBoxLayout>
 
-AudioOutputPage::AudioOutputPage(AudioEngine *audioEngine, QWidget *parent)
-    : QWidget(parent), m_audioEngine(audioEngine) {
+AudioOutputPage::AudioOutputPage(AudioController *audioController, QWidget *parent)
+    : QWidget(parent), m_audioController(audioController) {
     setStyleSheet(K4Styles::Dialog::pageBackground());
 
     auto *layout = new QVBoxLayout(this);
@@ -87,7 +87,7 @@ void AudioOutputPage::onSpeakerDeviceChanged(int index) {
     QString deviceId = m_speakerDeviceCombo->currentData().toString();
     RadioSettings::instance()->setSpeakerDevice(deviceId);
 
-    if (m_audioEngine) {
-        QMetaObject::invokeMethod(m_audioEngine, "setOutputDevice", Qt::QueuedConnection, Q_ARG(QString, deviceId));
+    if (m_audioController) {
+        m_audioController->setOutputDevice(deviceId);
     }
 }

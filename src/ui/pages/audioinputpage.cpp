@@ -1,14 +1,14 @@
 #include "ui/pages/audioinputpage.h"
 #include "ui/styling/k4styles.h"
 #include "audio/audioengine.h"
+#include "controllers/audiocontroller.h"
 #include "settings/radiosettings.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QFrame>
-#include <QMetaObject>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
 
-AudioInputPage::AudioInputPage(AudioEngine *audioEngine, QWidget *parent)
-    : QWidget(parent), m_audioEngine(audioEngine) {
+AudioInputPage::AudioInputPage(AudioController *audioController, QWidget *parent)
+    : QWidget(parent), m_audioController(audioController) {
     setStyleSheet(K4Styles::Dialog::pageBackground());
 
     auto *layout = new QVBoxLayout(this);
@@ -109,8 +109,8 @@ void AudioInputPage::onMicDeviceChanged(int index) {
     QString deviceId = m_micDeviceCombo->currentData().toString();
     RadioSettings::instance()->setMicDevice(deviceId);
 
-    if (m_audioEngine) {
-        QMetaObject::invokeMethod(m_audioEngine, "setMicDevice", Qt::QueuedConnection, Q_ARG(QString, deviceId));
+    if (m_audioController) {
+        m_audioController->setMicDevice(deviceId);
     }
 }
 
@@ -121,7 +121,7 @@ void AudioInputPage::onMicGainChanged(int value) {
 
     RadioSettings::instance()->setMicGain(value);
 
-    if (m_audioEngine) {
-        m_audioEngine->setMicGain(value / 100.0f);
+    if (m_audioController) {
+        m_audioController->setMicGain(value / 100.0f);
     }
 }

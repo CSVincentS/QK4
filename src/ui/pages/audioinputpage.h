@@ -6,17 +6,17 @@
 #include <QSlider>
 #include <QLabel>
 
-class AudioEngine;
+class AudioController;
 
 /**
  * @brief OptionsDialog "Audio Input" tab. Selects the system microphone device and tunes mic
- *        gain. Writes selections back to AudioEngine via the AudioController.
+ *        gain. Writes selections back to AudioEngine via AudioController's task-level API.
  */
 class AudioInputPage : public QWidget {
     Q_OBJECT
 
 public:
-    explicit AudioInputPage(AudioEngine *audioEngine, QWidget *parent = nullptr);
+    explicit AudioInputPage(AudioController *audioController, QWidget *parent = nullptr);
     ~AudioInputPage() = default;
 
     void refresh();
@@ -28,7 +28,7 @@ private slots:
 private:
     void populateMicDevices();
 
-    AudioEngine *m_audioEngine;
+    AudioController *m_audioController;
     QComboBox *m_micDeviceCombo = nullptr;
     QSlider *m_micGainSlider = nullptr;
     QLabel *m_micGainValueLabel = nullptr;

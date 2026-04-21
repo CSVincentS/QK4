@@ -48,8 +48,12 @@ public:
     void setAudioMix(int left, int right);
     void setSubMuted(bool muted);
 
-    // Accessor for OptionsDialog integration
-    AudioEngine *audioEngine() const { return m_audioEngine; }
+    // Device selection + mic gain — used by Options dialog tabs. Each dispatches via
+    // QMetaObject::invokeMethod to the audio thread internally. Task-level API only —
+    // per CONVENTIONS.md Rule 2, callers do not get direct access to AudioEngine.
+    void setMicDevice(const QString &deviceId);
+    void setOutputDevice(const QString &deviceId);
+    void setMicGain(float gain); // 0.0 to 1.0
 
 signals:
     void pttStateChanged(bool active);
