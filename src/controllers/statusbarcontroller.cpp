@@ -2,8 +2,8 @@
 
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
-#include "ui/k4styles.h"
-#include "ui/nethealthwidget.h"
+#include "ui/styling/k4styles.h"
+#include "ui/widgets/nethealthwidget.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>

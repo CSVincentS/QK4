@@ -2,7 +2,7 @@
 #include "halikeymidiworker.h"
 #include "halikeyv14worker.h"
 #include "halikeyworkerbase.h"
-#include "../settings/radiosettings.h"
+#include "settings/radiosettings.h"
 #include <QDebug>
 #include <RtMidi.h>
 

@@ -1,7 +1,7 @@
 #include "sidecontroldisplaycontroller.h"
 
 #include "models/radiostate.h"
-#include "ui/sidecontrolpanel.h"
+#include "ui/widgets/sidecontrolpanel.h"
 
 #include <QtMath>
 

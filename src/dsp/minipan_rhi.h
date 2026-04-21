@@ -8,7 +8,7 @@
 #include <QTimer>
 #include <QVector>
 #include <memory>
-#include "ui/k4styles.h"
+#include "ui/styling/k4styles.h"
 
 // Compact Mini-Pan widget for VFO area using Qt RHI
 // GPU-accelerated via Metal (macOS), DirectX (Windows), Vulkan (Linux)

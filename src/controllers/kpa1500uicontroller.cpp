@@ -3,8 +3,8 @@
 #include "controllers/statusbarcontroller.h"
 #include "network/kpa1500client.h"
 #include "settings/radiosettings.h"
-#include "ui/k4styles.h"
-#include "ui/kpa1500minipanel.h"
+#include "ui/styling/k4styles.h"
+#include "ui/widgets/kpa1500minipanel.h"
 
 #include <QLoggingCategory>
 #include <QString>

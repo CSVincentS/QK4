@@ -2,7 +2,7 @@
 
 #include "connectioncontroller.h"
 #include "models/radiostate.h"
-#include "ui/antennacfgpopup.h"
+#include "ui/popups/antennacfgpopup.h"
 
 #include <QString>
 #include <QVector>

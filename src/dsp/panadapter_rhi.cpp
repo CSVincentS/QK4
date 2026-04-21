@@ -1,7 +1,7 @@
 #include "panadapter_rhi.h"
 #include "panadapter_constants.h"
 #include "rhi_utils.h"
-#include "ui/k4styles.h"
+#include "ui/styling/k4styles.h"
 #include <QMouseEvent>
 #include <QPainter>
 #include <QResizeEvent>

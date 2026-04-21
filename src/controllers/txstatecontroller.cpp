@@ -3,9 +3,9 @@
 #include "controllers/statusbarcontroller.h"
 #include "controllers/vfofrequencycontroller.h"
 #include "models/radiostate.h"
-#include "ui/k4styles.h"
-#include "ui/sidecontrolpanel.h"
-#include "ui/vfowidget.h"
+#include "ui/styling/k4styles.h"
+#include "ui/widgets/sidecontrolpanel.h"
+#include "ui/widgets/vfowidget.h"
 
 #include <QLabel>
 #include <QString>

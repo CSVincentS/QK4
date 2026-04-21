@@ -1,7 +1,7 @@
 #include "vfofrequencycontroller.h"
 
 #include "models/radiostate.h"
-#include "ui/vfowidget.h"
+#include "ui/widgets/vfowidget.h"
 
 #include <QString>
 

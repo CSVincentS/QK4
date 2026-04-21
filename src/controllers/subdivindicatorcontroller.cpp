@@ -2,9 +2,9 @@
 
 #include "controllers/spectrumcontroller.h"
 #include "models/radiostate.h"
-#include "ui/frequencydisplaywidget.h"
-#include "ui/k4styles.h"
-#include "ui/vfowidget.h"
+#include "ui/widgets/frequencydisplaywidget.h"
+#include "ui/styling/k4styles.h"
+#include "ui/widgets/vfowidget.h"
 
 #include <QColor>
 #include <QLabel>

@@ -11,7 +11,7 @@
 #include "controllers/connectioncontroller.h"
 #include "settings/radiosettings.h"
 #include "models/radiostate.h"
-#include "ui/vfowidget.h"
+#include "ui/widgets/vfowidget.h"
 
 class AudioController;
 class SpectrumController;

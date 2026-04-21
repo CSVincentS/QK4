@@ -2,13 +2,13 @@
 #include "connectioncontroller.h"
 #include "dsp/panadapter_rhi.h"
 #include "models/radiostate.h"
-#include "ui/k4styles.h"
-#include "ui/vfowidget.h"
+#include "ui/styling/k4styles.h"
+#include "ui/widgets/vfowidget.h"
 #include "dxclustercontroller.h"
 #include "utils/radioutils.h"
 
-#include "ui/dxspotoverlay.h"
-#include "ui/mousevfoindicator.h"
+#include "ui/overlays/dxspotoverlay.h"
+#include "ui/overlays/mousevfoindicator.h"
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>

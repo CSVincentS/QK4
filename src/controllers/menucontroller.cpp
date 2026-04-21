@@ -4,7 +4,7 @@
 #include "dsp/panadapter_rhi.h"
 #include "models/menumodel.h"
 #include "spectrumcontroller.h"
-#include "ui/menuoverlay.h"
+#include "ui/overlays/menuoverlay.h"
 
 #include <QLoggingCategory>
 #include <QPoint>

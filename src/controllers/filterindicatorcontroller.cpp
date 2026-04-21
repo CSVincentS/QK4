@@ -1,7 +1,7 @@
 #include "filterindicatorcontroller.h"
 
 #include "models/radiostate.h"
-#include "ui/filterindicatorwidget.h"
+#include "ui/widgets/filterindicatorwidget.h"
 
 FilterIndicatorController::FilterIndicatorController(RadioState *radioState, FilterIndicatorWidget *filterA,
                                                      FilterIndicatorWidget *filterB, QObject *parent)

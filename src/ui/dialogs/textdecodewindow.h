@@ -1,0 +1,106 @@
+#ifndef TEXTDECODEWINDOW_H
+#define TEXTDECODEWINDOW_H
+
+#include <QWidget>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QLabel>
+#include "ui/widgets/wheelaccumulator.h"
+
+/**
+ * @brief Standalone floating window for the K4's on-radio decoder output (CW / AFSK / FSK / PSK /
+ *        DATA / SSB). One instance per receiver (Main/Sub). Owns its title-bar controls
+ *        (on/off, WPM range, threshold, data rate) and emits state-change signals for MainWindow
+ *        to forward as CAT. Resizable + draggable.
+ */
+class TextDecodeWindow : public QWidget {
+    Q_OBJECT
+
+public:
+    enum Receiver { MainRx, SubRx };
+    enum OperatingMode { ModeCW, ModeAFSK, ModeFSK, ModePSK, ModeData, ModeSSB, ModeOther };
+
+    explicit TextDecodeWindow(Receiver rx, QWidget *parent = nullptr);
+
+    void appendText(const QString &text);
+    void clearText();
+    void setMaxLines(int lines);
+    int maxLines() const { return m_maxLines; }
+    Receiver receiver() const { return m_receiver; }
+
+    // Decode state getters
+    bool isDecodeEnabled() const { return m_decodeEnabled; }
+    int wpmRange() const { return m_wpmRange; }
+    bool autoThreshold() const { return m_autoThreshold; }
+    int threshold() const { return m_threshold; }
+    int dataRate() const { return m_dataRate; }
+    OperatingMode operatingMode() const { return m_operatingMode; }
+
+    // Decode state setters (for syncing from radio)
+    void setDecodeEnabled(bool enabled);
+    void setWpmRange(int range);
+    void setAutoThreshold(bool isAuto);
+    void setThreshold(int value);
+    void setDataRate(int rate);
+    void setOperatingMode(OperatingMode mode);
+
+signals:
+    void closeRequested();
+    void enabledChanged(bool on);
+    void wpmRangeChanged(int range);
+    void thresholdModeChanged(bool isAuto);
+    void thresholdChanged(int value);
+    void dataRateChanged(int rate);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+
+private:
+    void setupUi();
+    void trimToMaxLines();
+    QRect titleBarRect() const;
+    QRect resizeGripRect() const;
+    void updateButtonStates();
+    void updateSpeedButton();
+    void updateThresholdControls();
+    void updateModeVisibility();
+    QString controlButtonStyle(bool selected = false) const;
+
+    Receiver m_receiver;
+    OperatingMode m_operatingMode = ModeCW;
+    int m_maxLines = 1;
+
+    // Decode state
+    bool m_decodeEnabled = false;
+    int m_wpmRange = 0; // 0=8-45, 1=8-60, 2=8-90
+    bool m_autoThreshold = true;
+    int m_threshold = 5; // 1-9
+    int m_dataRate = 0;  // 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
+
+    // Title bar controls
+    QLabel *m_titleLabel;
+    QPushButton *m_onOffBtn;
+    QPushButton *m_wpmBtn;
+    QPushButton *m_autoManualBtn;
+    QPushButton *m_thresholdMinusBtn;
+    QLabel *m_thresholdValueLabel;
+    QPushButton *m_thresholdPlusBtn;
+    QPushButton *m_clearBtn;
+    QPushButton *m_closeBtn;
+    QPlainTextEdit *m_textDisplay;
+
+    // Drag/resize state
+    QPoint m_dragPosition;
+    bool m_dragging = false;
+    bool m_resizing = false;
+    QPoint m_resizeStartPos;
+    QSize m_resizeStartSize;
+    WheelAccumulator m_wheelAccumulator;
+};
+
+#endif // TEXTDECODEWINDOW_H

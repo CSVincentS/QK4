@@ -3,7 +3,7 @@
 
 #include <QObject>
 
-#include "ui/wheelaccumulator.h"
+#include "ui/widgets/wheelaccumulator.h"
 
 class RadioState;
 class ConnectionController;

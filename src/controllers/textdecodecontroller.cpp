@@ -2,7 +2,7 @@
 
 #include "connectioncontroller.h"
 #include "models/radiostate.h"
-#include "ui/textdecodewindow.h"
+#include "ui/dialogs/textdecodewindow.h"
 
 #include <QLoggingCategory>
 #include <QWidget>

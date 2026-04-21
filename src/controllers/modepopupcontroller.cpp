@@ -2,7 +2,7 @@
 
 #include "connectioncontroller.h"
 #include "models/radiostate.h"
-#include "ui/modepopupwidget.h"
+#include "ui/popups/modepopupwidget.h"
 
 #include <QLoggingCategory>
 #include <QRegularExpression>

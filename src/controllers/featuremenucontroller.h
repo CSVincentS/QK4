@@ -3,7 +3,7 @@
 
 #include <QObject>
 
-#include "ui/featuremenubar.h" // needs the Feature enum for the public API
+#include "ui/widgets/featuremenubar.h" // needs the Feature enum for the public API
 
 class RadioState;
 class ConnectionController;

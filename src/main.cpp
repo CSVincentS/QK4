@@ -12,7 +12,7 @@
 #include <QFileInfo>
 #endif
 #include "mainwindow.h"
-#include "ui/k4styles.h"
+#include "ui/styling/k4styles.h"
 
 // Filter out known benign Qt warnings on macOS
 // QSocketNotifier::Exception is not supported by kqueue (macOS's event system)

@@ -3,7 +3,7 @@
 #include "connectioncontroller.h"
 #include "controllers/spectrumcontroller.h"
 #include "models/radiostate.h"
-#include "ui/k4styles.h"
+#include "ui/styling/k4styles.h"
 
 #include <QLabel>
 #include <QString>
