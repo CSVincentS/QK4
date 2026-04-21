@@ -56,7 +56,6 @@ public:
     QLabel *txIndicator() const { return m_txIndicator; }
     QLabel *txTriangle() const { return m_txTriangle; }
     QLabel *txTriangleB() const { return m_txTriangleB; }
-    QLabel *testLabel() const { return m_testLabel; }
     QLabel *subLabel() const { return m_subLabel; }
     QLabel *divLabel() const { return m_divLabel; }
     QLabel *splitLabel() const { return m_splitLabel; }
