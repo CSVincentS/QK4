@@ -1,4 +1,5 @@
 #include "sidetonegenerator.h"
+#include "audio/audiologging.h"
 #include <QAudioFormat>
 #include <QMediaDevices>
 #include <QDebug>
@@ -16,7 +17,7 @@ SidetoneGenerator::~SidetoneGenerator() {
     // Audio sink should already be cleaned up by stop() on the correct thread.
     // Guard against missing stop() call, but this runs on the wrong thread.
     if (m_audioSink) {
-        qWarning() << "SidetoneGenerator: audio sink not cleaned up by stop() — destroying from wrong thread";
+        qCWarning(qk4Audio) << "SidetoneGenerator: audio sink not cleaned up by stop() — destroying from wrong thread";
         delete m_audioSink;
         m_audioSink = nullptr;
     }
@@ -55,7 +56,7 @@ void SidetoneGenerator::initAudio() {
         device = QMediaDevices::defaultAudioOutput();
 
     if (!device.isFormatSupported(format)) {
-        qWarning() << "SidetoneGenerator: Default format not supported, trying nearest";
+        qCWarning(qk4Audio) << "SidetoneGenerator: Default format not supported, trying nearest";
         format = device.preferredFormat();
     }
 
@@ -65,7 +66,7 @@ void SidetoneGenerator::initAudio() {
     // Start audio sink immediately and keep it running
     m_pushDevice = m_audioSink->start();
     if (!m_pushDevice) {
-        qWarning() << "SidetoneGenerator: Failed to start audio sink:" << m_audioSink->error();
+        qCWarning(qk4Audio) << "SidetoneGenerator: Failed to start audio sink:" << m_audioSink->error();
     }
 }
 
@@ -127,7 +128,7 @@ void SidetoneGenerator::playElement(int durationMs) {
         // Try to restart audio sink if it stopped
         m_pushDevice = m_audioSink->start();
         if (!m_pushDevice) {
-            qWarning() << "SidetoneGenerator: Cannot play - no audio device";
+            qCWarning(qk4Audio) << "SidetoneGenerator: Cannot play - no audio device";
             return;
         }
     }

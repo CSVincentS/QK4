@@ -1,6 +1,7 @@
 #include "audiocontroller.h"
 #include "connectioncontroller.h"
 #include "audio/audioengine.h"
+#include "audio/audiologging.h"
 #include "audio/opusdecoder.h"
 #include "audio/opusencoder.h"
 #include "models/radiostate.h"
@@ -8,7 +9,6 @@
 #include "network/protocol.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
-#include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(qk4Audio, "qk4.audio")
 

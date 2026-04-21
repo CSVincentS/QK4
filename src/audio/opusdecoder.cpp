@@ -1,4 +1,5 @@
 #include "opusdecoder.h"
+#include "audio/audiologging.h"
 #include <QDebug>
 
 OpusDecoder::OpusDecoder(QObject *parent) : QObject(parent), m_decoder(nullptr), m_sampleRate(12000), m_channels(2) {}
@@ -17,7 +18,7 @@ bool OpusDecoder::initialize(int sampleRate, int channels) {
     m_decoder = opus_decoder_create(sampleRate, channels, &error);
 
     if (error != OPUS_OK) {
-        qWarning() << "OpusDecoder: Failed to create decoder:" << opus_strerror(error);
+        qCWarning(qk4Audio) << "OpusDecoder: Failed to create decoder:" << opus_strerror(error);
         return false;
     }
 
@@ -120,7 +121,7 @@ QByteArray OpusDecoder::decodeK4Packet(const QByteArray &packet) {
     }
 
     default:
-        qWarning() << "OpusDecoder: Unknown encode mode:" << encodeMode;
+        qCWarning(qk4Audio) << "OpusDecoder: Unknown encode mode:" << encodeMode;
         return QByteArray();
     }
 }
@@ -137,7 +138,7 @@ QByteArray OpusDecoder::decode(const QByteArray &opusData) {
                               pcm.data(), maxFrameSize, 0);
 
     if (samples < 0) {
-        qWarning() << "OpusDecoder: decode failed:" << opus_strerror(samples);
+        qCWarning(qk4Audio) << "OpusDecoder: decode failed:" << opus_strerror(samples);
         return QByteArray();
     }
 
@@ -156,7 +157,7 @@ QByteArray OpusDecoder::decodeFloat(const QByteArray &opusData) {
                                     opusData.size(), pcm.data(), maxFrameSize, 0);
 
     if (samples < 0) {
-        qWarning() << "OpusDecoder: decodeFloat failed:" << opus_strerror(samples);
+        qCWarning(qk4Audio) << "OpusDecoder: decodeFloat failed:" << opus_strerror(samples);
         return QByteArray();
     }
 

@@ -1,4 +1,5 @@
 #include "opusencoder.h"
+#include "audio/audiologging.h"
 #include <QDebug>
 
 OpusEncoder::OpusEncoder(QObject *parent) : QObject(parent), m_encoder(nullptr), m_sampleRate(12000), m_channels(1) {}
@@ -16,7 +17,7 @@ bool OpusEncoder::initialize(int sampleRate, int channels, int bitrate) {
     int error;
     m_encoder = opus_encoder_create(sampleRate, channels, OPUS_APPLICATION_VOIP, &error);
     if (error != OPUS_OK) {
-        qWarning() << "OpusEncoder: Failed to create encoder:" << opus_strerror(error);
+        qCWarning(qk4Audio) << "OpusEncoder: Failed to create encoder:" << opus_strerror(error);
         return false;
     }
 
@@ -32,7 +33,8 @@ QByteArray OpusEncoder::encode(const QByteArray &pcmData, int frameSamples) {
     // Validate input size matches requested frame size
     int expectedBytes = frameSamples * static_cast<int>(sizeof(opus_int16));
     if (pcmData.size() != expectedBytes) {
-        qWarning() << "OpusEncoder: Invalid frame size" << pcmData.size() << "bytes, expected" << expectedBytes;
+        qCWarning(qk4Audio) << "OpusEncoder: Invalid frame size" << pcmData.size() << "bytes, expected"
+                            << expectedBytes;
         return QByteArray();
     }
 
@@ -43,7 +45,7 @@ QByteArray OpusEncoder::encode(const QByteArray &pcmData, int frameSamples) {
         opus_encode(m_encoder, pcm, frameSamples, reinterpret_cast<unsigned char *>(encoded.data()), MAX_PACKET_SIZE);
 
     if (bytes < 0) {
-        qWarning() << "OpusEncoder: Encode failed:" << opus_strerror(bytes);
+        qCWarning(qk4Audio) << "OpusEncoder: Encode failed:" << opus_strerror(bytes);
         return QByteArray();
     }
 

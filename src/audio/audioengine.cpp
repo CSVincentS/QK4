@@ -1,4 +1,5 @@
 #include "audioengine.h"
+#include "audio/audiologging.h"
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QDebug>
@@ -113,12 +114,12 @@ bool AudioEngine::setupAudioOutput() {
     }
 
     if (outputDevice.isNull()) {
-        qWarning() << "AudioEngine: No audio output device available";
+        qCWarning(qk4Audio) << "AudioEngine: No audio output device available";
         return false;
     }
 
     if (!outputDevice.isFormatSupported(m_outputFormat)) {
-        qWarning() << "AudioEngine: 12kHz output format not supported by device";
+        qCWarning(qk4Audio) << "AudioEngine: 12kHz output format not supported by device";
         return false;
     }
 
@@ -127,7 +128,7 @@ bool AudioEngine::setupAudioOutput() {
 
     m_audioSinkDevice = m_audioSink->start();
     if (!m_audioSinkDevice) {
-        qWarning() << "AudioEngine: Failed to start audio output";
+        qCWarning(qk4Audio) << "AudioEngine: Failed to start audio output";
         delete m_audioSink;
         m_audioSink = nullptr;
         return false;
@@ -159,12 +160,12 @@ bool AudioEngine::setupAudioInput() {
     }
 
     if (inputDevice.isNull()) {
-        qWarning() << "AudioEngine: No audio input device available";
+        qCWarning(qk4Audio) << "AudioEngine: No audio input device available";
         return false;
     }
 
     if (!inputDevice.isFormatSupported(m_inputFormat)) {
-        qWarning() << "AudioEngine: 48kHz input format not supported by device";
+        qCWarning(qk4Audio) << "AudioEngine: 48kHz input format not supported by device";
         return false;
     }
 
@@ -353,7 +354,7 @@ void AudioEngine::setMicEnabled(bool enabled) {
         // macOS mic permission dialog during connection (which would deadlock)
         if (!m_audioSource) {
             if (!setupAudioInput()) {
-                qWarning() << "AudioEngine: Failed to setup audio input";
+                qCWarning(qk4Audio) << "AudioEngine: Failed to setup audio input";
                 m_micEnabled.store(false, std::memory_order_relaxed);
                 return;
             }
@@ -364,7 +365,7 @@ void AudioEngine::setMicEnabled(bool enabled) {
             // (readyRead doesn't fire reliably on all platforms)
             m_micPollTimer->start();
         } else {
-            qWarning() << "AudioEngine: Failed to start microphone device";
+            qCWarning(qk4Audio) << "AudioEngine: Failed to start microphone device";
         }
     } else {
         m_micPollTimer->stop();
