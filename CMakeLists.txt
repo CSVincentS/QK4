@@ -114,6 +114,7 @@ set(SOURCES
     src/settings/radiosettings.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
+    src/models/radiostate/processingstate.cpp
     src/models/radiostate/textdecodestate.cpp
     src/models/menumodel.cpp
     src/ui/radiomanagerdialog.cpp
@@ -221,6 +222,7 @@ set(HEADERS
     src/settings/radiosettings.h
     src/models/radiostate.h
     src/models/radiostate/antennastate.h
+    src/models/radiostate/processingstate.h
     src/models/radiostate/textdecodestate.h
     src/models/menumodel.h
     src/models/macroids.h

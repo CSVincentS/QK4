@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "radiostate/antennastate.h"
+#include "radiostate/processingstate.h"
 #include "radiostate/textdecodestate.h"
 
 /**
@@ -143,44 +144,41 @@ public:
     bool diversityEnabled() const { return m_diversityEnabled; }
     bool splitEnabled() const { return m_splitEnabled; }
 
-    // Processing - Main RX
-    int noiseBlankerLevel() const { return m_noiseBlankerLevel; }
-    bool noiseBlankerEnabled() const { return m_noiseBlankerEnabled; }
-    int noiseBlankerFilterWidth() const { return m_noiseBlankerFilterWidth; } // 0=NONE, 1=NARROW, 2=WIDE
-    int noiseReductionLevel() const { return m_noiseReductionLevel; }
-    bool noiseReductionEnabled() const { return m_noiseReductionEnabled; }
+    // Processing (NB/NR/PA/RA/GT + NA/NM) — backed by m_processingState.
+    int noiseBlankerLevel() const { return m_processingState.noiseBlankerLevel; }
+    bool noiseBlankerEnabled() const { return m_processingState.noiseBlankerEnabled; }
+    int noiseBlankerFilterWidth() const { return m_processingState.noiseBlankerFilterWidth; }
+    int noiseReductionLevel() const { return m_processingState.noiseReductionLevel; }
+    bool noiseReductionEnabled() const { return m_processingState.noiseReductionEnabled; }
 
-    // Notch filter - Main RX
-    bool autoNotchEnabled() const { return m_autoNotchEnabled; }
-    bool manualNotchEnabled() const { return m_manualNotchEnabled; }
-    int manualNotchPitch() const { return m_manualNotchPitch; }
+    bool autoNotchEnabled() const { return m_processingState.autoNotchEnabled; }
+    bool manualNotchEnabled() const { return m_processingState.manualNotchEnabled; }
+    int manualNotchPitch() const { return m_processingState.manualNotchPitch; }
 
-    // Notch filter - Sub RX
-    bool autoNotchEnabledB() const { return m_autoNotchEnabledB; }
-    bool manualNotchEnabledB() const { return m_manualNotchEnabledB; }
-    int manualNotchPitchB() const { return m_manualNotchPitchB; }
+    bool autoNotchEnabledB() const { return m_processingState.autoNotchEnabledB; }
+    bool manualNotchEnabledB() const { return m_processingState.manualNotchEnabledB; }
+    int manualNotchPitchB() const { return m_processingState.manualNotchPitchB; }
 
     // Optimistic setters for notch pitch (radio doesn't echo these commands)
     void setManualNotchPitch(int pitch);
     void setManualNotchPitchB(int pitch);
 
-    int preamp() const { return m_preamp; }
-    bool preampEnabled() const { return m_preampEnabled; }
-    int attenuatorLevel() const { return m_attenuatorLevel; }
-    bool attenuatorEnabled() const { return m_attenuatorEnabled; }
-    AGCSpeed agcSpeed() const { return m_agcSpeed; }
+    int preamp() const { return m_processingState.preamp; }
+    bool preampEnabled() const { return m_processingState.preampEnabled; }
+    int attenuatorLevel() const { return m_processingState.attenuatorLevel; }
+    bool attenuatorEnabled() const { return m_processingState.attenuatorEnabled; }
+    AGCSpeed agcSpeed() const { return static_cast<AGCSpeed>(m_processingState.agcSpeed); }
 
-    // Processing - Sub RX
-    int noiseBlankerLevelB() const { return m_noiseBlankerLevelB; }
-    bool noiseBlankerEnabledB() const { return m_noiseBlankerEnabledB; }
-    int noiseBlankerFilterWidthB() const { return m_noiseBlankerFilterWidthB; } // 0=NONE, 1=NARROW, 2=WIDE
-    int noiseReductionLevelB() const { return m_noiseReductionLevelB; }
-    bool noiseReductionEnabledB() const { return m_noiseReductionEnabledB; }
-    int preampB() const { return m_preampB; }
-    bool preampEnabledB() const { return m_preampEnabledB; }
-    int attenuatorLevelB() const { return m_attenuatorLevelB; }
-    bool attenuatorEnabledB() const { return m_attenuatorEnabledB; }
-    AGCSpeed agcSpeedB() const { return m_agcSpeedB; }
+    int noiseBlankerLevelB() const { return m_processingState.noiseBlankerLevelB; }
+    bool noiseBlankerEnabledB() const { return m_processingState.noiseBlankerEnabledB; }
+    int noiseBlankerFilterWidthB() const { return m_processingState.noiseBlankerFilterWidthB; }
+    int noiseReductionLevelB() const { return m_processingState.noiseReductionLevelB; }
+    bool noiseReductionEnabledB() const { return m_processingState.noiseReductionEnabledB; }
+    int preampB() const { return m_processingState.preampB; }
+    bool preampEnabledB() const { return m_processingState.preampEnabledB; }
+    int attenuatorLevelB() const { return m_processingState.attenuatorLevelB; }
+    bool attenuatorEnabledB() const { return m_processingState.attenuatorEnabledB; }
+    AGCSpeed agcSpeedB() const { return static_cast<AGCSpeed>(m_processingState.agcSpeedB); }
 
     // Radio info
     QString radioID() const { return m_radioID; }
@@ -784,40 +782,8 @@ private:
     bool m_diversityEnabled = false;
     bool m_splitEnabled = false;
 
-    // Processing - Main RX
-    int m_noiseBlankerLevel = 0;
-    bool m_noiseBlankerEnabled = false;
-    int m_noiseBlankerFilterWidth = 0;
-    int m_noiseReductionLevel = 0;
-    bool m_noiseReductionEnabled = false;
-
-    // Notch filter
-    bool m_autoNotchEnabled = false;
-    bool m_manualNotchEnabled = false;
-    int m_manualNotchPitch = 1000; // 150-5000 Hz, default 1000
-
-    // Notch filter - Sub RX
-    bool m_autoNotchEnabledB = false;
-    bool m_manualNotchEnabledB = false;
-    int m_manualNotchPitchB = 1000; // 150-5000 Hz, default 1000
-
-    int m_preamp = 0;
-    bool m_preampEnabled = false;
-    int m_attenuatorLevel = 0;
-    bool m_attenuatorEnabled = false;
-    AGCSpeed m_agcSpeed = AGC_Slow;
-
-    // Processing - Sub RX
-    int m_noiseBlankerLevelB = 0;
-    bool m_noiseBlankerEnabledB = false;
-    int m_noiseBlankerFilterWidthB = 0; // 0=NONE, 1=NARROW, 2=WIDE
-    int m_noiseReductionLevelB = 0;
-    bool m_noiseReductionEnabledB = false;
-    int m_preampB = 0;
-    bool m_preampEnabledB = false;
-    int m_attenuatorLevelB = 0;
-    bool m_attenuatorEnabledB = false;
-    AGCSpeed m_agcSpeedB = AGC_Slow;
+    // Processing state (NB/NR/PA/RA/GT/NA/NM) — see models/radiostate/processingstate.h.
+    ProcessingState m_processingState;
 
     // Antenna state — see models/radiostate/antennastate.h.
     AntennaState m_antennaState;

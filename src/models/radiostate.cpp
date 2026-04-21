@@ -60,40 +60,8 @@ void RadioState::reset() {
     m_diversityEnabled = false;
     m_splitEnabled = false;
 
-    // Processing - Main RX
-    m_noiseBlankerLevel = 0;
-    m_noiseBlankerEnabled = false;
-    m_noiseBlankerFilterWidth = 0;
-    m_noiseReductionLevel = 0;
-    m_noiseReductionEnabled = false;
-
-    // Notch filter - Main RX
-    m_autoNotchEnabled = false;
-    m_manualNotchEnabled = false;
-    m_manualNotchPitch = 1000;
-
-    // Notch filter - Sub RX
-    m_autoNotchEnabledB = false;
-    m_manualNotchEnabledB = false;
-    m_manualNotchPitchB = 1000;
-
-    m_preamp = 0;
-    m_preampEnabled = false;
-    m_attenuatorLevel = 0;
-    m_attenuatorEnabled = false;
-    m_agcSpeed = AGC_Slow;
-
-    // Processing - Sub RX
-    m_noiseBlankerLevelB = 0;
-    m_noiseBlankerEnabledB = false;
-    m_noiseBlankerFilterWidthB = 0;
-    m_noiseReductionLevelB = 0;
-    m_noiseReductionEnabledB = false;
-    m_preampB = 0;
-    m_preampEnabledB = false;
-    m_attenuatorLevelB = 0;
-    m_attenuatorEnabledB = false;
-    m_agcSpeedB = AGC_Slow;
+    // Processing state (NB/NR/PA/RA/GT + NA/NM for both VFOs).
+    m_processingState.reset();
 
     // Antenna
     m_antennaState.reset();
@@ -479,64 +447,30 @@ void RadioState::setMonitorLevel(int mode, int level) {
     }
 }
 
+// Processing optimistic setters — delegate to ProcessingHandlers namespace.
 void RadioState::setNoiseBlankerLevel(int level) {
-    if (m_noiseBlankerLevel != level) {
-        m_noiseBlankerLevel = qMin(level, 15);
-        emit processingChanged();
-    }
+    ProcessingHandlers::setNoiseBlankerLevel(m_processingState, *this, level);
 }
-
 void RadioState::setNoiseBlankerLevelB(int level) {
-    if (m_noiseBlankerLevelB != level) {
-        m_noiseBlankerLevelB = qMin(level, 15);
-        emit processingChangedB();
-    }
+    ProcessingHandlers::setNoiseBlankerLevelB(m_processingState, *this, level);
 }
-
 void RadioState::setNoiseBlankerFilter(int filter) {
-    filter = qBound(0, filter, 2);
-    if (m_noiseBlankerFilterWidth != filter) {
-        m_noiseBlankerFilterWidth = filter;
-        emit processingChanged();
-    }
+    ProcessingHandlers::setNoiseBlankerFilter(m_processingState, *this, filter);
 }
-
 void RadioState::setNoiseBlankerFilterB(int filter) {
-    filter = qBound(0, filter, 2);
-    if (m_noiseBlankerFilterWidthB != filter) {
-        m_noiseBlankerFilterWidthB = filter;
-        emit processingChangedB();
-    }
+    ProcessingHandlers::setNoiseBlankerFilterB(m_processingState, *this, filter);
 }
-
 void RadioState::setNoiseReductionLevel(int level) {
-    if (m_noiseReductionLevel != level) {
-        m_noiseReductionLevel = qMin(level, 10);
-        emit processingChanged();
-    }
+    ProcessingHandlers::setNoiseReductionLevel(m_processingState, *this, level);
 }
-
 void RadioState::setNoiseReductionLevelB(int level) {
-    if (m_noiseReductionLevelB != level) {
-        m_noiseReductionLevelB = qMin(level, 10);
-        emit processingChangedB();
-    }
+    ProcessingHandlers::setNoiseReductionLevelB(m_processingState, *this, level);
 }
-
 void RadioState::setManualNotchPitch(int pitch) {
-    pitch = qBound(150, pitch, 5000);
-    if (m_manualNotchPitch != pitch) {
-        m_manualNotchPitch = pitch;
-        emit notchChanged();
-    }
+    ProcessingHandlers::setManualNotchPitch(m_processingState, *this, pitch);
 }
-
 void RadioState::setManualNotchPitchB(int pitch) {
-    pitch = qBound(150, pitch, 5000);
-    if (m_manualNotchPitchB != pitch) {
-        m_manualNotchPitchB = pitch;
-        emit notchBChanged();
-    }
+    ProcessingHandlers::setManualNotchPitchB(m_processingState, *this, pitch);
 }
 
 void RadioState::setDataSubMode(int subMode) {
@@ -988,8 +922,9 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"RA$", [this](const QString &c) { handleRASub(c); }});
     m_commandHandlers.append({"GT$", [this](const QString &c) { handleGTSub(c); }});
     // NA$ — deduplicated via handleBoolPair
-    m_commandHandlers.append(
-        {"NA$", [this](const QString &c) { handleBoolPair(c, 3, m_autoNotchEnabledB, &RadioState::notchBChanged); }});
+    m_commandHandlers.append({"NA$", [this](const QString &c) {
+                                  handleBoolPair(c, 3, m_processingState.autoNotchEnabledB, &RadioState::notchBChanged);
+                              }});
     m_commandHandlers.append({"NM$", [this](const QString &c) { handleNMSub(c); }});
     m_commandHandlers.append({"AP$", [this](const QString &c) { handleAPSub(c); }});
     // LK$ — deduplicated via handleBoolPairVal
@@ -1107,8 +1042,9 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"NB", [this](const QString &c) { handleNB(c); }});
     m_commandHandlers.append({"NR", [this](const QString &c) { handleNR(c); }});
     // NA — deduplicated via handleBoolPair
-    m_commandHandlers.append(
-        {"NA", [this](const QString &c) { handleBoolPair(c, 2, m_autoNotchEnabled, &RadioState::notchChanged); }});
+    m_commandHandlers.append({"NA", [this](const QString &c) {
+                                  handleBoolPair(c, 2, m_processingState.autoNotchEnabled, &RadioState::notchChanged);
+                              }});
     m_commandHandlers.append({"NM", [this](const QString &c) { handleNM(c); }});
     m_commandHandlers.append({"PA", [this](const QString &c) { handlePA(c); }});
     m_commandHandlers.append({"RA", [this](const QString &c) { handleRA(c); }});
@@ -1585,320 +1521,42 @@ void RadioState::handleRX(const QString &cmd) {
 // differs, and only then mutate + emit — keeps the rollup idempotent so
 // redundant CAT echoes don't trigger spurious UI repaints.
 
+// Processing CAT handlers — delegate to ProcessingHandlers namespace.
 void RadioState::handleNB(const QString &cmd) {
-    // NB - Noise Blanker Main: NBnnm or NBnnmf where nn=level, m=on/off, f=filter
-    if (cmd.length() < 4)
-        return;
-    QString nbStr = cmd.mid(2);
-    if (nbStr.length() < 3)
-        return;
-
-    bool ok1, ok2;
-    int level = nbStr.left(2).toInt(&ok1);
-    int enabled = nbStr.mid(2, 1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    int newLevel = qMin(level, 15);
-    bool newEnabled = (enabled == 1);
-    int newFilter = m_noiseBlankerFilterWidth;
-    if (nbStr.length() >= 4) {
-        bool ok3;
-        int filter = nbStr.mid(3, 1).toInt(&ok3);
-        if (ok3)
-            newFilter = qMin(filter, 2);
-    }
-
-    if (newLevel == m_noiseBlankerLevel && newEnabled == m_noiseBlankerEnabled &&
-        newFilter == m_noiseBlankerFilterWidth)
-        return;
-
-    m_noiseBlankerLevel = newLevel;
-    m_noiseBlankerEnabled = newEnabled;
-    m_noiseBlankerFilterWidth = newFilter;
-    emit processingChanged();
+    ProcessingHandlers::handleNB(m_processingState, *this, cmd);
 }
-
 void RadioState::handleNBSub(const QString &cmd) {
-    // NB$ - Noise Blanker Sub
-    if (cmd.length() < 5)
-        return;
-    QString nbStr = cmd.mid(3);
-    if (nbStr.length() < 3)
-        return;
-
-    bool ok1, ok2;
-    int level = nbStr.left(2).toInt(&ok1);
-    int enabled = nbStr.mid(2, 1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    int newLevel = qMin(level, 15);
-    bool newEnabled = (enabled == 1);
-    int newFilter = m_noiseBlankerFilterWidthB;
-    if (nbStr.length() >= 4) {
-        bool ok3;
-        int filter = nbStr.mid(3, 1).toInt(&ok3);
-        if (ok3)
-            newFilter = qMin(filter, 2);
-    }
-
-    if (newLevel == m_noiseBlankerLevelB && newEnabled == m_noiseBlankerEnabledB &&
-        newFilter == m_noiseBlankerFilterWidthB)
-        return;
-
-    m_noiseBlankerLevelB = newLevel;
-    m_noiseBlankerEnabledB = newEnabled;
-    m_noiseBlankerFilterWidthB = newFilter;
-    emit processingChangedB();
+    ProcessingHandlers::handleNBSub(m_processingState, *this, cmd);
 }
-
 void RadioState::handleNR(const QString &cmd) {
-    // NR - Noise Reduction Main
-    if (cmd.length() < 3)
-        return;
-    QString nrStr = cmd.mid(2);
-    if (nrStr.length() < 3)
-        return;
-
-    bool ok1, ok2;
-    int level = nrStr.left(2).toInt(&ok1);
-    int enabled = nrStr.right(1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    bool newEnabled = (enabled == 1);
-    if (level == m_noiseReductionLevel && newEnabled == m_noiseReductionEnabled)
-        return;
-
-    m_noiseReductionLevel = level;
-    m_noiseReductionEnabled = newEnabled;
-    emit processingChanged();
+    ProcessingHandlers::handleNR(m_processingState, *this, cmd);
 }
-
 void RadioState::handleNRSub(const QString &cmd) {
-    // NR$ - Noise Reduction Sub
-    if (cmd.length() < 4)
-        return;
-    QString nrStr = cmd.mid(3);
-    if (nrStr.length() < 3)
-        return;
-
-    bool ok1, ok2;
-    int level = nrStr.left(2).toInt(&ok1);
-    int enabled = nrStr.right(1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    bool newEnabled = (enabled == 1);
-    if (level == m_noiseReductionLevelB && newEnabled == m_noiseReductionEnabledB)
-        return;
-
-    m_noiseReductionLevelB = level;
-    m_noiseReductionEnabledB = newEnabled;
-    emit processingChangedB();
+    ProcessingHandlers::handleNRSub(m_processingState, *this, cmd);
 }
-
 void RadioState::handlePA(const QString &cmd) {
-    // PA - Preamp Main: PAnm where n=level, m=on/off
-    if (cmd.length() < 4)
-        return;
-    QString paStr = cmd.mid(2);
-    if (paStr.length() < 2)
-        return;
-
-    bool ok1, ok2;
-    int level = paStr.left(1).toInt(&ok1);
-    int enabled = paStr.mid(1, 1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    bool newEnabled = (enabled == 1);
-    if (level == m_preamp && newEnabled == m_preampEnabled)
-        return;
-
-    m_preamp = level;
-    m_preampEnabled = newEnabled;
-    emit processingChanged();
+    ProcessingHandlers::handlePA(m_processingState, *this, cmd);
 }
-
 void RadioState::handlePASub(const QString &cmd) {
-    // PA$ - Preamp Sub
-    if (cmd.length() < 5)
-        return;
-    QString paStr = cmd.mid(3);
-    if (paStr.length() < 2)
-        return;
-
-    bool ok1, ok2;
-    int level = paStr.left(1).toInt(&ok1);
-    int enabled = paStr.mid(1, 1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    bool newEnabled = (enabled == 1);
-    if (level == m_preampB && newEnabled == m_preampEnabledB)
-        return;
-
-    m_preampB = level;
-    m_preampEnabledB = newEnabled;
-    emit processingChangedB();
+    ProcessingHandlers::handlePASub(m_processingState, *this, cmd);
 }
-
 void RadioState::handleRA(const QString &cmd) {
-    // RA - Attenuator Main: RAnnotm where nn=level, m=on/off
-    if (cmd.length() < 5)
-        return;
-    QString raStr = cmd.mid(2);
-    if (raStr.length() < 3)
-        return;
-
-    bool ok1, ok2;
-    int level = raStr.left(2).toInt(&ok1);
-    int enabled = raStr.mid(2, 1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    bool newEnabled = (enabled == 1);
-    if (level == m_attenuatorLevel && newEnabled == m_attenuatorEnabled)
-        return;
-
-    m_attenuatorLevel = level;
-    m_attenuatorEnabled = newEnabled;
-    emit processingChanged();
+    ProcessingHandlers::handleRA(m_processingState, *this, cmd);
 }
-
 void RadioState::handleRASub(const QString &cmd) {
-    // RA$ - Attenuator Sub
-    if (cmd.length() < 6)
-        return;
-    QString raStr = cmd.mid(3);
-    if (raStr.length() < 3)
-        return;
-
-    bool ok1, ok2;
-    int level = raStr.left(2).toInt(&ok1);
-    int enabled = raStr.mid(2, 1).toInt(&ok2);
-    if (!ok1 || !ok2)
-        return;
-
-    bool newEnabled = (enabled == 1);
-    if (level == m_attenuatorLevelB && newEnabled == m_attenuatorEnabledB)
-        return;
-
-    m_attenuatorLevelB = level;
-    m_attenuatorEnabledB = newEnabled;
-    emit processingChangedB();
+    ProcessingHandlers::handleRASub(m_processingState, *this, cmd);
 }
-
 void RadioState::handleGT(const QString &cmd) {
-    // GT - AGC Speed Main: GTn where n=0(off)/1(slow)/2(fast). Values outside 0-2 are ignored.
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int gt = cmd.mid(2).toInt(&ok);
-    if (!ok)
-        return;
-
-    AGCSpeed newSpeed;
-    if (gt == 0)
-        newSpeed = AGC_Off;
-    else if (gt == 1)
-        newSpeed = AGC_Slow;
-    else if (gt == 2)
-        newSpeed = AGC_Fast;
-    else
-        return;
-
-    if (newSpeed == m_agcSpeed)
-        return;
-    m_agcSpeed = newSpeed;
-    emit processingChanged();
+    ProcessingHandlers::handleGT(m_processingState, *this, cmd);
 }
-
 void RadioState::handleGTSub(const QString &cmd) {
-    // GT$ - AGC Speed Sub
-    if (cmd.length() < 4)
-        return;
-    bool ok;
-    int gt = cmd.mid(3).toInt(&ok);
-    if (!ok)
-        return;
-
-    AGCSpeed newSpeed;
-    if (gt == 0)
-        newSpeed = AGC_Off;
-    else if (gt == 1)
-        newSpeed = AGC_Slow;
-    else if (gt == 2)
-        newSpeed = AGC_Fast;
-    else
-        return;
-
-    if (newSpeed == m_agcSpeedB)
-        return;
-    m_agcSpeedB = newSpeed;
-    emit processingChangedB();
+    ProcessingHandlers::handleGTSub(m_processingState, *this, cmd);
 }
-
 void RadioState::handleNM(const QString &cmd) {
-    // NM - Manual Notch Main: NMnnnnm or NMm
-    if (cmd.length() < 3)
-        return;
-    QString data = cmd.mid(2);
-    if (data.length() >= 5) {
-        bool ok;
-        int pitch = data.left(4).toInt(&ok);
-        bool enabled = (data.at(4) == '1');
-        bool changed = false;
-        if (ok && pitch >= 150 && pitch <= 5000 && m_manualNotchPitch != pitch) {
-            m_manualNotchPitch = pitch;
-            changed = true;
-        }
-        if (m_manualNotchEnabled != enabled) {
-            m_manualNotchEnabled = enabled;
-            changed = true;
-        }
-        if (changed) {
-            emit notchChanged();
-        }
-    } else if (data.length() >= 1) {
-        bool enabled = (data.at(0) == '1');
-        if (m_manualNotchEnabled != enabled) {
-            m_manualNotchEnabled = enabled;
-            emit notchChanged();
-        }
-    }
+    ProcessingHandlers::handleNM(m_processingState, *this, cmd);
 }
-
 void RadioState::handleNMSub(const QString &cmd) {
-    // NM$ - Manual Notch Sub
-    if (cmd.length() < 4)
-        return;
-    QString data = cmd.mid(3);
-    if (data.length() >= 5) {
-        bool ok;
-        int pitch = data.left(4).toInt(&ok);
-        bool enabled = (data.at(4) == '1');
-        bool changed = false;
-        if (ok && pitch >= 150 && pitch <= 5000 && m_manualNotchPitchB != pitch) {
-            m_manualNotchPitchB = pitch;
-            changed = true;
-        }
-        if (m_manualNotchEnabledB != enabled) {
-            m_manualNotchEnabledB = enabled;
-            changed = true;
-        }
-        if (changed) {
-            emit notchBChanged();
-        }
-    } else if (data.length() >= 1) {
-        bool enabled = (data.at(0) == '1');
-        if (m_manualNotchEnabledB != enabled) {
-            m_manualNotchEnabledB = enabled;
-            emit notchBChanged();
-        }
-    }
+    ProcessingHandlers::handleNMSub(m_processingState, *this, cmd);
 }
 
 // =============================================================================
