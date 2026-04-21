@@ -9,8 +9,8 @@ TCP / TLS / PSK transport to the K4, binary protocol framing, CAT server for thi
 - `catserver.{cpp,h}` — TCP CAT server for WSJT-X / MacLoggerDX integration. Pinned public API via `docs/radiostate-catserver-api-contract.md`, regression-gated by `test_catserver`.
 - `networkmetrics.{cpp,h}` — Latency / throughput aggregation. Feeds `NetHealthWidget`.
 - `k4discovery.{cpp,h}` — UDP mDNS discovery for K4 servers on the LAN.
-- `dxclusterclient.{cpp,h}` — TCP client to a single DX cluster node. Used by `DxClusterController` — one instance per configured cluster.
-- `kpa1500client.{cpp,h}` — TCP client to the KPA1500 amplifier.
+- `dxclusterclient.{cpp,h}` — TCP client to a single DX cluster node. Used by `DxClusterController` — one instance per configured cluster. Receive buffer capped at 64KB; overflow disconnects.
+- `kpa1500client.{cpp,h}` — TCP client to the KPA1500 amplifier. Receive buffer capped at 64KB; overflow disconnects.
 
 ## Threading
 

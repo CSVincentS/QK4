@@ -83,7 +83,17 @@ void DxClusterClient::onSocketDisconnected() {
 }
 
 void DxClusterClient::onReadyRead() {
+    // WHY: cap the receive buffer per CONVENTIONS.md Rule 5. DX cluster lines are short (~100B);
+    // 64KB is generous headroom for split reads. A misbehaving server that never terminates a line
+    // with \n would otherwise grow this unbounded.
+    static constexpr int kMaxBufferSize = 64 * 1024;
     m_receiveBuffer += QString::fromUtf8(m_socket->readAll());
+    if (m_receiveBuffer.size() > kMaxBufferSize) {
+        qCWarning(netDxCluster) << "Buffer overflow (" << m_receiveBuffer.size() << "bytes) — disconnecting";
+        m_receiveBuffer.clear();
+        disconnectFromHost();
+        return;
+    }
     qCDebug(netDxCluster) << "onReadyRead, state:" << m_state << "buffer:" << m_receiveBuffer.left(200);
 
     // Process complete lines
