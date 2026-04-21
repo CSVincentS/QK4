@@ -1,20 +1,18 @@
 #include <QApplication>
 #include <QDebug>
-#include <QFontDatabase>
-#include <QGuiApplication>
-#include <QLoggingCategory>
-#include <QMessageBox>
-#include <QSslSocket>
 #include <QSysInfo>
+#include <QGuiApplication>
+#include <QFontDatabase>
 #include <rhi/qrhi.h>
 #ifdef Q_OS_MACOS
 #include <QtGui/private/qguiapplication_p.h>
 #include <QtGui/qpa/qplatformintegration.h>
+#include <cstdlib>
+#include <QDir>
+#include <QFileInfo>
 #endif
 #include "mainwindow.h"
 #include "ui/styling/k4styles.h"
-
-Q_LOGGING_CATEGORY(qk4App, "qk4.app")
 
 // Filter out known benign Qt warnings on macOS
 // QSocketNotifier::Exception is not supported by kqueue (macOS's event system)
@@ -41,7 +39,7 @@ void setupFonts() {
 
     // Verify fonts loaded (only warn on failure)
     if (interRegular < 0 || interMedium < 0) {
-        qCWarning(qk4App) << "Failed to load Inter font - using system default";
+        qWarning() << "Failed to load Inter font - using system default";
     }
 
     // Set Inter Medium as the default application font (crisper than Regular)
@@ -58,6 +56,44 @@ int main(int argc, char *argv[]) {
     // Install message filter to suppress known benign Qt warnings
     originalHandler = qInstallMessageHandler(messageFilter);
 
+#ifdef Q_OS_MACOS
+    // Enable OpenSSL for TLS/PSK support
+    // Qt's OpenSSL backend dynamically loads libssl/libcrypto at runtime
+    // Check bundled location first (inside .app bundle), then Homebrew locations
+
+    // Get the path to the executable to find the Frameworks folder
+    QString execPath = QString::fromLocal8Bit(argv[0]);
+    QString bundledFrameworks;
+    if (execPath.contains(".app/Contents/MacOS/")) {
+        bundledFrameworks = QFileInfo(execPath).absolutePath() + "/../Frameworks";
+    }
+
+    QStringList opensslPaths;
+    if (!bundledFrameworks.isEmpty()) {
+        opensslPaths << bundledFrameworks; // Check bundled first
+    }
+    opensslPaths << "/opt/homebrew/opt/openssl@3/lib" // Homebrew on Apple Silicon
+                 << "/usr/local/opt/openssl@3/lib"    // Homebrew on Intel Mac
+                 << "/opt/homebrew/opt/openssl/lib"   // Homebrew openssl (latest)
+                 << "/usr/local/opt/openssl/lib";     // Homebrew openssl on Intel
+
+    QString currentPath = QString::fromLocal8Bit(qgetenv("DYLD_LIBRARY_PATH"));
+    bool foundOpenSSL = false;
+
+    for (const QString &opensslPath : opensslPaths) {
+        // Check if libssl exists in this location
+        if (QFileInfo::exists(opensslPath + "/libssl.3.dylib") || QFileInfo::exists(opensslPath + "/libssl.dylib")) {
+            if (!currentPath.contains(opensslPath)) {
+                QString newPath = currentPath.isEmpty() ? opensslPath : QString("%1:%2").arg(opensslPath, currentPath);
+                qputenv("DYLD_LIBRARY_PATH", newPath.toLocal8Bit());
+            }
+            foundOpenSSL = true;
+            break;
+        }
+    }
+    Q_UNUSED(foundOpenSSL);
+#endif
+
     // Enable HiDPI scaling for crisp rendering on Retina/4K displays
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
@@ -66,24 +102,6 @@ int main(int argc, char *argv[]) {
     app.setApplicationVersion(QK4_VERSION);
     app.setOrganizationName("AI5QK");
     app.setOrganizationDomain("ai5qk.com");
-
-    // WHY a runtime SSL check here: the K4 connection requires TLS/PSK. Qt loads OpenSSL
-    // dynamically via dlopen; on macOS with SIP enabled (every end-user Mac) DYLD_LIBRARY_PATH
-    // cannot be injected after process start, so earlier attempts to prepend Homebrew paths via
-    // qputenv() were ineffective. The correct fix is to bundle OpenSSL dylibs inside the .app
-    // bundle's Frameworks/ directory (CMake bundle step). This check catches the case where
-    // neither the bundle nor the system has OpenSSL available and tells the user directly
-    // instead of failing silently when they try to connect.
-    if (!QSslSocket::supportsSsl()) {
-        QMessageBox::critical(
-            nullptr, "OpenSSL required",
-            QString("QK4 requires OpenSSL at runtime for TLS/PSK connections to the K4.\n\n"
-                    "Qt build: %1\nRuntime: %2\n\n"
-                    "macOS: install via Homebrew (`brew install openssl@3`) or reinstall a bundled build.\n"
-                    "Windows / Linux: install the OpenSSL runtime for your platform.")
-                .arg(QSslSocket::sslLibraryBuildVersionString(), QSslSocket::sslLibraryVersionString()));
-        return 1;
-    }
 
     // Load embedded Inter font family
     setupFonts();
