@@ -22,7 +22,7 @@ Code style, naming conventions, and development rules for QK4.
    - Protocol for CAT parsing, emitting typed signals
    - Widgets self-contained with clear public interfaces
 
-4. **Write descriptive commits** - `CHANGELOG.md` is auto-generated from conventional commits at release time. Use commit body text for details that should appear in the changelog (see Commit Messages below).
+4. **Write descriptive commits** - GitHub Release notes are auto-generated from conventional commits by `git-cliff` at tag time (see `.github/workflows/release.yml`). Use commit body text for details that should appear in the release notes (see Commit Messages below).
 
 5. **Parse order matters** - Check specific patterns FIRST (e.g., `RG$` before `RG`)
 
@@ -132,16 +132,16 @@ Before considering a feature complete:
 
 ## Commit Messages
 
-Commits drive the auto-generated changelog. Use [conventional commit](https://www.conventionalcommits.org/) format:
+Commits drive the auto-generated GitHub Release notes (via `git-cliff --latest` in the release workflow). Use [conventional commit](https://www.conventionalcommits.org/) format:
 
 ```
 type(scope): short summary
 
-Optional body with detail — each line becomes a sub-bullet in the changelog.
+Optional body with detail — each line becomes a sub-bullet in the release notes.
 ```
 
-| Type | Changelog Section | Example |
-|------|-------------------|---------|
+| Type | Release Notes Section | Example |
+|------|-----------------------|---------|
 | `feat` | Added | `feat(audio): add jitter buffer for RX playback` |
 | `fix` | Fixed | `fix(panadapter): correct CW pitch offset in passband` |
 | `refactor` | Changed | `refactor(state): replace if-else chain with handler registry` |
@@ -151,8 +151,8 @@ Optional body with detail — each line becomes a sub-bullet in the changelog.
 | `ci` | *(skipped)* | `ci: add Raspberry Pi build job` |
 
 **Tips:**
-- The `(scope)` is optional but makes changelog entries scannable (e.g., `audio`, `panadapter`, `state`, `ui`)
-- Put detail in the commit body — it flows into the changelog as sub-bullets
+- The `(scope)` is optional but makes entries scannable (e.g., `audio`, `panadapter`, `state`, `ui`)
+- Put detail in the commit body — it flows into the release notes as sub-bullets
 - Keep the summary line under 72 characters
 
 ---
