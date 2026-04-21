@@ -76,42 +76,15 @@ void RadioState::reset() {
     m_lockA = false;
     m_lockB = false;
 
-    // Panadapter
-    m_refLevel = -110;
-    m_scale = -1;
-    m_spanHz = 0;
-    m_refLevelB = -110;
-    m_spanHzB = 0;
+    // Panadapter / display state (REF, SPN, SCL, MP, DPM, DSM, FPS, WFC, WFH,
+    // AVG, PKM, FXT, FXA, FRZ, VFA, VFB, AR, NB$, NBL$ + EXT variants).
+    m_spectrumDisplayState.reset();
 
     // Radio info
     m_radioID.clear();
     m_radioModel.clear();
     m_optionModules.clear();
     m_firmwareVersions.clear();
-
-    // Mini-Pan
-    m_miniPanAEnabled = false;
-    m_miniPanBEnabled = false;
-
-    // Display state
-    m_dualPanModeLcd = -1;
-    m_dualPanModeExt = -1;
-    m_displayModeLcd = -1;
-    m_displayModeExt = -1;
-    m_displayFps = 30;
-    m_waterfallColor = -1;
-    m_waterfallHeight = 50;
-    m_waterfallHeightExt = 50;
-    m_averaging = -1;
-    m_peakMode = -1;
-    m_fixedTune = -1;
-    m_fixedTuneMode = -1;
-    m_freeze = -1;
-    m_vfoACursor = -1;
-    m_vfoBCursor = -1;
-    m_autoRefLevel = -1;
-    m_ddcNbMode = -1;
-    m_ddcNbLevel = -1;
 
     // Data-mode + rate + optimistic cooldowns reset via m_dataControlState.reset().
 
@@ -363,41 +336,43 @@ void RadioState::setDataRateB(int rate) {
 }
 
 void RadioState::setMiniPanAEnabled(bool enabled) {
-    if (m_miniPanAEnabled != enabled) {
-        m_miniPanAEnabled = enabled;
-        emit miniPanAEnabledChanged(enabled);
-    }
+    SpectrumDisplayHandlers::setMiniPanAEnabled(m_spectrumDisplayState, *this, enabled);
 }
 
 void RadioState::setMiniPanBEnabled(bool enabled) {
-    if (m_miniPanBEnabled != enabled) {
-        m_miniPanBEnabled = enabled;
-        emit miniPanBEnabledChanged(enabled);
-    }
+    SpectrumDisplayHandlers::setMiniPanBEnabled(m_spectrumDisplayState, *this, enabled);
 }
 
 void RadioState::setWaterfallHeight(int percent) {
-    percent = qBound(10, percent, 90);
-    if (m_waterfallHeight != percent) {
-        m_waterfallHeight = percent;
-        emit waterfallHeightChanged(percent);
-    }
+    SpectrumDisplayHandlers::setWaterfallHeight(m_spectrumDisplayState, *this, percent);
 }
 
 void RadioState::setWaterfallHeightExt(int percent) {
-    percent = qBound(10, percent, 90);
-    if (m_waterfallHeightExt != percent) {
-        m_waterfallHeightExt = percent;
-        emit waterfallHeightExtChanged(percent);
-    }
+    SpectrumDisplayHandlers::setWaterfallHeightExt(m_spectrumDisplayState, *this, percent);
 }
 
 void RadioState::setAveraging(int value) {
-    value = qBound(1, value, 20);
-    if (m_averaging != value) {
-        m_averaging = value;
-        emit averagingChanged(value);
-    }
+    SpectrumDisplayHandlers::setAveraging(m_spectrumDisplayState, *this, value);
+}
+
+void RadioState::setRefLevel(int level) {
+    SpectrumDisplayHandlers::setRefLevel(m_spectrumDisplayState, *this, level);
+}
+
+void RadioState::setScale(int scale) {
+    SpectrumDisplayHandlers::setScale(m_spectrumDisplayState, *this, scale);
+}
+
+void RadioState::setSpanHz(int spanHz) {
+    SpectrumDisplayHandlers::setSpanHz(m_spectrumDisplayState, *this, spanHz);
+}
+
+void RadioState::setRefLevelB(int level) {
+    SpectrumDisplayHandlers::setRefLevelB(m_spectrumDisplayState, *this, level);
+}
+
+void RadioState::setSpanHzB(int spanHz) {
+    SpectrumDisplayHandlers::setSpanHzB(m_spectrumDisplayState, *this, spanHz);
 }
 
 void RadioState::setRxEqBand(int index, int dB) {
@@ -589,45 +564,36 @@ void RadioState::registerCommandHandlers() {
     // Register handlers in order - will be sorted by prefix length (longest first)
     // This ensures "MD$" is checked before "MD", "NB$" before "NB", etc.
 
-    // Display commands (# prefix) - register longest first
-    m_commandHandlers.append({"#HWFH", [this](const QString &c) { handleDisplayHWFH(c); }});
-    m_commandHandlers.append({"#HDPM", [this](const QString &c) { handleDisplayHDPM(c); }});
-    m_commandHandlers.append({"#HDSM", [this](const QString &c) { handleDisplayHDSM(c); }});
-    m_commandHandlers.append({"#NBL$", [this](const QString &c) { handleDisplayNBL(c); }});
-    // #REF$/#REF — deduplicated via handleIntPair (prefixLen 5 vs 4)
-    m_commandHandlers.append({"#REF$", [this](const QString &c) {
-                                  handleIntPair(c, 5, m_refLevelB, -200, 50, &RadioState::refLevelBChanged);
-                              }});
-    // #SPN$/#SPN — deduplicated via handleIntPair (prefixLen 5 vs 4, min 1)
-    m_commandHandlers.append(
-        {"#SPN$", [this](const QString &c) { handleIntPair(c, 5, m_spanHzB, 1, 999999, &RadioState::spanBChanged); }});
-    m_commandHandlers.append({"#NB$", [this](const QString &c) { handleDisplayNB(c); }});
-    // #MP$/#MP — deduplicated via handleBoolPairVal (charPos 4 vs 3)
-    m_commandHandlers.append({"#MP$", [this](const QString &c) {
-                                  handleBoolPairVal(c, 4, m_miniPanBEnabled, &RadioState::miniPanBEnabledChanged);
-                              }});
-    m_commandHandlers.append({"#REF", [this](const QString &c) {
-                                  handleIntPair(c, 4, m_refLevel, -200, 50, &RadioState::refLevelChanged);
-                              }});
-    m_commandHandlers.append(
-        {"#SPN", [this](const QString &c) { handleIntPair(c, 4, m_spanHz, 1, 999999, &RadioState::spanChanged); }});
-    m_commandHandlers.append({"#SCL", [this](const QString &c) { handleDisplaySCL(c); }});
-    m_commandHandlers.append({"#DPM", [this](const QString &c) { handleDisplayDPM(c); }});
-    m_commandHandlers.append({"#DSM", [this](const QString &c) { handleDisplayDSM(c); }});
-    m_commandHandlers.append({"#FPS", [this](const QString &c) { handleDisplayFPS(c); }});
-    m_commandHandlers.append({"#WFC", [this](const QString &c) { handleDisplayWFC(c); }});
-    m_commandHandlers.append({"#WFH", [this](const QString &c) { handleDisplayWFH(c); }});
-    m_commandHandlers.append({"#AVG", [this](const QString &c) { handleDisplayAVG(c); }});
-    m_commandHandlers.append({"#PKM", [this](const QString &c) { handleDisplayPKM(c); }});
-    m_commandHandlers.append({"#FXT", [this](const QString &c) { handleDisplayFXT(c); }});
-    m_commandHandlers.append({"#FXA", [this](const QString &c) { handleDisplayFXA(c); }});
-    m_commandHandlers.append({"#FRZ", [this](const QString &c) { handleDisplayFRZ(c); }});
-    m_commandHandlers.append({"#VFA", [this](const QString &c) { handleDisplayVFA(c); }});
-    m_commandHandlers.append({"#VFB", [this](const QString &c) { handleDisplayVFB(c); }});
-    m_commandHandlers.append({"#MP", [this](const QString &c) {
-                                  handleBoolPairVal(c, 3, m_miniPanAEnabled, &RadioState::miniPanAEnabledChanged);
-                              }});
-    m_commandHandlers.append({"#AR", [this](const QString &c) { handleDisplayAR(c); }});
+    // Display commands (# prefix) - register longest first. All handlers
+    // delegate to SpectrumDisplayHandlers (see radiostate/spectrumdisplaystate.cpp).
+    auto spectrumHandler = [this](void (*fn)(SpectrumDisplayState &, RadioState &, const QString &)) {
+        return [this, fn](const QString &c) { fn(m_spectrumDisplayState, *this, c); };
+    };
+    m_commandHandlers.append({"#HWFH", spectrumHandler(&SpectrumDisplayHandlers::handleHWFH)});
+    m_commandHandlers.append({"#HDPM", spectrumHandler(&SpectrumDisplayHandlers::handleHDPM)});
+    m_commandHandlers.append({"#HDSM", spectrumHandler(&SpectrumDisplayHandlers::handleHDSM)});
+    m_commandHandlers.append({"#NBL$", spectrumHandler(&SpectrumDisplayHandlers::handleNBL)});
+    m_commandHandlers.append({"#REF$", spectrumHandler(&SpectrumDisplayHandlers::handleREFSub)});
+    m_commandHandlers.append({"#SPN$", spectrumHandler(&SpectrumDisplayHandlers::handleSPNSub)});
+    m_commandHandlers.append({"#NB$", spectrumHandler(&SpectrumDisplayHandlers::handleNB)});
+    m_commandHandlers.append({"#MP$", spectrumHandler(&SpectrumDisplayHandlers::handleMPSub)});
+    m_commandHandlers.append({"#REF", spectrumHandler(&SpectrumDisplayHandlers::handleREF)});
+    m_commandHandlers.append({"#SPN", spectrumHandler(&SpectrumDisplayHandlers::handleSPN)});
+    m_commandHandlers.append({"#SCL", spectrumHandler(&SpectrumDisplayHandlers::handleSCL)});
+    m_commandHandlers.append({"#DPM", spectrumHandler(&SpectrumDisplayHandlers::handleDPM)});
+    m_commandHandlers.append({"#DSM", spectrumHandler(&SpectrumDisplayHandlers::handleDSM)});
+    m_commandHandlers.append({"#FPS", spectrumHandler(&SpectrumDisplayHandlers::handleFPS)});
+    m_commandHandlers.append({"#WFC", spectrumHandler(&SpectrumDisplayHandlers::handleWFC)});
+    m_commandHandlers.append({"#WFH", spectrumHandler(&SpectrumDisplayHandlers::handleWFH)});
+    m_commandHandlers.append({"#AVG", spectrumHandler(&SpectrumDisplayHandlers::handleAVG)});
+    m_commandHandlers.append({"#PKM", spectrumHandler(&SpectrumDisplayHandlers::handlePKM)});
+    m_commandHandlers.append({"#FXT", spectrumHandler(&SpectrumDisplayHandlers::handleFXT)});
+    m_commandHandlers.append({"#FXA", spectrumHandler(&SpectrumDisplayHandlers::handleFXA)});
+    m_commandHandlers.append({"#FRZ", spectrumHandler(&SpectrumDisplayHandlers::handleFRZ)});
+    m_commandHandlers.append({"#VFA", spectrumHandler(&SpectrumDisplayHandlers::handleVFA)});
+    m_commandHandlers.append({"#VFB", spectrumHandler(&SpectrumDisplayHandlers::handleVFB)});
+    m_commandHandlers.append({"#MP", spectrumHandler(&SpectrumDisplayHandlers::handleMP)});
+    m_commandHandlers.append({"#AR", spectrumHandler(&SpectrumDisplayHandlers::handleAR)});
 
     // Multi-char commands with $ suffix (must come before their base commands)
     m_commandHandlers.append({"SIFP", [this](const QString &c) { handleSIFP(c); }});
@@ -1433,218 +1399,5 @@ void RadioState::handleER(const QString &cmd) {
         int errorCode = cmd.mid(2, colonPos - 2).toInt(&ok);
         if (ok)
             emit errorNotificationReceived(errorCode, cmd.mid(colonPos + 1));
-    }
-}
-
-// =============================================================================
-// Individual Command Handlers - Display (# prefix)
-// =============================================================================
-
-void RadioState::handleDisplaySCL(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int scale = cmd.mid(4).toInt(&ok);
-    if (ok && scale >= 10 && scale <= 150 && scale != m_scale) {
-        m_scale = scale;
-        emit scaleChanged(m_scale);
-    }
-}
-
-void RadioState::handleDisplayDPM(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int mode = cmd.mid(4).toInt(&ok);
-    if (ok && mode >= 0 && mode <= 2 && mode != m_dualPanModeLcd) {
-        m_dualPanModeLcd = mode;
-        emit dualPanModeLcdChanged(m_dualPanModeLcd);
-    }
-}
-
-void RadioState::handleDisplayHDPM(const QString &cmd) {
-    if (cmd.length() <= 5)
-        return;
-    bool ok;
-    int mode = cmd.mid(5).toInt(&ok);
-    if (ok && mode >= 0 && mode <= 2 && mode != m_dualPanModeExt) {
-        m_dualPanModeExt = mode;
-        emit dualPanModeExtChanged(m_dualPanModeExt);
-    }
-}
-
-void RadioState::handleDisplayDSM(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int mode = cmd.mid(4).toInt(&ok);
-    if (ok && (mode == 0 || mode == 1) && mode != m_displayModeLcd) {
-        m_displayModeLcd = mode;
-        emit displayModeLcdChanged(m_displayModeLcd);
-    }
-}
-
-void RadioState::handleDisplayHDSM(const QString &cmd) {
-    if (cmd.length() <= 5)
-        return;
-    bool ok;
-    int mode = cmd.mid(5).toInt(&ok);
-    if (ok && (mode == 0 || mode == 1) && mode != m_displayModeExt) {
-        m_displayModeExt = mode;
-        emit displayModeExtChanged(m_displayModeExt);
-    }
-}
-
-void RadioState::handleDisplayFPS(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int fps = cmd.mid(4).toInt(&ok);
-    if (ok && fps >= 12 && fps <= 30 && fps != m_displayFps) {
-        m_displayFps = fps;
-        emit displayFpsChanged(m_displayFps);
-    }
-}
-
-void RadioState::handleDisplayWFC(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int color = cmd.mid(4).toInt(&ok);
-    if (ok && color >= 0 && color <= 4 && color != m_waterfallColor) {
-        m_waterfallColor = color;
-        emit waterfallColorChanged(m_waterfallColor);
-    }
-}
-
-void RadioState::handleDisplayWFH(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int height = cmd.mid(4).toInt(&ok);
-    if (ok && height >= 0 && height <= 100 && height != m_waterfallHeight) {
-        m_waterfallHeight = height;
-        emit waterfallHeightChanged(m_waterfallHeight);
-    }
-}
-
-void RadioState::handleDisplayHWFH(const QString &cmd) {
-    if (cmd.length() <= 5)
-        return;
-    bool ok;
-    int height = cmd.mid(5).toInt(&ok);
-    if (ok && height >= 0 && height <= 100 && height != m_waterfallHeightExt) {
-        m_waterfallHeightExt = height;
-        emit waterfallHeightExtChanged(m_waterfallHeightExt);
-    }
-}
-
-void RadioState::handleDisplayAVG(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int avg = cmd.mid(4).toInt(&ok);
-    if (ok && avg >= 1 && avg <= 20 && avg != m_averaging) {
-        m_averaging = avg;
-        emit averagingChanged(m_averaging);
-    }
-}
-
-void RadioState::handleDisplayPKM(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int pkm = cmd.mid(4).toInt(&ok);
-    if (ok && (pkm == 0 || pkm == 1) && pkm != m_peakMode) {
-        m_peakMode = pkm;
-        emit peakModeChanged(m_peakMode > 0);
-    }
-}
-
-void RadioState::handleDisplayFXT(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int fxt = cmd.mid(4).toInt(&ok);
-    if (ok && (fxt == 0 || fxt == 1) && fxt != m_fixedTune) {
-        m_fixedTune = fxt;
-        emit fixedTuneChanged(m_fixedTune, m_fixedTuneMode);
-    }
-}
-
-void RadioState::handleDisplayFXA(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int fxa = cmd.mid(4).toInt(&ok);
-    if (ok && fxa >= 0 && fxa <= 4 && fxa != m_fixedTuneMode) {
-        m_fixedTuneMode = fxa;
-        emit fixedTuneChanged(m_fixedTune, m_fixedTuneMode);
-    }
-}
-
-void RadioState::handleDisplayFRZ(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int frz = cmd.mid(4).toInt(&ok);
-    if (ok && (frz == 0 || frz == 1) && frz != m_freeze) {
-        m_freeze = frz;
-        emit freezeChanged(m_freeze > 0);
-    }
-}
-
-void RadioState::handleDisplayVFA(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int vfa = cmd.mid(4).toInt(&ok);
-    if (ok && vfa >= 0 && vfa <= 3 && vfa != m_vfoACursor) {
-        m_vfoACursor = vfa;
-        emit vfoACursorChanged(m_vfoACursor);
-    }
-}
-
-void RadioState::handleDisplayVFB(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int vfb = cmd.mid(4).toInt(&ok);
-    if (ok && vfb >= 0 && vfb <= 3 && vfb != m_vfoBCursor) {
-        m_vfoBCursor = vfb;
-        emit vfoBCursorChanged(m_vfoBCursor);
-    }
-}
-
-void RadioState::handleDisplayAR(const QString &cmd) {
-    if (cmd.length() < 12)
-        return;
-    QChar mode = cmd.at(cmd.length() - 1);
-    int newValue = (mode == 'A') ? 1 : 0;
-    if (newValue != m_autoRefLevel) {
-        m_autoRefLevel = newValue;
-        emit autoRefLevelChanged(m_autoRefLevel > 0);
-    }
-}
-
-void RadioState::handleDisplayNB(const QString &cmd) {
-    if (cmd.length() <= 4)
-        return;
-    bool ok;
-    int mode = cmd.mid(4).toInt(&ok);
-    if (ok && mode >= 0 && mode <= 2 && mode != m_ddcNbMode) {
-        m_ddcNbMode = mode;
-        emit ddcNbModeChanged(m_ddcNbMode);
-    }
-}
-
-void RadioState::handleDisplayNBL(const QString &cmd) {
-    if (cmd.length() <= 5)
-        return;
-    bool ok;
-    int level = cmd.mid(5).toInt(&ok);
-    if (ok && level >= 0 && level <= 14 && level != m_ddcNbLevel) {
-        m_ddcNbLevel = level;
-        emit ddcNbLevelChanged(m_ddcNbLevel);
     }
 }

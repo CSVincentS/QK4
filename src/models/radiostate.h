@@ -14,6 +14,7 @@
 #include "radiostate/frequencyvfostate.h"
 #include "radiostate/modefilterstate.h"
 #include "radiostate/processingstate.h"
+#include "radiostate/spectrumdisplaystate.h"
 #include "radiostate/textdecodestate.h"
 
 /**
@@ -363,65 +364,30 @@ public:
     }
 
     // Panadapter REF level (Main)
-    int refLevel() const { return m_refLevel; }
-
-    // Setter for optimistic ref level updates (Main RX)
-    void setRefLevel(int level) {
-        if (level != m_refLevel) {
-            m_refLevel = level;
-            emit refLevelChanged(m_refLevel);
-        }
-    }
+    int refLevel() const { return m_spectrumDisplayState.refLevel; }
+    void setRefLevel(int level);
 
     // Panadapter scale (Main, from #SCL command, 10-150)
     // Higher values = more compressed display (signals appear weaker)
     // Lower values = more expanded display (signals appear stronger)
-    int scale() const { return m_scale; }
-
-    // Setter for optimistic scale updates (UI updates immediately)
-    void setScale(int scale) {
-        if (scale >= 10 && scale <= 150 && scale != m_scale) {
-            m_scale = scale;
-            emit scaleChanged(m_scale);
-        }
-    }
+    int scale() const { return m_spectrumDisplayState.scale; }
+    void setScale(int scale);
 
     // Panadapter span (Main, from #SPN command, in Hz)
-    int spanHz() const { return m_spanHz; }
-
-    // Setter for optimistic span updates (UI updates immediately, like K4Mobile)
-    void setSpanHz(int spanHz) {
-        if (spanHz > 0 && spanHz != m_spanHz) {
-            m_spanHz = spanHz;
-            emit spanChanged(m_spanHz);
-        }
-    }
+    int spanHz() const { return m_spectrumDisplayState.spanHz; }
+    void setSpanHz(int spanHz);
 
     // Panadapter REF level (Sub)
-    int refLevelB() const { return m_refLevelB; }
-
-    // Setter for optimistic ref level updates (Sub RX)
-    void setRefLevelB(int level) {
-        if (level != m_refLevelB) {
-            m_refLevelB = level;
-            emit refLevelBChanged(m_refLevelB);
-        }
-    }
+    int refLevelB() const { return m_spectrumDisplayState.refLevelB; }
+    void setRefLevelB(int level);
 
     // Panadapter span (Sub, from #SPN$ command, in Hz)
-    int spanHzB() const { return m_spanHzB; }
-
-    // Setter for optimistic span updates (Sub RX)
-    void setSpanHzB(int spanHz) {
-        if (spanHz > 0 && spanHz != m_spanHzB) {
-            m_spanHzB = spanHz;
-            emit spanBChanged(m_spanHzB);
-        }
-    }
+    int spanHzB() const { return m_spectrumDisplayState.spanHzB; }
+    void setSpanHzB(int spanHz);
 
     // Mini-Pan enabled state (tracked via #MP / #MP$ CAT commands)
-    bool miniPanAEnabled() const { return m_miniPanAEnabled; }
-    bool miniPanBEnabled() const { return m_miniPanBEnabled; }
+    bool miniPanAEnabled() const { return m_spectrumDisplayState.miniPanAEnabled; }
+    bool miniPanBEnabled() const { return m_spectrumDisplayState.miniPanBEnabled; }
 
     // Mini-Pan state setters (called optimistically when sending CAT commands)
     void setMiniPanAEnabled(bool enabled);
@@ -436,24 +402,24 @@ public:
 
     // Display state (tracked via # prefixed display commands)
     // LCD/EXT getters - default to LCD for backwards compatibility
-    int dualPanModeLcd() const { return m_dualPanModeLcd; }
-    int dualPanModeExt() const { return m_dualPanModeExt; }
-    int displayModeLcd() const { return m_displayModeLcd; }
-    int displayModeExt() const { return m_displayModeExt; }
-    int displayFps() const { return m_displayFps; }
-    int waterfallColor() const { return m_waterfallColor; }
-    int waterfallHeight() const { return m_waterfallHeight; }       // LCD: #WFHxx (0-100%)
-    int waterfallHeightExt() const { return m_waterfallHeightExt; } // EXT: #HWFHxx (0-100%)
-    int averaging() const { return m_averaging; }
-    bool peakMode() const { return m_peakMode > 0; }
-    int fixedTune() const { return m_fixedTune; }         // #FXT: 0=track, 1=fixed
-    int fixedTuneMode() const { return m_fixedTuneMode; } // #FXA: 0-4
-    bool freeze() const { return m_freeze > 0; }
-    int vfoACursor() const { return m_vfoACursor; }
-    int vfoBCursor() const { return m_vfoBCursor; }
-    bool autoRefLevel() const { return m_autoRefLevel > 0; }
-    int ddcNbMode() const { return m_ddcNbMode; }   // #NB$: 0=off, 1=on, 2=auto
-    int ddcNbLevel() const { return m_ddcNbLevel; } // #NBL$: 0-14
+    int dualPanModeLcd() const { return m_spectrumDisplayState.dualPanModeLcd; }
+    int dualPanModeExt() const { return m_spectrumDisplayState.dualPanModeExt; }
+    int displayModeLcd() const { return m_spectrumDisplayState.displayModeLcd; }
+    int displayModeExt() const { return m_spectrumDisplayState.displayModeExt; }
+    int displayFps() const { return m_spectrumDisplayState.displayFps; }
+    int waterfallColor() const { return m_spectrumDisplayState.waterfallColor; }
+    int waterfallHeight() const { return m_spectrumDisplayState.waterfallHeight; }       // #WFHxx
+    int waterfallHeightExt() const { return m_spectrumDisplayState.waterfallHeightExt; } // #HWFHxx
+    int averaging() const { return m_spectrumDisplayState.averaging; }
+    bool peakMode() const { return m_spectrumDisplayState.peakMode > 0; }
+    int fixedTune() const { return m_spectrumDisplayState.fixedTune; } // #FXT
+    int fixedTuneMode() const { return m_spectrumDisplayState.fixedTuneMode; }
+    bool freeze() const { return m_spectrumDisplayState.freeze > 0; }
+    int vfoACursor() const { return m_spectrumDisplayState.vfoACursor; }
+    int vfoBCursor() const { return m_spectrumDisplayState.vfoBCursor; }
+    bool autoRefLevel() const { return m_spectrumDisplayState.autoRefLevel > 0; }
+    int ddcNbMode() const { return m_spectrumDisplayState.ddcNbMode; }
+    int ddcNbLevel() const { return m_spectrumDisplayState.ddcNbLevel; }
 
     // Data sub-mode (DT command): 0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D
     int dataSubMode() const { return m_dataControlState.dataSubMode; }
@@ -826,52 +792,16 @@ private:
     bool m_lockA = false;
     bool m_lockB = false;
 
-    // Panadapter REF level (Main)
-    int m_refLevel = -110; // Default -110 dBm
-
-    // Panadapter scale (GLOBAL, from #SCL command, applies to both panadapters)
-    int m_scale = -1; // 10-150, init to -1 to ensure first emit
-
-    // Panadapter span (Main, from #SPN command)
-    int m_spanHz = 0; // Init to 0 to ensure first emit
-
-    // Panadapter REF level (Sub)
-    int m_refLevelB = -110; // Default -110 dBm
-
-    // Panadapter span (Sub, from #SPN$ command)
-    int m_spanHzB = 0; // Init to 0 to ensure first emit
+    // Panadapter / display state (#REF, #SPN, #SCL, #MP, #DPM, #DSM, #FPS,
+    // #WFC, #WFH, #AVG, #PKM, #FXT, #FXA, #FRZ, #VFA, #VFB, #AR, #NB$,
+    // #NBL$, plus EXT variants) — see models/radiostate/spectrumdisplaystate.h.
+    SpectrumDisplayState m_spectrumDisplayState;
 
     // Radio info
     QString m_radioID;
     QString m_radioModel;
     QString m_optionModules;
     QMap<QString, QString> m_firmwareVersions;
-
-    // Mini-Pan enabled state (tracked via #MP / #MP$ CAT commands)
-    bool m_miniPanAEnabled = false;
-    bool m_miniPanBEnabled = false;
-
-    // Display state (from # prefixed display commands)
-    // Initial values are -1 to ensure first update triggers signal
-    // Separate LCD (#DPM, #DSM) and EXT (#HDPM, #HDSM) state
-    int m_dualPanModeLcd = -1;     // #DPM: LCD 0=A, 1=B, 2=Dual
-    int m_dualPanModeExt = -1;     // #HDPM: EXT 0=A, 1=B, 2=Dual
-    int m_displayModeLcd = -1;     // #DSM: LCD 0=spectrum, 1=spectrum+waterfall
-    int m_displayModeExt = -1;     // #HDSM: EXT 0=spectrum, 1=spectrum+waterfall
-    int m_displayFps = 30;         // #FPS: Display frame rate 12-30 (default 30)
-    int m_waterfallColor = -1;     // #WFC: 0-4
-    int m_waterfallHeight = 50;    // #WFHxx: LCD waterfall height 0-100% (default 50%)
-    int m_waterfallHeightExt = 50; // #HWFHxx: EXT waterfall height 0-100% (default 50%)
-    int m_averaging = -1;          // #AVG: 1-20
-    int m_peakMode = -1;           // #PKM: 0/1 (int for -1 init)
-    int m_fixedTune = -1;          // #FXT: 0=track, 1=fixed
-    int m_fixedTuneMode = -1;      // #FXA: 0-4
-    int m_freeze = -1;             // #FRZ: 0/1 (int for -1 init)
-    int m_vfoACursor = -1;         // #VFA: 0=OFF, 1=ON, 2=AUTO, 3=HIDE
-    int m_vfoBCursor = -1;         // #VFB: 0-3
-    int m_autoRefLevel = -1;       // #AR: A=auto, M=manual (GLOBAL - affects both VFOs)
-    int m_ddcNbMode = -1;          // #NB$: 0=off, 1=on, 2=auto
-    int m_ddcNbLevel = -1;         // #NBL$: 0-14
 
     // Data sub-mode + rate + optimistic cooldown timestamps live on m_dataControlState.
 
@@ -1049,29 +979,9 @@ private:
     void handleMN(const QString &cmd); // Message Bank
     void handleER(const QString &cmd); // Error notifications
 
-    // Display commands (# prefix)
-    // #REF/#REF$ — handled inline via handleIntPair
-    void handleDisplaySCL(const QString &cmd); // #SCL - Scale
-    // #SPN/#SPN$ — handled inline via handleIntPair
-    // #MP/#MP$ — handled inline via handleBoolPair
-    void handleDisplayDPM(const QString &cmd);  // #DPM - Dual Pan Mode LCD
-    void handleDisplayHDPM(const QString &cmd); // #HDPM - Dual Pan Mode EXT
-    void handleDisplayDSM(const QString &cmd);  // #DSM - Display Mode LCD
-    void handleDisplayHDSM(const QString &cmd); // #HDSM - Display Mode EXT
-    void handleDisplayFPS(const QString &cmd);  // #FPS - Frame Rate
-    void handleDisplayWFC(const QString &cmd);  // #WFC - Waterfall Color
-    void handleDisplayWFH(const QString &cmd);  // #WFH - Waterfall Height LCD
-    void handleDisplayHWFH(const QString &cmd); // #HWFH - Waterfall Height EXT
-    void handleDisplayAVG(const QString &cmd);  // #AVG - Averaging
-    void handleDisplayPKM(const QString &cmd);  // #PKM - Peak Mode
-    void handleDisplayFXT(const QString &cmd);  // #FXT - Fixed Tune
-    void handleDisplayFXA(const QString &cmd);  // #FXA - Fixed Tune Mode
-    void handleDisplayFRZ(const QString &cmd);  // #FRZ - Freeze
-    void handleDisplayVFA(const QString &cmd);  // #VFA - VFO A Cursor
-    void handleDisplayVFB(const QString &cmd);  // #VFB - VFO B Cursor
-    void handleDisplayAR(const QString &cmd);   // #AR - Auto Ref Level
-    void handleDisplayNB(const QString &cmd);   // #NB$ - DDC NB Mode
-    void handleDisplayNBL(const QString &cmd);  // #NBL$ - DDC NB Level
+    // Display commands (# prefix) — all handlers live in SpectrumDisplayHandlers
+    // (see models/radiostate/spectrumdisplaystate.{h,cpp}). The registry inline
+    // lambdas in registerCommandHandlers() forward directly into the namespace.
 };
 
 #endif // RADIOSTATE_H
