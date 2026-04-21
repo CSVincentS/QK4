@@ -60,9 +60,16 @@ QAction *myAction = myMenu->addAction("My Action");
 connect(myAction, &QAction::triggered, this, &MainWindow::onMyAction);
 ```
 
+### Adding a Protocol Packet Type
+
+1. `src/network/protocol.h` — add to `PayloadType` enum
+2. `src/network/protocol.cpp` — add case in `processPacket()`
+3. `src/network/protocol.h` — add signal for new packet type
+4. `src/mainwindow.cpp` — connect signal to handler (or route via the owning controller)
+
 ### Adding RadioState Property / CAT Command
 
-Post-Phase 1: state lives in **subsystem structs** under `src/models/radiostate/`, not as raw members on `RadioState`. The flow is:
+State lives in **subsystem structs** under `src/models/radiostate/`, not as raw members on `RadioState`. The flow is:
 
 1. **Pick the subsystem.** Field lives in whichever subsystem matches its topic — see the table in "Subsystem State" below. If genuinely new topic (rare), create a new subsystem struct.
 2. **Add the field to the struct** and cover it in the struct's `reset()`.
@@ -99,8 +106,9 @@ Rule: signals stay on `RadioState`; data and logic live in subsystems.
 
 - **Single `QObject` thread-affinity check.** Only `RadioState` is a `QObject`; subsystems can't accidentally sit on the wrong thread. `Q_ASSERT(QThread::currentThread() == thread())` in `parseCATCommand()` covers the whole hierarchy.
 - **No moc storm.** Adding a subsystem doesn't touch the moc pipeline. No Q_OBJECT, no signals, no child-destructor ordering traps during RadioState teardown.
-- **Public API unchanged.** External callers (CatServer, controllers, MainWindow, etc.) still see `radioState->frequency()`, `radioState->mode()`, etc. Subsystems are an implementation detail.
+- **Public API unchanged.** External callers (CatServer, controllers, MainWindow, etc.) still see `radioState->frequency()`, `radioState->mode()`, etc. Subsystems are an implementation detail — and the public surface `CatServer` depends on is pinned by `docs/radiostate-catserver-api-contract.md`.
 - **Signals still rollup via the façade.** When a handler fn mutates a field, it emits through the `owner` reference: `emit owner.frequencyChanged(...)`. Cross-cutting rollup signals (`processingChanged`, `antennaChanged`) emit from the same place they always did.
+- **Subsystems own their slice of the command registry.** `RadioState::registerCommandHandlers()` is composition — each subsystem contributes its CAT prefixes to the longest-first dispatch table. Adding a subsystem doesn't edit a monolithic if/else chain.
 
 ### File layout per subsystem
 
@@ -122,14 +130,6 @@ void RadioState::handleMD(const QString &cmd) {
 
 - **Golden CAT-trace replay** (`test_radiostate_golden`) — every subsystem move must preserve the emit sequence byte-for-byte.
 - **Registry invariant** (`test_radiostate_registry`) — every CAT prefix resolves, longest-first ordering preserved.
-- **Signal-graph drift** (`tools/check_signal_graph_drift.py`) — per-file emit counts frozen in `docs/generated/baseline/`; regressions surface on PR.
-
-### Adding a Protocol Packet Type
-
-1. **network/protocol.h**: Add to `PayloadType` enum
-2. **network/protocol.cpp**: Add case in `processPacket()`
-3. **network/protocol.h**: Add signal for new packet type
-4. **mainwindow.cpp**: Connect signal to handler
 
 ---
 
@@ -479,36 +479,6 @@ VFOWidget::VFOWidget(RadioState *state, QWidget *parent)
 | **Controller** | Participates in coordinated state across multiple widgets (e.g., feature menu where toggling one feature updates 5 indicators), or triggers CAT commands, or requires mode-dependent behavior spanning several widgets. |
 
 **Rule of thumb:** if the slot body is just `m_target->setValue(incoming)`, the widget should observe directly. The middleman is pure overhead.
-
----
-
-## State Subsystem Pattern (RadioState internals)
-
-`RadioState` is the single `QObject` external code depends on — MainWindow, CatServer, and every controller connect to its signals + call its getters. That public surface must stay stable during the Phase 1 refactor (see `docs/radiostate-catserver-api-contract.md`).
-
-Internal state is reorganized into **plain-struct subsystems** that RadioState composes. This pattern is the target shape once Phase 1 lands; apply it to any new RadioState expansion going forward.
-
-### Rules
-
-1. **Subsystems are plain structs, not `QObject`.** Keeps RadioState as the only QObject — one thread affinity, one `Q_ASSERT(currentThread() == thread())`, no moc explosion, no child-destructor signal-ordering surprises.
-
-2. **RadioState is the only emitter.** Subsystem handlers take `RadioState&` by reference and call `emit owner.xxxChanged()` via the facade. The subsystem doesn't even know Qt signals exist.
-
-3. **Subsystems own their field subset.** Sentinel initialization lives with the field. `RadioState::reset()` delegates to each subsystem's `reset()`.
-
-4. **Each subsystem registers its own handler fragments** into RadioState's registry. `RadioState::registerCommandHandlers()` becomes composition: it calls each subsystem's `registerHandlers(RegistryBuilder&)`.
-
-5. **Public API (getters + signals) stays on `RadioState`.** External callers see a stable surface even as internals evolve. If a getter must be exposed, RadioState delegates — the subsystem stays private.
-
-### Subsystem file layout
-
-```
-src/models/radiostate.{cpp,h}            <- facade: registry + public API
-src/models/radiostate/frequencyvfostate.{cpp,h}
-src/models/radiostate/modefilterstate.{cpp,h}
-src/models/radiostate/processingstate.{cpp,h}
-...
-```
 
 ---
 
