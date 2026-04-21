@@ -117,6 +117,7 @@ set(SOURCES
     src/models/radiostate/audioeffectsstate.cpp
     src/models/radiostate/datacontrolstate.cpp
     src/models/radiostate/frequencyvfostate.cpp
+    src/models/radiostate/levelsstate.cpp
     src/models/radiostate/modefilterstate.cpp
     src/models/radiostate/processingstate.cpp
     src/models/radiostate/rxtxmeterstate.cpp
@@ -230,6 +231,7 @@ set(HEADERS
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h
     src/models/radiostate/frequencyvfostate.h
+    src/models/radiostate/levelsstate.h
     src/models/radiostate/modefilterstate.h
     src/models/radiostate/processingstate.h
     src/models/radiostate/textdecodestate.h

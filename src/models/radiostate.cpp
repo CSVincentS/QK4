@@ -17,15 +17,8 @@ void RadioState::reset() {
     // Mode / filter / CW pitch / keyer config — subsystem struct.
     m_modeFilterState.reset();
 
-    // Power and levels
-    m_rfPower = -1.0;
-    m_isQrpMode = false;
-    m_micGain = -1;
-    m_compression = -1;
-    m_rfGain = -999;
-    m_squelchLevel = -1;
-    m_rfGainB = -999;
-    m_squelchLevelB = -1;
+    // Power, mic gain, compression, RF gain, squelch.
+    m_levelsState.reset();
     // Keyer speed / iambic / paddle / weight reset via m_modeFilterState.reset() above.
 
     // Meters / TX state / control toggles / supply / radio identity / message bank.
@@ -188,18 +181,7 @@ void RadioState::setCwPitch(int pitchHz) {
 }
 
 void RadioState::setRfPower(double watts) {
-    bool qrp = (watts <= 10.0);
-    bool changed = false;
-    if (m_rfPower != watts) {
-        m_rfPower = watts;
-        changed = true;
-    }
-    if (qrp != m_isQrpMode) {
-        m_isQrpMode = qrp;
-        changed = true;
-    }
-    if (changed)
-        emit rfPowerChanged(m_rfPower, m_isQrpMode);
+    LevelsHandlers::setRfPower(m_levelsState, *this, watts);
 }
 
 void RadioState::setFilterBandwidth(int bwHz) {
@@ -216,45 +198,27 @@ void RadioState::setIfShiftB(int shift) {
 }
 
 void RadioState::setRfGain(int gain) {
-    if (m_rfGain != gain) {
-        m_rfGain = gain;
-        emit rfGainChanged(m_rfGain);
-    }
+    LevelsHandlers::setRfGain(m_levelsState, *this, gain);
 }
 
 void RadioState::setSquelchLevel(int level) {
-    if (m_squelchLevel != level) {
-        m_squelchLevel = level;
-        emit squelchChanged(m_squelchLevel);
-    }
+    LevelsHandlers::setSquelchLevel(m_levelsState, *this, level);
 }
 
 void RadioState::setRfGainB(int gain) {
-    if (m_rfGainB != gain) {
-        m_rfGainB = gain;
-        emit rfGainBChanged(m_rfGainB);
-    }
+    LevelsHandlers::setRfGainB(m_levelsState, *this, gain);
 }
 
 void RadioState::setSquelchLevelB(int level) {
-    if (m_squelchLevelB != level) {
-        m_squelchLevelB = level;
-        emit squelchBChanged(m_squelchLevelB);
-    }
+    LevelsHandlers::setSquelchLevelB(m_levelsState, *this, level);
 }
 
 void RadioState::setMicGain(int gain) {
-    if (m_micGain != gain) {
-        m_micGain = gain;
-        emit micGainChanged(m_micGain);
-    }
+    LevelsHandlers::setMicGain(m_levelsState, *this, gain);
 }
 
 void RadioState::setCompression(int level) {
-    if (m_compression != level) {
-        m_compression = level;
-        emit compressionChanged(m_compression);
-    }
+    LevelsHandlers::setCompression(m_levelsState, *this, level);
 }
 
 void RadioState::setBalance(int mode, int offset) {
@@ -587,23 +551,10 @@ void RadioState::registerCommandHandlers() {
     // RG$ — strips leading dash before parsing
     // WHY: K4 reports RF gain as an attenuation in the range -0..-60 dB
     // ("RG-030;" = -30 dB). Throughout the codebase (SideControlPanel UI,
-    // MainWindow scroll handlers, setRfGain()) RF gain is carried as a
-    // positive *magnitude* 0..60; the minus sign is re-added only when
-    // dispatching CAT or formatting for display. We take qAbs() here to
-    // keep the magnitude convention explicit.
-    m_commandHandlers.append({"RG$", [this](const QString &c) {
-                                  if (c.length() <= 3)
-                                      return;
-                                  bool ok;
-                                  int rg = qAbs(c.mid(3).toInt(&ok));
-                                  if (ok && m_rfGainB != rg) {
-                                      m_rfGainB = rg;
-                                      emit rfGainBChanged(m_rfGainB);
-                                  }
-                              }});
-    m_commandHandlers.append({"SQ$", [this](const QString &c) {
-                                  handleIntPair(c, 3, m_squelchLevelB, -99999, 99999, &RadioState::squelchBChanged);
-                              }});
+    m_commandHandlers.append(
+        {"RG$", [this](const QString &c) { LevelsHandlers::handleRGSub(m_levelsState, *this, c); }});
+    m_commandHandlers.append(
+        {"SQ$", [this](const QString &c) { LevelsHandlers::handleSQSub(m_levelsState, *this, c); }});
     m_commandHandlers.append({"SM$", [this](const QString &c) { handleSMSub(c); }});
     m_commandHandlers.append({"NB$", [this](const QString &c) { handleNBSub(c); }});
     m_commandHandlers.append({"NR$", [this](const QString &c) { handleNRSub(c); }});
@@ -665,22 +616,8 @@ void RadioState::registerCommandHandlers() {
                                                 &RadioState::ifShiftChanged);
                               }});
     m_commandHandlers.append({"CW", [this](const QString &c) { handleCW(c); }});
-    // RG — deduplicated inline (strips leading dash)
-    // WHY: see RG$ handler above — RF gain is carried as positive magnitude 0..60.
-    m_commandHandlers.append({"RG", [this](const QString &c) {
-                                  if (c.length() <= 2)
-                                      return;
-                                  bool ok;
-                                  int rg = qAbs(c.mid(2).toInt(&ok));
-                                  if (ok && m_rfGain != rg) {
-                                      m_rfGain = rg;
-                                      emit rfGainChanged(m_rfGain);
-                                  }
-                              }});
-    // SQ — deduplicated via handleIntPair
-    m_commandHandlers.append({"SQ", [this](const QString &c) {
-                                  handleIntPair(c, 2, m_squelchLevel, -99999, 99999, &RadioState::squelchChanged);
-                              }});
+    m_commandHandlers.append({"RG", [this](const QString &c) { LevelsHandlers::handleRG(m_levelsState, *this, c); }});
+    m_commandHandlers.append({"SQ", [this](const QString &c) { LevelsHandlers::handleSQ(m_levelsState, *this, c); }});
     m_commandHandlers.append({"MG", [this](const QString &c) { handleMG(c); }});
     m_commandHandlers.append({"ML", [this](const QString &c) { handleML(c); }});
     m_commandHandlers.append({"CP", [this](const QString &c) { handleCP(c); }});
@@ -787,25 +724,11 @@ void RadioState::handleCW(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleMG(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int gain = cmd.mid(2).toInt(&ok);
-    if (ok && gain != m_micGain) {
-        m_micGain = gain;
-        emit micGainChanged(m_micGain);
-    }
+    LevelsHandlers::handleMG(m_levelsState, *this, cmd);
 }
 
 void RadioState::handleCP(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int comp = cmd.mid(2).toInt(&ok);
-    if (ok && comp != m_compression) {
-        m_compression = comp;
-        emit compressionChanged(m_compression);
-    }
+    LevelsHandlers::handleCP(m_levelsState, *this, cmd);
 }
 
 void RadioState::handleML(const QString &cmd) {
@@ -821,47 +744,7 @@ void RadioState::handleMX(const QString &cmd) {
 }
 
 void RadioState::handlePC(const QString &cmd) {
-    // Power Control - PCnnnr; where nnn=power value, r=L/H/X
-    // L = QRP (0.1-10W): nnn is watts*10 (e.g., 099 = 9.9W)
-    // H = QRO (1-110W): nnn is watts directly (e.g., 050 = 50W)
-    // X = XVTR (0.1-10mW): nnn is mW*10
-    if (cmd.length() < 6)
-        return;
-
-    bool ok;
-    int powerRaw = cmd.mid(2, 3).toInt(&ok);
-    if (!ok)
-        return;
-
-    QChar mode = cmd.at(5);
-    double watts;
-    bool qrp;
-
-    if (mode == 'L') {
-        // QRP mode: value is watts * 10
-        watts = powerRaw / 10.0;
-        qrp = true;
-    } else if (mode == 'H') {
-        // QRO mode: value is watts directly
-        watts = powerRaw;
-        qrp = false;
-    } else {
-        // Unknown mode (X for XVTR, etc.) - skip
-        return;
-    }
-
-    bool changed = false;
-    if (watts != m_rfPower) {
-        m_rfPower = watts;
-        changed = true;
-    }
-    if (qrp != m_isQrpMode) {
-        m_isQrpMode = qrp;
-        changed = true;
-    }
-    if (changed) {
-        emit rfPowerChanged(m_rfPower, m_isQrpMode);
-    }
+    LevelsHandlers::handlePC(m_levelsState, *this, cmd);
 }
 
 void RadioState::handleKS(const QString &cmd) {

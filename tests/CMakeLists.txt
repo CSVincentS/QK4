@@ -20,6 +20,7 @@ add_executable(test_radiostate test_radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
@@ -37,6 +38,7 @@ add_executable(test_radiostate_registry test_radiostate_registry.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
@@ -57,6 +59,7 @@ add_executable(test_radiostate_golden test_radiostate_golden.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
@@ -76,6 +79,7 @@ add_executable(bench_radiostate bench_radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
@@ -110,6 +114,7 @@ add_executable(test_catserver test_catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp

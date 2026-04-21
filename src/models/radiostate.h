@@ -12,6 +12,7 @@
 #include "radiostate/audioeffectsstate.h"
 #include "radiostate/datacontrolstate.h"
 #include "radiostate/frequencyvfostate.h"
+#include "radiostate/levelsstate.h"
 #include "radiostate/modefilterstate.h"
 #include "radiostate/processingstate.h"
 #include "radiostate/rxtxmeterstate.h"
@@ -92,14 +93,14 @@ public:
     int keyingWeight() const { return m_modeFilterState.keyingWeight; }
 
     // Power and levels
-    double rfPower() const { return m_rfPower; }
-    bool isQrpMode() const { return m_isQrpMode; }
-    int micGain() const { return m_micGain; }
-    int compression() const { return m_compression; }
-    int rfGain() const { return m_rfGain; }
-    int squelchLevel() const { return m_squelchLevel; }
-    int rfGainB() const { return m_rfGainB; }
-    int squelchLevelB() const { return m_squelchLevelB; }
+    double rfPower() const { return m_levelsState.rfPower; }
+    bool isQrpMode() const { return m_levelsState.isQrpMode; }
+    int micGain() const { return m_levelsState.micGain; }
+    int compression() const { return m_levelsState.compression; }
+    int rfGain() const { return m_levelsState.rfGain; }
+    int squelchLevel() const { return m_levelsState.squelchLevel; }
+    int rfGainB() const { return m_levelsState.rfGainB; }
+    int squelchLevelB() const { return m_levelsState.squelchLevelB; }
 
     // Optimistic setters for scroll wheel updates (radio doesn't echo these commands)
     void setKeyerSpeed(int wpm);
@@ -645,15 +646,8 @@ private:
     // Mode / filter / CW pitch / keyer — see radiostate/modefilterstate.h.
     ModeFilterState m_modeFilterState;
 
-    // Power and levels
-    double m_rfPower = -1.0; // Init to invalid to ensure first emit
-    bool m_isQrpMode = false;
-    int m_micGain = -1;       // Init to invalid to ensure first emit (0-80)
-    int m_compression = -1;   // Init to invalid to ensure first emit (0-30, SSB only)
-    int m_rfGain = -999;      // Init to invalid to ensure first emit
-    int m_squelchLevel = -1;  // Init to invalid to ensure first emit
-    int m_rfGainB = -999;     // Sub RX RF gain
-    int m_squelchLevelB = -1; // Sub RX squelch
+    // Power, mic gain, compression, RF gain, squelch — see radiostate/levelsstate.h.
+    LevelsState m_levelsState;
     // Keyer speed / iambic / paddle / weight live on m_modeFilterState.
 
     // Meters, TX/RX transition, control toggles (SB/DV/TS/BS), message bank,
