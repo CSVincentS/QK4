@@ -259,8 +259,9 @@ void MainWindow::setupRadioStateWiring() {
     // Synthetic "Display FPS" menu item value tracks the radio's echoed FPS.
     connect(m_radioState, &RadioState::displayFpsChanged, m_menuController, &MenuController::setDisplayFps);
 
-    // Error/notification messages from K4 (ERxx: format) -> show notification popup
-    connect(m_radioState, &RadioState::errorNotificationReceived, this, &MainWindow::onErrorNotification);
+    // Error/notification messages from K4 (ERxx:) → notification popup.
+    connect(m_radioState, &RadioState::errorNotificationReceived, this,
+            [this](int, const QString &message) { m_notificationWidget->showMessage(message, 2000); });
 
     // TX meter data + TX state (indicator colors, VFO meter-mode flip,
     // XIT-aware frequency refresh, PA current calc) owned by TxStateController.
@@ -268,9 +269,9 @@ void MainWindow::setupRadioStateWiring() {
     // SUB / DIV indicator styling + VFO B dim-state + auto-hide mini pan B
     // are owned by SubDivIndicatorController (created later in constructor).
 
-    // VFO Lock indicators - show lock arc on VFO A/B squares when locked
-    connect(m_radioState, &RadioState::lockAChanged, this, [this](bool locked) { m_vfoRow->setLockA(locked); });
-    connect(m_radioState, &RadioState::lockBChanged, this, [this](bool locked) { m_vfoRow->setLockB(locked); });
+    // VFO Lock indicators — direct-observation.
+    connect(m_radioState, &RadioState::lockAChanged, m_vfoRow, &VfoRowWidget::setLockA);
+    connect(m_radioState, &RadioState::lockBChanged, m_vfoRow, &VfoRowWidget::setLockB);
 
     // Side control panel state (BW/SHFT/HI/LO, knob values, CW↔voice display
     // swap) owned by SideControlDisplayController (created later in ctor).
@@ -1803,13 +1804,3 @@ void MainWindow::toggleTxPopup() {
     m_popupManager->toggleTx();
 }
 
-// ============== K4 Error/Notification Slots ==============
-
-void MainWindow::onErrorNotification(int errorCode, const QString &message) {
-    Q_UNUSED(errorCode)
-    // Show the notification message in a centered popup
-    // The message contains the text after "ERxx:" (e.g., "KPA1500 Status: operate.")
-    if (m_notificationWidget) {
-        m_notificationWidget->showMessage(message, 2000);
-    }
-}

@@ -75,9 +75,6 @@ private slots:
     void toggleTxPopup();
     void closeAllPopups();
 
-    // Error/notification from K4 (ERxx: messages)
-    void onErrorNotification(int errorCode, const QString &message);
-
     // Display FPS (synthetic menu item)
 
 private:
