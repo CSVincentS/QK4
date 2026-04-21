@@ -14,6 +14,7 @@
 #include "controllers/vforowindicatorcontroller.h"
 #include "controllers/ritxitcontroller.h"
 #include "controllers/modelabelcontroller.h"
+#include "controllers/vfofrequencycontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -129,14 +130,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     m_modeLabelController = new ModeLabelController(m_radioState, m_modeALabel, m_modeBLabel, this);
 
+    m_vfoFrequencyController = new VfoFrequencyController(m_radioState, m_vfoA, m_vfoB, this);
+
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
     // RIT offset shifts rendered VFO frequency — refresh displays on any
     // RIT/XIT state change emitted by the controller.
-    connect(m_ritXitController, &RitXitController::displayRefreshRequested, this, [this]() {
-        onFrequencyChanged(m_radioState->vfoA());
-        onFrequencyBChanged(m_radioState->vfoB());
-    });
+    connect(m_ritXitController, &RitXitController::displayRefreshRequested, m_vfoFrequencyController,
+            &VfoFrequencyController::refresh);
 
     setupCatServer();
 }
@@ -215,15 +216,12 @@ void MainWindow::setupConnectionWiring() {
 
 void MainWindow::setupRadioStateWiring() {
     // RadioState signals -> UI updates (VFO A)
-    connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::onFrequencyChanged);
+    // Frequency display (with RIT/XIT offset) owned by VfoFrequencyController.
     // Mode + data-sub-mode + ESSB label updates are owned by ModeLabelController.
     // TX button-row mode-dependent labels are observed by ButtonRowDispatcher.
     // VOX label refresh on mode change is handled by VfoRowIndicatorController
     // (K4 VOX state is per-mode-class, so the displayed color depends on current mode).
     connect(m_radioState, &RadioState::sMeterChanged, this, &MainWindow::onSMeterChanged);
-
-    // RadioState signals -> UI updates (VFO B)
-    connect(m_radioState, &RadioState::frequencyBChanged, this, &MainWindow::onFrequencyBChanged);
     connect(m_radioState, &RadioState::sMeterBChanged, this, &MainWindow::onSMeterBChanged);
     // Auto-hide mini pan B when VFOs move to different bands (and SUB RX is off)
     connect(m_radioState, &RadioState::frequencyChanged, m_spectrumController,
@@ -298,11 +296,10 @@ void MainWindow::setupRadioStateWiring() {
         // No split: VFO A displays TX freq; Split: VFO B displays TX freq
         // On return to RX, restore the normal RX frequency display
         if (m_radioState->xitEnabled()) {
-            if (m_radioState->splitEnabled()) {
-                onFrequencyBChanged(m_radioState->vfoB());
-            } else {
-                onFrequencyChanged(m_radioState->vfoA());
-            }
+            if (m_radioState->splitEnabled())
+                m_vfoFrequencyController->refreshVfoB();
+            else
+                m_vfoFrequencyController->refreshVfoA();
         }
     });
 
@@ -1740,30 +1737,6 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     mainVLayout->addLayout(antennaRow);
 }
 
-QString MainWindow::formatFrequency(quint64 freq) {
-    QString freqStr = QString::number(freq);
-    while (freqStr.length() < 8) {
-        freqStr.prepend('0');
-    }
-
-    // Insert dots: XX.XXX.XXX
-    QString formatted;
-    int len = freqStr.length();
-    for (int i = 0; i < len; i++) {
-        formatted.append(freqStr[i]);
-        int posFromEnd = len - i - 1;
-        if (posFromEnd > 0 && posFromEnd % 3 == 0) {
-            formatted.append('.');
-        }
-    }
-
-    // Remove leading zero for frequencies < 10 MHz (40m-160m)
-    if (formatted.startsWith('0')) {
-        formatted = formatted.mid(1);
-    }
-    return formatted;
-}
-
 void MainWindow::showRadioManager() {
     RadioManagerDialog dialog(this);
     connect(&dialog, &RadioManagerDialog::connectRequested, this, &MainWindow::connectToRadio);
@@ -1904,36 +1877,6 @@ void MainWindow::onCatResponse(const QString &response) {
                 m_bandNavController->setCurrentBand(bandNum, false);
         }
     }
-}
-
-void MainWindow::onFrequencyChanged(quint64 freq) {
-    // When transmitting with XIT (no split): show TX frequency (dial + XIT offset)
-    // When receiving with RIT: show RX frequency (dial + RIT offset)
-    if (m_radioState->isTransmitting() && m_radioState->xitEnabled() && !m_radioState->splitEnabled()) {
-        qint64 txFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffset();
-        if (txFreq > 0)
-            freq = static_cast<quint64>(txFreq);
-    } else if (m_radioState->ritEnabled()) {
-        qint64 rxFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffset();
-        if (rxFreq > 0)
-            freq = static_cast<quint64>(rxFreq);
-    }
-    m_vfoA->setFrequency(formatFrequency(freq));
-}
-
-void MainWindow::onFrequencyBChanged(quint64 freq) {
-    // When transmitting with XIT (split): show TX frequency (dial + XIT offset)
-    // When receiving with RIT B: show RX frequency (dial + RIT B offset)
-    if (m_radioState->isTransmitting() && m_radioState->xitEnabled() && m_radioState->splitEnabled()) {
-        qint64 txFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffsetB();
-        if (txFreq > 0)
-            freq = static_cast<quint64>(txFreq);
-    } else if (m_radioState->ritEnabledB()) {
-        qint64 rxFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffsetB();
-        if (rxFreq > 0)
-            freq = static_cast<quint64>(rxFreq);
-    }
-    m_vfoB->setFrequency(formatFrequency(freq));
 }
 
 void MainWindow::onSMeterChanged(double value) {

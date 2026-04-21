@@ -28,6 +28,7 @@ class ProcessingDisplayController;
 class VfoRowIndicatorController;
 class RitXitController;
 class ModeLabelController;
+class VfoFrequencyController;
 class AntennaConfigController;
 class AntennaDisplayController;
 class TextDecodeController;
@@ -60,8 +61,6 @@ private slots:
     void onRadioReady();
     void onAuthFailed();
     void onCatResponse(const QString &response);
-    void onFrequencyChanged(quint64 freq);
-    void onFrequencyBChanged(quint64 freq);
     void onSMeterChanged(double value);
     void onSMeterBChanged(double value);
     void onRfPowerChanged(double watts, bool isQrp);
@@ -108,7 +107,6 @@ private:
     // KPA1500UiController::disconnectFromHost, RadioState::reset). This helper
     // covers only the labels MainWindow still owns directly.
     void resetUiForDisconnect();
-    QString formatFrequency(quint64 freq);
 
     // Closes menu overlay, antenna-config popups, and mode popup — i.e.,
     // every popup NOT owned by PopupManager. Used by the per-popup toggle
@@ -190,6 +188,7 @@ private:
     VfoRowIndicatorController *m_vfoRowIndicatorController;
     RitXitController *m_ritXitController;
     ModeLabelController *m_modeLabelController;
+    VfoFrequencyController *m_vfoFrequencyController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     AntennaDisplayController *m_antennaDisplayController;

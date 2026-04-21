@@ -93,6 +93,7 @@ set(SOURCES
     src/controllers/vforowindicatorcontroller.cpp
     src/controllers/ritxitcontroller.cpp
     src/controllers/modelabelcontroller.cpp
+    src/controllers/vfofrequencycontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -193,6 +194,7 @@ set(HEADERS
     src/controllers/vforowindicatorcontroller.h
     src/controllers/ritxitcontroller.h
     src/controllers/modelabelcontroller.h
+    src/controllers/vfofrequencycontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h
