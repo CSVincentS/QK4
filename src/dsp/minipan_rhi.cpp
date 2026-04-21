@@ -2,10 +2,13 @@
 #include "panadapter_constants.h"
 #include "rhi_utils.h"
 #include "ui/styling/k4styles.h"
+#include <QLoggingCategory>
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QtMath>
 #include <cmath>
+
+Q_LOGGING_CATEGORY(dspMiniPan, "dsp.minipan")
 
 MiniPanRhiWidget::MiniPanRhiWidget(QWidget *parent) : QRhiWidget(parent) {
     setFixedHeight(150);
@@ -42,7 +45,7 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
 
     m_rhi = rhi();
     if (!m_rhi) {
-        qWarning() << "MiniPan: QRhi is NULL - Metal backend failed";
+        qCWarning(dspMiniPan) << "MiniPan: QRhi is NULL - Metal backend failed";
         return;
     }
 

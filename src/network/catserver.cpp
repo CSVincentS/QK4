@@ -8,6 +8,10 @@
 #include "protocol.h"
 #include "tcpclient.h"
 
+#include <QLoggingCategory>
+
+Q_LOGGING_CATEGORY(netCat, "net.cat")
+
 namespace {
 // RadioState::Mode enum values already match K4 mode codes (LSB=1..DATA_R=9, no 8).
 // Unknown (0) is not a valid K4 mode digit, so fall back to USB (2) to match the
@@ -86,8 +90,8 @@ void CatServer::onNewConnection() {
 
             // Protect against unbounded buffer growth from misbehaving clients
             if (buffer.size() > K4Protocol::MAX_BUFFER_SIZE) {
-                qWarning() << "CAT client buffer overflow from" << client->peerAddress().toString()
-                           << "- disconnecting";
+                qCWarning(netCat) << "CAT client buffer overflow from" << client->peerAddress().toString()
+                                  << "- disconnecting";
                 client->disconnectFromHost();
                 return;
             }
