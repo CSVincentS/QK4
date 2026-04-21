@@ -20,6 +20,10 @@ ButtonRowDispatcher::ButtonRowDispatcher(RadioState *radioState, ConnectionContr
     connect(m_popupManager, &PopupManager::subRxButtonRightClicked, this, &ButtonRowDispatcher::onSubRxRightClicked);
     connect(m_popupManager, &PopupManager::txButtonClicked, this, &ButtonRowDispatcher::onTxClicked);
     connect(m_popupManager, &PopupManager::txButtonRightClicked, this, &ButtonRowDispatcher::onTxRightClicked);
+
+    // Mode flip changes whether buttons 5/6 show paddle/weight (CW) or
+    // SSB BW/ESSB (voice/data).
+    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode) { refreshTxButtonsForMode(); });
 }
 
 ButtonRowDispatcher::~ButtonRowDispatcher() {
@@ -237,5 +241,44 @@ void ButtonRowDispatcher::onTxRightClicked(int index) {
         if (m_radioState->micInput() == 2)
             return;
         m_popupManager->showMicConfigAbove(m_popupManager->txPopupAnchor());
+    }
+}
+
+void ButtonRowDispatcher::refreshTxButtonsForMode() {
+    // TX popup's anchor is nullptr until setBottomMenuBar is injected
+    // and the popup is first constructed; skip early refreshes.
+    if (!m_popupManager->txPopupAnchor())
+        return;
+
+    const RadioState::Mode mode = m_radioState->mode();
+    if (mode == RadioState::CW || mode == RadioState::CW_R) {
+        // CW mode: buttons 5/6 show paddle orientation + iambic mode, and keying weight.
+        const QChar iambic = m_radioState->iambicMode();
+        const QChar paddle = m_radioState->paddleOrientation();
+        const int weight = m_radioState->keyingWeight();
+        if (!iambic.isNull() && !paddle.isNull()) {
+            const QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
+            const QString iambicStr = QString("IAMB %1").arg(iambic);
+            m_popupManager->setTxButtonLabel(5, paddleStr, iambicStr, true);
+        } else {
+            // KP state not yet received from the K4 — render defaults.
+            m_popupManager->setTxButtonLabel(5, "PDL NOR", "IAMB A", true);
+        }
+        if (weight >= 90 && weight <= 125) {
+            const QString weightStr = QString::number(weight / 100.0, 'f', 2);
+            m_popupManager->setTxButtonLabel(6, "WEIGHT", weightStr, false);
+        } else {
+            m_popupManager->setTxButtonLabel(6, "WEIGHT", "1.00", false);
+        }
+    } else {
+        // Voice / data mode: buttons 5/6 show SSB BW and ESSB toggle.
+        const int bw = m_radioState->ssbTxBw();
+        if (bw >= 24 && bw <= 45) {
+            const QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+            m_popupManager->setTxButtonLabel(5, "SSB BW", bwStr, false);
+        } else {
+            m_popupManager->setTxButtonLabel(5, "SSB BW", "2.8k", false);
+        }
+        m_popupManager->setTxButtonLabel(6, "ESSB", m_radioState->essbEnabled() ? "ON" : "OFF", false);
     }
 }

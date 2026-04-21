@@ -132,7 +132,6 @@ signals:
 
     // ESSB toggle affects the USB/LSB mode label suffix (USB+ / LSB+).
     // PopupManager flags this so MainWindow's updateModeLabels() can run.
-    void modeLabelRefreshNeeded();
 
 private:
     RadioState *m_radioState;                 // injected, not owned

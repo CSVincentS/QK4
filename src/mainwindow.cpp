@@ -13,6 +13,7 @@
 #include "controllers/processingdisplaycontroller.h"
 #include "controllers/vforowindicatorcontroller.h"
 #include "controllers/ritxitcontroller.h"
+#include "controllers/modelabelcontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -74,7 +75,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_popupManager =
         new PopupManager(m_radioState, m_connectionController, m_spectrumController, nullptr, nullptr, this, this);
     m_bandNavController = new BandNavigationController(m_radioState, m_connectionController, m_popupManager, this);
-    connect(m_popupManager, &PopupManager::modeLabelRefreshNeeded, this, &MainWindow::updateModeLabels);
+    // Mode label refresh on ESSB toggle is observed directly by
+    // ModeLabelController via RadioState::essbChanged.
     m_macroController = new MacroController(m_connectionController, m_popupManager, this);
     connect(m_macroController, &MacroController::macroDialogRequested, this, [this]() {
         closeAllPopups();
@@ -124,6 +126,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
                                                       m_qskLabel,   m_atuLabel,   m_msgBankLabel};
     m_vfoRowIndicatorController =
         new VfoRowIndicatorController(m_radioState, m_spectrumController, m_vfoRow, rowLabels, this);
+
+    m_modeLabelController = new ModeLabelController(m_radioState, m_modeALabel, m_modeBLabel, this);
 
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
@@ -212,19 +216,14 @@ void MainWindow::setupConnectionWiring() {
 void MainWindow::setupRadioStateWiring() {
     // RadioState signals -> UI updates (VFO A)
     connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::onFrequencyChanged);
-    connect(m_radioState, &RadioState::modeChanged, this, &MainWindow::onModeChanged);
-    // VOX label refresh on mode change is handled inside VfoRowIndicatorController
+    // Mode + data-sub-mode + ESSB label updates are owned by ModeLabelController.
+    // TX button-row mode-dependent labels are observed by ButtonRowDispatcher.
+    // VOX label refresh on mode change is handled by VfoRowIndicatorController
     // (K4 VOX state is per-mode-class, so the displayed color depends on current mode).
-
-    // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
-    connect(m_radioState, &RadioState::dataSubModeChanged, this, [this](int) { updateModeLabels(); });
     connect(m_radioState, &RadioState::sMeterChanged, this, &MainWindow::onSMeterChanged);
 
     // RadioState signals -> UI updates (VFO B)
     connect(m_radioState, &RadioState::frequencyBChanged, this, &MainWindow::onFrequencyBChanged);
-    connect(m_radioState, &RadioState::modeBChanged, this, &MainWindow::onModeBChanged);
-    // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
-    connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this](int) { updateModeLabels(); });
     connect(m_radioState, &RadioState::sMeterBChanged, this, &MainWindow::onSMeterBChanged);
     // Auto-hide mini pan B when VFOs move to different bands (and SUB RX is off)
     connect(m_radioState, &RadioState::frequencyChanged, m_spectrumController,
@@ -1935,70 +1934,6 @@ void MainWindow::onFrequencyBChanged(quint64 freq) {
             freq = static_cast<quint64>(rxFreq);
     }
     m_vfoB->setFrequency(formatFrequency(freq));
-}
-
-void MainWindow::onModeChanged(RadioState::Mode mode) {
-    // Use full mode string which includes data sub-mode (AFSK, FSK, PSK, DATA)
-    // Also adds "+" suffix for USB/LSB when ESSB is enabled
-    updateModeLabels();
-
-    // Swap TX popup buttons 5/6 between CW keyer controls and SSB BW/ESSB
-    if (m_popupManager->txPopupAnchor()) {
-        if (mode == RadioState::CW || mode == RadioState::CW_R) {
-            // CW mode: swap to paddle/iambic and keying weight buttons
-            QChar iambic = m_radioState->iambicMode();
-            QChar paddle = m_radioState->paddleOrientation();
-            int weight = m_radioState->keyingWeight();
-            if (!iambic.isNull() && !paddle.isNull()) {
-                QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
-                QString iambicStr = QString("IAMB %1").arg(iambic);
-                m_popupManager->setTxButtonLabel(5, paddleStr, iambicStr, true);
-            } else {
-                // KP state not yet received — show defaults
-                m_popupManager->setTxButtonLabel(5, "PDL NOR", "IAMB A", true);
-            }
-            if (weight >= 90 && weight <= 125) {
-                QString weightStr = QString::number(weight / 100.0, 'f', 2);
-                m_popupManager->setTxButtonLabel(6, "WEIGHT", weightStr, false);
-            } else {
-                m_popupManager->setTxButtonLabel(6, "WEIGHT", "1.00", false);
-            }
-        } else {
-            // Voice/data mode: restore SSB BW and ESSB buttons
-            int bw = m_radioState->ssbTxBw();
-            if (bw >= 24 && bw <= 45) {
-                QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-                m_popupManager->setTxButtonLabel(5, "SSB BW", bwStr, false);
-            } else {
-                m_popupManager->setTxButtonLabel(5, "SSB BW", "2.8k", false);
-            }
-            m_popupManager->setTxButtonLabel(6, "ESSB", m_radioState->essbEnabled() ? "ON" : "OFF", false);
-        }
-    }
-}
-
-void MainWindow::onModeBChanged(RadioState::Mode mode) {
-    Q_UNUSED(mode)
-    // Use full mode string which includes data sub-mode (AFSK, FSK, PSK, DATA)
-    updateModeLabels();
-}
-
-void MainWindow::updateModeLabels() {
-    // VFO A mode label
-    QString modeA = m_radioState->modeStringFull();
-    RadioState::Mode mode = m_radioState->mode();
-    if (m_radioState->essbEnabled() && (mode == RadioState::USB || mode == RadioState::LSB)) {
-        modeA += "+";
-    }
-    m_modeALabel->setText(modeA);
-
-    // VFO B mode label
-    QString modeB = m_radioState->modeStringFullB();
-    RadioState::Mode modeVfoB = m_radioState->modeB();
-    if (m_radioState->essbEnabled() && (modeVfoB == RadioState::USB || modeVfoB == RadioState::LSB)) {
-        modeB += "+";
-    }
-    m_modeBLabel->setText(modeB);
 }
 
 void MainWindow::onSMeterChanged(double value) {

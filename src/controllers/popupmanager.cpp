@@ -855,8 +855,8 @@ void PopupManager::wireVoxAndSsbPopups() {
             // Button 6: ESSB toggle with ON/OFF state
             m_txRow->setButtonLabel(6, "ESSB", enabled ? "ON" : "OFF", false);
         }
-        // Update mode labels to show USB+/LSB+ when ESSB enabled
-        emit modeLabelRefreshNeeded();
+        // Mode label "+"/"-" suffix refresh is handled by ModeLabelController
+        // observing RadioState::essbChanged directly — no forwarding needed here.
     });
 }
 

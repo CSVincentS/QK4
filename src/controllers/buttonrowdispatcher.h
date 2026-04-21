@@ -36,6 +36,11 @@ private slots:
     void onTxClicked(int index);
     void onTxRightClicked(int index);
 
+    // Refresh TX row buttons 5/6 labels when the current mode changes
+    // between CW and voice/data — CW mode shows paddle/iambic/weight
+    // controls, other modes show SSB BW/ESSB.
+    void refreshTxButtonsForMode();
+
 private:
     RadioState *m_radioState;              // injected, not owned
     ConnectionController *m_connection;    // injected, not owned

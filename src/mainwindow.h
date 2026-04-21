@@ -27,6 +27,7 @@ class MacroController;
 class ProcessingDisplayController;
 class VfoRowIndicatorController;
 class RitXitController;
+class ModeLabelController;
 class AntennaConfigController;
 class AntennaDisplayController;
 class TextDecodeController;
@@ -61,8 +62,6 @@ private slots:
     void onCatResponse(const QString &response);
     void onFrequencyChanged(quint64 freq);
     void onFrequencyBChanged(quint64 freq);
-    void onModeChanged(RadioState::Mode mode);
-    void onModeBChanged(RadioState::Mode mode);
     void onSMeterChanged(double value);
     void onSMeterBChanged(double value);
     void onRfPowerChanged(double watts, bool isQrp);
@@ -110,7 +109,6 @@ private:
     // covers only the labels MainWindow still owns directly.
     void resetUiForDisconnect();
     QString formatFrequency(quint64 freq);
-    void updateModeLabels();
 
     // Closes menu overlay, antenna-config popups, and mode popup — i.e.,
     // every popup NOT owned by PopupManager. Used by the per-popup toggle
@@ -191,6 +189,7 @@ private:
     ProcessingDisplayController *m_processingDisplayController;
     VfoRowIndicatorController *m_vfoRowIndicatorController;
     RitXitController *m_ritXitController;
+    ModeLabelController *m_modeLabelController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     AntennaDisplayController *m_antennaDisplayController;
