@@ -167,59 +167,79 @@ Rules for new widget code:
 
 These rules prevent the architectural issues identified in the 2026-03-30 audit. They are non-negotiable for all new code and refactoring work.
 
-### 1. No Duplicated Static Functions
+**How rules are enforced:** not all twelve rules have the same bite. The tag at the front of each rule tells a new contributor what happens when they're broken:
+
+- **[CI]** — a test or lint check in `.github/workflows/lint.yml` fails. The rule *breaks the build*.
+- **[sanitizer]** — ASAN or UBSAN in the sanitizer CI job catches the violation when the offending code path runs.
+- **[review]** — no automation. Enforced by reviewer discipline. Violations ship if reviewers miss them.
+- **[aspirational]** — target not fully met today; documented exemptions exist. Binds new code only.
+
+The CI-enforced rules (4, 6, 10) are the load-bearing ones. Sanitizer rules (11) catch the nastiest violations at runtime. Review-only rules (2, 3, 5, 8, 9, 12) depend on human attention. Aspirational rules (1, 7) mark architectural intent without strict enforcement.
+
+### 1. [aspirational] No Duplicated Static Functions
 
 If a function is needed in more than one translation unit, it goes in `src/utils/` with a namespace (e.g., `RadioUtils::`). Copy-pasting a static function into another `.cpp` file is a defect. Fix it immediately.
 
-### 2. Controllers Do Not Expose Owned Objects
+No lint check enforces this; honored today by convention.
+
+### 2. [review] Controllers Do Not Expose Owned Objects
 
 Controllers expose **task-level APIs**, not internal workers. No `audioEngine()`, `kpodDevice()`, or `tcpClient()` accessors in the public interface. If external code needs to configure a device, add a method to the controller (e.g., `audioController->setInputDevice(...)` instead of `audioController->audioEngine()->setInputDevice(...)`).
 
 **Exception:** `tcpClient()` is exposed for AudioController's performance-sensitive audio data path and CatServer's direct TCP forwarding. These are documented exceptions, not precedent.
 
-### 3. No Non-Const References to Shared State
+### 3. [review] No Non-Const References to Shared State
 
 Never return `Type&` from a getter when multiple callers may read or write. Use `const Type&` for read access and typed setters for mutations. This prevents data races and makes state changes auditable.
 
-### 4. RadioState is Main-Thread Only
+### 4. [CI] RadioState is Main-Thread Only
 
 `parseCATCommand()` is enforced by `Q_ASSERT(QThread::currentThread() == thread())`. All callers must be on the main (GUI) thread. If cross-thread parsing is ever needed, use `QMetaObject::invokeMethod` with `Qt::QueuedConnection`.
 
-### 5. Network Buffers Have Explicit Size Limits
+Debug builds assert on violation; sanitizer CI catches any cross-thread access that slips past the assert.
+
+### 5. [review] Network Buffers Have Explicit Size Limits
 
 Any buffer that accumulates data from an external source must check against a maximum size and handle overflow (disconnect, discard, or reset). Use `K4Protocol::MAX_BUFFER_SIZE` (1MB) as the default limit.
 
-### 6. Parser Changes Require Test Cases
+### 6. [CI + review] Parser Changes Require Test Cases
 
 Any modification to `RadioState::parseCATCommand()` or its handlers must include a corresponding test case in `tests/test_radiostate.cpp`. No merge without test coverage for the changed behavior.
 
-### 7. No File Over 800 Lines
+Three CI-enforced invariants catch structural breaks:
+- `test_radiostate_registry` — every registered prefix resolves; longest-first ordering preserved.
+- `test_radiostate_golden` — byte-for-byte replay of captured K4 CAT session.
+- `test_catserver` — `RadioState` public API pinned to `docs/radiostate-catserver-api-contract.md`.
+
+Behavioral coverage of the specific change is still author discipline.
+
+### 7. [aspirational] No File Over 800 Lines
 
 If a `.cpp` or `.h` file grows past 800 lines, split it by responsibility before merging. Check with `wc -l` before committing.
 
-**Status (2026-04-20): aspirational.** Seven files currently exceed the cap and will be split as part of the refactor tracked in `memory/refactor-plan.md`. The rule is binding for *new* code: PRs that introduce new files over 800 LOC or push a borderline file past the limit are blocked. PRs that leave an existing violator untouched are fine.
+**Status: aspirational with documented exemptions.** Binding for *new* code: PRs that introduce new files over 800 LOC or push a borderline file past the limit are blocked. PRs that leave an existing violator untouched are fine.
 
-Current violators (for awareness — do not green-light new additions):
+Current exempt files (do not green-light new additions that bloat these further):
 
-| File | LOC | Planned split |
-|------|----:|---------------|
-| `src/mainwindow.cpp` | 4967 | Top of `refactor-plan.md` — MainWindow decomposition |
-| `src/models/radiostate.cpp` | 2893 | `refactor-plan.md` — RadioState handler extraction |
-| `src/dsp/panadapter_rhi.cpp` | 1871 | Natural RHI pipeline size; low priority |
-| `src/models/radiostate.h` | 1156 | Follows the `.cpp` split |
-| `src/dsp/minipan_rhi.cpp` | 1065 | Follows the panadapter refactor |
-| `src/controllers/spectrumcontroller.cpp` | 891 | Close to threshold — hold the line |
-| `src/ui/displaypopupwidget.cpp` | 865 | Close to threshold — hold the line |
+| File | LOC | Notes |
+|------|----:|-------|
+| `src/mainwindow.cpp` | 1758 | Down from 4967 pre-refactor. Remaining scope is genuine coordination (setupUi, event-filter dispatch, lifecycle). Further decomposition is judgment territory. |
+| `src/dsp/panadapter_rhi.cpp` | 1871 | Naturally large — RHI pipeline + buffer management. Low priority. |
+| `src/models/radiostate.cpp` | 1128 | Down from 2893 pre-refactor. Handler registry + façade delegation. |
+| `src/dsp/minipan_rhi.cpp` | 1065 | Mirrors panadapter structure. |
+| `src/models/radiostate.h` | 883 | Down from 1156 pre-refactor; 11 subsystem struct references + public API. |
+| `src/controllers/spectrumcontroller.cpp` | 891 | Close to threshold — hold the line. |
+| `src/ui/popups/displaypopupwidget.cpp` | 865 | Close to threshold — hold the line. |
 
-### 8. Every Extraction is Traced First
+### 8. [review] Every Extraction is Traced First
 
 Before moving code between classes: read every member variable, method, signal, and `connect()` call involved. Document what moves, what stays, and what the cross-domain dependencies are. Missing a dependency means a broken extraction.
 
-### 9. One Commit Per Logical Change
+### 9. [review] One Commit Per Logical Change
 
 Never combine structural moves with logic changes in the same commit. If a refactor introduces a new class AND fixes a bug, those are two commits. This enables `git bisect` and clean `git revert`.
 
-### 10. Build + Format + Tests Before Every Commit
+### 10. [CI] Build + Format + Tests Before Every Commit
 
 ```bash
 clang-format -i <changed files>
@@ -228,13 +248,15 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-All four must pass. No exceptions.
+All four must pass. No exceptions. `.github/workflows/lint.yml` mirrors the format gate and runs the test suites — skipping locally means the CI run will fail.
 
-### 11. Controlled Shutdown Order
+### 11. [sanitizer + review] Controlled Shutdown Order
 
 Every controller and MainWindow calls `disconnect(this)` as the first statement in its destructor. This prevents queued signals from arriving during partial destruction. Thread shutdown follows the dependency chain: producers stop before consumers.
 
-### 12. New UI Concerns Belong in Controllers, Not MainWindow
+ASAN in the sanitizer CI job catches use-after-free on violation if the destruction path runs under test. Review catches the rest.
+
+### 12. [review] New UI Concerns Belong in Controllers, Not MainWindow
 
 After the 2026-04 MainWindow decomposition, `MainWindow.cpp`'s scope is **window chrome, top-level layout, and controller coordination — nothing else**. New features that need a widget, a signal wiring, a CAT dispatch helper, or mode-dependent UI behavior go in a controller under `src/controllers/` (see `PATTERNS.md` → Controller Pattern). If the widget only consumes a single RadioState property, use Direct Observation instead of adding a controller.
 
@@ -244,6 +266,8 @@ Regressing to "throw it on MainWindow" is the single biggest risk for re-driftin
 - No slots on MainWindow that just forward a RadioState signal to a widget setter.
 - No inline lambdas over ~5 lines or ~5 connect() calls clustered at one site — extract to a helper, or if it grows past ~30 lines, promote to a controller.
 - No cross-controller reach-in (`controllerA->someGetter()->doThing()`) — communicate via signals.
+
+No automated check; relies on PR review.
 
 ---
 
