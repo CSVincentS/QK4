@@ -79,6 +79,19 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
             auto it = std::lower_bound(m_spots.begin(), m_spots.end(), spot.frequencyHz,
                                        [](const DxSpot &s, qint64 freq) { return s.frequencyHz < freq; });
             m_spots.insert(it, spot);
+
+            // WHY: hard cap memory growth between 30s prune cycles. In a heavy contest the
+            // cluster stream can produce thousands of spots/min; without this cap m_spots
+            // grows tens of thousands of entries and spotsForFrequencyRange() scans all of
+            // them on every panadapter render. Trim to newest-by-timestamp on overflow.
+            static constexpr int kMaxSpots = 5000;
+            if (m_spots.size() > kMaxSpots) {
+                std::sort(m_spots.begin(), m_spots.end(),
+                          [](const DxSpot &a, const DxSpot &b) { return a.timestamp > b.timestamp; });
+                m_spots.resize(kMaxSpots);
+                std::sort(m_spots.begin(), m_spots.end(),
+                          [](const DxSpot &a, const DxSpot &b) { return a.frequencyHz < b.frequencyHz; });
+            }
             emit spotsUpdated();
         });
 
