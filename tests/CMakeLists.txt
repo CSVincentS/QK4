@@ -73,25 +73,30 @@ target_include_directories(test_radiostate_golden PRIVATE ${CMAKE_SOURCE_DIR}/sr
 target_link_libraries(test_radiostate_golden Qt6::Core Qt6::Test)
 add_test(NAME RadioStateGoldenTests COMMAND test_radiostate_golden)
 
+option(QK4_BUILD_BENCHMARKS "Build the RadioState parse-dispatch microbenchmark" OFF)
+
 # RadioState::parseCATCommand() dispatch microbenchmark — not wired into
 # add_test() so it doesn't run during every `ctest` invocation; build and
-# invoke explicitly when checking for perf regressions.
-add_executable(bench_radiostate bench_radiostate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
-    ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
-)
-target_include_directories(bench_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(bench_radiostate Qt6::Core Qt6::Test)
+# invoke explicitly when checking for perf regressions. Gated behind the
+# QK4_BUILD_BENCHMARKS option so regular CI builds don't compile it.
+if(QK4_BUILD_BENCHMARKS)
+    add_executable(bench_radiostate bench_radiostate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    )
+    target_include_directories(bench_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(bench_radiostate Qt6::Core Qt6::Test)
+endif()
 
 # RadioUtils shared utility tests
 add_executable(test_radioutils test_radioutils.cpp

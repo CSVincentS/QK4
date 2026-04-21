@@ -271,6 +271,9 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
             m_consoleOutput->appendPlainText("> " + cmd);
             m_consoleInput->clear();
         }
+        // WHY: defer setFocus() one event-loop iteration so Qt finishes processing the
+        // current return-key event before we steal focus back — otherwise focus can land
+        // on the wrong widget during the Enter keypress.
         QTimer::singleShot(0, m_consoleInput, [this]() { m_consoleInput->setFocus(); });
     });
     inputLayout->addWidget(m_consoleInput, 1);
