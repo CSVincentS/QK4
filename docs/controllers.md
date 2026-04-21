@@ -1,0 +1,113 @@
+# QK4 Controller Map
+
+> **Purpose:** if something is broken in the UI, find the owning controller here first.
+> Each entry maps a user-visible feature → the controller that owns it → the file path.
+
+Last updated: end of Phase 3 refactor (26 controllers).
+
+---
+
+## Quick reference table
+
+| If the user says… | Look at | Source |
+|---|---|---|
+| "My KPA1500 amp isn't showing status" | KPA1500UiController | `src/controllers/kpa1500uicontroller.cpp` |
+| "The KPA1500 mini panel buttons don't work" | KPA1500UiController | same |
+| "Mode popup won't open / wrong VFO" | ModePopupController | `src/controllers/modepopupcontroller.cpp` |
+| "Mode label shows wrong text (AFSK, DATA-A, +)" | ModeLabelController | `src/controllers/modelabelcontroller.cpp` |
+| "VFO frequency display off by RIT offset" | VfoFrequencyController | `src/controllers/vfofrequencycontroller.cpp` |
+| "Band selector doesn't switch bands / SAME band tap" | BandNavigationController | `src/controllers/bandnavigationcontroller.cpp` |
+| "RIT/XIT label or wheel not working" | RitXitController | `src/controllers/ritxitcontroller.cpp` |
+| "Main RX / Sub RX / TX popup buttons do wrong thing" | ButtonRowDispatcher | `src/controllers/buttonrowdispatcher.cpp` |
+| "TX row buttons 5/6 wrong for CW vs SSB" | ButtonRowDispatcher | same |
+| "AFX/AGC/APF button label wrong on Main/Sub RX row" | PopupManager::wireRxRowButtonLabels | `src/controllers/popupmanager.cpp` |
+| "SUB / DIV indicator color wrong" | SubDivIndicatorController | `src/controllers/subdivindicatorcontroller.cpp` |
+| "VFO B dim color wrong (SUB RX off state)" | SubDivIndicatorController | same |
+| "SPLIT / VOX / QSK / TEST / ATU / MSG bank label wrong" | VfoRowIndicatorController | `src/controllers/vforowindicatorcontroller.cpp` |
+| "TX triangle color not red on transmit" | TxStateController | `src/controllers/txstatecontroller.cpp` |
+| "TX meters (Po / ALC / COMP / SWR / Id) not updating" | TxStateController | same |
+| "VFO AGC / preamp / attenuator / NB / NR indicator wrong" | ProcessingDisplayController | `src/controllers/processingdisplaycontroller.cpp` |
+| "Antenna label text (TX / RX Main / RX Sub) wrong" | AntennaDisplayController | `src/controllers/antennadisplaycontroller.cpp` |
+| "Antenna config popup (ANT CFG button) not working" | AntennaConfigController | `src/controllers/antennaconfigcontroller.cpp` |
+| "Filter indicator shape / position wrong" | FilterIndicatorController | `src/controllers/filterindicatorcontroller.cpp` |
+| "Side panel knob values (BW/SHFT, power, mic gain) wrong" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
+| "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
+| "Menu overlay / MEDF system not working" | MenuController | `src/controllers/menucontroller.cpp` |
+| "Feature menu bar (ATTN/NB/NR/NOTCH) not working" | FeatureMenuController | `src/controllers/featuremenucontroller.cpp` |
+| "Text decode window not opening / updating" | TextDecodeController | `src/controllers/textdecodecontroller.cpp` |
+| "Band/Display/Fn/Main RX/Sub RX/TX popup won't open or close" | PopupManager | `src/controllers/popupmanager.cpp` |
+| "Fn popup macro buttons not sending CAT" | MacroController | `src/controllers/macrocontroller.cpp` |
+| "PF1-PF4 / F1-F12 keyboard shortcuts / KPOD macro buttons" | MacroController | same |
+| "Connection to K4 / status indicator wrong" | ConnectionController + MainWindow::updateConnectionState | `src/controllers/connectioncontroller.cpp` + `src/mainwindow.cpp` |
+| "Top status bar label / KPA1500 badge wrong" | StatusBarController | `src/controllers/statusbarcontroller.cpp` |
+| "Audio (RX/TX, PTT) not working" | AudioController | `src/controllers/audiocontroller.cpp` |
+| "KPOD / HaliKey / CW keyer / sidetone not working" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
+| "Spectrum / panadapter / click-tune not working" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
+| "DX cluster spots not appearing / cluster connect fail" | DxClusterController | `src/controllers/dxclustercontroller.cpp` |
+
+---
+
+## What's still in MainWindow (and why)
+
+MainWindow is now ~1,800 LOC. What remains is genuinely MainWindow responsibility:
+
+- **Widget construction** — `setupUi()` and `setupVfoSection()` build the window layout tree. This is MainWindow's job; controllers observe widgets they don't own.
+- **Setup helpers** — `setupControllers()`, `setupNotificationWidget()`, `setupConnectionWiring()`, `setupRadioStateWiring()`, `setupSpectrumDataRouting()`, `setupHardwareController()`, `setupCatServer()`, `setupMenuBar()`. Construction orchestration.
+- **Event filter dispatch** — `eventFilter()` routes widget-level mouse events to the right controller. MainWindow is the natural dispatcher because it owns the top-level event filter installation.
+- **Connection lifecycle** — `onRadioReady()`, `onCatResponse()`, `onConnectionStateChanged()`, `onConnectionError()`, `onAuthFailed()` orchestrate startup / teardown across multiple controllers. This is coordination, not feature logic.
+- **resetUiForDisconnect()** — single place that calls each controller's / widget's reset on K4 disconnect. Also coordination.
+- **Window chrome** — `closeEvent`, `moveEvent`, `keyPressEvent`. Native QMainWindow overrides.
+- **closeAllPopups / closeNonPopupManagerPopups / toggleXPopup** — cross-controller popup coordination.
+
+---
+
+## The 26 controllers at a glance
+
+Grouped by concern:
+
+### Core (exist before refactor)
+- **ConnectionController** — TCP connection state machine, network I/O thread, CAT send
+- **AudioController** — audio engine, Opus codecs, PTT, audio thread
+- **SpectrumController** — panadapters, spectrum data routing, click-tune, passband overlays
+- **HardwareController** — KPOD, HaliKey, IambicKeyer, SidetoneGenerator (owns 2 hardware threads)
+- **DxClusterController** — DX cluster client (multi-instance; spot cache)
+
+### Popup-family
+- **PopupManager** — owns 13 popups: band, display, Fn, macro dialog, 3 button rows (Main/Sub/Tx), RX EQ, TX EQ, line in/out, mic input/config, VOX, SSB BW, keying weight. Also wires RX-row button label state observers.
+- **ModePopupController** — mode selector popup
+- **FeatureMenuController** — ATTN/NB/NR/NOTCH feature popup
+- **AntennaConfigController** — three antenna-config popups
+- **MenuController** — K4 MEDF menu system + overlay
+
+### Signal dispatch (plumbing)
+- **ButtonRowDispatcher** — Main RX / Sub RX / TX button-row click → CAT / popup / mode-aware
+- **MacroController** — Fn popup / PF1-4 / F1-F12 / KPOD macro dispatch
+- **BandNavigationController** — band-popup selection → BN CAT + band-stack logic
+
+### Display / indicator (RadioState → widget)
+- **StatusBarController** — top status bar (clock, readings, K4+KPA status)
+- **ModeLabelController** — VFO A/B mode label text (ESSB "+" suffix included)
+- **VfoFrequencyController** — VFO A/B frequency display (RIT/XIT offset applied)
+- **AntennaDisplayController** — TX / RX Main / RX Sub antenna label text
+- **ProcessingDisplayController** — AGC/preamp/attenuator/NB/NR indicators on VFOs
+- **FilterIndicatorController** — FilterIndicatorWidget shape/position
+- **SideControlDisplayController** — side panel knob values (BW/SHFT/HI/LO, power, mic gain, etc.), CW↔voice display swap
+- **VfoRowIndicatorController** — SPLIT/VOX/QSK/TEST/ATU/MSG-bank labels
+- **SubDivIndicatorController** — SUB/DIV badges + VFO B dim state
+- **TxStateController** — TX triangles + indicator colors + VFO meter mode flip + PA current calc
+- **RitXitController** — RIT/XIT label state + wheel accumulator + click handlers + BSet-aware display routing
+- **KPA1500UiController** — KPA1500 mini panel + amp status + client lifecycle
+- **TextDecodeController** — text decode window lifecycle + CAT dispatch
+
+---
+
+## When you extend
+
+Adding a new user-visible feature?
+1. If it's a popup → likely belongs in **PopupManager** (or a new popup controller)
+2. If it's a status indicator → one of the `*DisplayController` or `*IndicatorController` classes
+3. If it's a CAT-dispatching action → dispatcher / config controller
+4. If it's a widget that needs RadioState reactions → new small presentation controller
+
+Controllers should generally be 50-300 LOC. If yours grows past that, split by responsibility.
+See `PATTERNS.md` → Controller Pattern for the dependency-injection / lifecycle rules.
