@@ -15,7 +15,7 @@ Q_LOGGING_CATEGORY(qk4Audio, "qk4.audio")
 AudioController::AudioController(ConnectionController *connController, RadioState *radioState, QObject *parent)
     : QObject(parent), m_connectionController(connController), m_radioState(radioState),
       m_audioEngine(new AudioEngine(nullptr)), m_opusDecoder(new OpusDecoder(nullptr)),
-      m_opusEncoder(new OpusEncoder(this)) {
+      m_opusEncoder(new OpusEncoder(nullptr)) {
     // Initialize Opus decoder (K4 sends 12kHz stereo: left=Main, right=Sub)
     m_opusDecoder->initialize(12000, 2);
 
@@ -86,14 +86,15 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
 
 AudioController::~AudioController() {
     disconnect(this);
-    delete m_opusDecoder; // No parent, must delete manually
+    delete m_opusDecoder;
+    delete m_opusEncoder;
 
     if (m_audioThread) {
         QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::BlockingQueuedConnection);
         m_audioThread->quit();
         m_audioThread->wait(2000);
     }
-    delete m_audioEngine; // No parent, must delete manually
+    delete m_audioEngine;
     m_audioEngine = nullptr;
 }
 

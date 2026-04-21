@@ -15,8 +15,14 @@ class RadioState;
  *        startAudio/stopAudio, PTT toggle, atomic volume/mix/balance setters. Connects to
  *        RadioState.streamingLatencyChanged to resize TX Opus frames in step with the K4's SL tier.
  *
- * Threading: AudioEngine and both codecs live on `m_audioThread`; public methods are safe to call
- * from the main thread (they dispatch via QMetaObject::invokeMethod / atomics).
+ * Threading:
+ *   - AudioEngine is moved to `m_audioThread` (single moveToThread at construction).
+ *   - OpusDecoder keeps main-thread affinity but is only called from the IO-thread lambda
+ *     wired to Protocol::audioDataReady — effectively single-threaded on the IO thread.
+ *   - OpusEncoder keeps main-thread affinity and is called from the audio thread via queued
+ *     signals (Qt auto-connect resolves to QueuedConnection).
+ *   Public AudioController methods are safe to call from the main thread (they dispatch via
+ *   QMetaObject::invokeMethod / atomics).
  */
 class AudioController : public QObject {
     Q_OBJECT
