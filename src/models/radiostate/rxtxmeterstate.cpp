@@ -1,0 +1,247 @@
+#include "rxtxmeterstate.h"
+
+#include "models/radiostate.h"
+
+#include <QtGlobal>
+
+void RxTxMeterState::reset() {
+    sMeter = 0.0;
+    sMeterB = 0.0;
+    swrMeter = 1.0;
+    alcMeter = 0;
+    compressionDb = 0;
+    forwardPower = 0.0;
+    supplyVoltage = 0.0;
+    supplyCurrent = 0.0;
+    isTransmitting = false;
+    subReceiverEnabled = false;
+    diversityEnabled = false;
+    testMode = false;
+    bSetEnabled = false;
+    messageBank = -1;
+    radioID.clear();
+    radioModel.clear();
+    optionModules.clear();
+    firmwareVersions.clear();
+}
+
+namespace RxTxMeterHandlers {
+
+void handleSM(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    // SMbb — Main RX S-meter. bars 0..18 = S0..S9, >18 encodes dB over S9.
+    if (cmd.length() <= 2)
+        return;
+    bool ok;
+    int bars = cmd.mid(2).toInt(&ok);
+    if (!ok)
+        return;
+    if (bars <= 18) {
+        state.sMeter = bars / 2.0;
+    } else {
+        int dbAboveS9 = (bars - 18) * 3;
+        state.sMeter = 9.0 + dbAboveS9 / 10.0;
+    }
+    emit owner.sMeterChanged(state.sMeter);
+}
+
+void handleSMSub(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    if (cmd.length() <= 3)
+        return;
+    bool ok;
+    int bars = cmd.mid(3).toInt(&ok);
+    if (!ok)
+        return;
+    if (bars <= 18) {
+        state.sMeterB = bars / 2.0;
+    } else {
+        int dbAboveS9 = (bars - 18) * 3;
+        state.sMeterB = 9.0 + dbAboveS9 / 10.0;
+    }
+    emit owner.sMeterBChanged(state.sMeterB);
+}
+
+void handlePO(RxTxMeterState & /*state*/, RadioState & /*owner*/, const QString & /*cmd*/) {
+    // PO (raw power meter) — unused; forward power already comes from TM.
+}
+
+void handleTM(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    // TMaaabbbcccddd — ALC, CMP, FWD, SWR (each 3 digits).
+    if (cmd.length() < 14)
+        return;
+    QString data = cmd.mid(2);
+    if (data.length() < 12)
+        return;
+
+    bool ok1, ok2, ok3, ok4;
+    int alc = data.mid(0, 3).toInt(&ok1);
+    int cmp = data.mid(3, 3).toInt(&ok2);
+    int fwd = data.mid(6, 3).toInt(&ok3);
+    int swrRaw = data.mid(9, 3).toInt(&ok4);
+
+    if (!ok1 || !ok2 || !ok3 || !ok4)
+        return;
+
+    state.alcMeter = alc;
+    state.compressionDb = cmp;
+    // FWD is watts in QRO, tenths of a watt in QRP.
+    state.forwardPower = owner.isQrpMode() ? fwd / 10.0 : fwd;
+    state.swrMeter = swrRaw / 10.0;
+
+    emit owner.txMeterChanged(state.alcMeter, state.compressionDb, state.forwardPower, state.swrMeter);
+    emit owner.swrChanged(state.swrMeter);
+}
+
+void handleTX(RxTxMeterState &state, RadioState &owner, const QString & /*cmd*/) {
+    if (!state.isTransmitting) {
+        state.isTransmitting = true;
+        emit owner.transmitStateChanged(true);
+    }
+}
+
+void handleRX(RxTxMeterState &state, RadioState &owner, const QString & /*cmd*/) {
+    if (state.isTransmitting) {
+        state.isTransmitting = false;
+        emit owner.transmitStateChanged(false);
+    }
+}
+
+void handleID(RxTxMeterState &state, RadioState & /*owner*/, const QString &cmd) {
+    if (cmd.length() > 2)
+        state.radioID = cmd.mid(2);
+}
+
+void handleOM(RxTxMeterState &state, RadioState & /*owner*/, const QString &cmd) {
+    // OM format: 12-char string where each position indicates an option.
+    // Positions 3=S (HD/subrx marker), 4=H (HD), 8=4 (K4 model marker).
+    if (cmd.length() <= 2)
+        return;
+    state.optionModules = cmd.mid(2).trimmed();
+    if (state.optionModules.length() > 8) {
+        const bool hasS = state.optionModules.length() > 3 && state.optionModules[3] == 'S';
+        const bool hasH = state.optionModules.length() > 4 && state.optionModules[4] == 'H';
+        const bool has4 = state.optionModules.length() > 8 && state.optionModules[8] == '4';
+
+        if (hasH && hasS && has4) {
+            state.radioModel = "K4HD";
+        } else if (hasS && has4) {
+            state.radioModel = "K4D";
+        } else if (has4) {
+            state.radioModel = "K4";
+        }
+    }
+}
+
+void handleRV(RxTxMeterState &state, RadioState & /*owner*/, const QString &cmd) {
+    // RV.COMPONENT-VERSION e.g. "RV.DDC0-00.65 (0:35)"
+    if (cmd.length() <= 3)
+        return;
+    QString versionData = cmd.mid(3);
+    int dashIndex = versionData.indexOf('-');
+    if (dashIndex > 0) {
+        QString component = versionData.left(dashIndex);
+        QString version = versionData.mid(dashIndex + 1);
+        state.firmwareVersions[component] = version;
+    }
+}
+
+void handleER(RxTxMeterState & /*state*/, RadioState &owner, const QString &cmd) {
+    int colonPos = cmd.indexOf(':');
+    if (colonPos > 2) {
+        bool ok;
+        int errorCode = cmd.mid(2, colonPos - 2).toInt(&ok);
+        if (ok)
+            emit owner.errorNotificationReceived(errorCode, cmd.mid(colonPos + 1));
+    }
+}
+
+void handleMN(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    if (cmd.length() < 3)
+        return;
+    bool ok;
+    int bank = cmd.mid(2).toInt(&ok);
+    if (ok && bank >= 1 && bank <= 4 && bank != state.messageBank) {
+        state.messageBank = bank;
+        emit owner.messageBankChanged(state.messageBank);
+    }
+}
+
+void handleSIFP(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    // SIFPVS:xx.x,IS:xx.x ... — supply voltage/current.
+    QString data = cmd.mid(4);
+
+    int vsIndex = data.indexOf("VS:");
+    if (vsIndex >= 0) {
+        int commaIndex = data.indexOf(',', vsIndex);
+        QString vsStr =
+            (commaIndex > vsIndex) ? data.mid(vsIndex + 3, commaIndex - vsIndex - 3) : data.mid(vsIndex + 3);
+        bool ok;
+        double voltage = vsStr.toDouble(&ok);
+        if (ok && voltage != state.supplyVoltage) {
+            state.supplyVoltage = voltage;
+            emit owner.supplyVoltageChanged(state.supplyVoltage);
+        }
+    }
+
+    int isIndex = data.indexOf("IS:");
+    if (isIndex >= 0) {
+        int commaIndex = data.indexOf(',', isIndex);
+        QString isStr =
+            (commaIndex > isIndex) ? data.mid(isIndex + 3, commaIndex - isIndex - 3) : data.mid(isIndex + 3);
+        bool ok;
+        double current = isStr.toDouble(&ok);
+        if (ok && current != state.supplyCurrent) {
+            state.supplyCurrent = current;
+            emit owner.supplyCurrentChanged(state.supplyCurrent);
+        }
+    }
+}
+
+void handleSB(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    // SB0=off, SB1=on, SB3=on (diversity)
+    if (cmd.length() <= 2)
+        return;
+    bool newState = (cmd.mid(2) != "0");
+    if (newState != state.subReceiverEnabled) {
+        state.subReceiverEnabled = newState;
+        emit owner.subRxEnabledChanged(state.subReceiverEnabled);
+    }
+}
+
+void handleDV(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    if (cmd.length() <= 2)
+        return;
+    bool newState = (cmd.mid(2) == "1");
+    if (newState != state.diversityEnabled) {
+        state.diversityEnabled = newState;
+        emit owner.diversityChanged(state.diversityEnabled);
+    }
+}
+
+void handleTS(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    if (cmd.length() < 3)
+        return;
+    bool enabled = (cmd.mid(2, 1) == "1");
+    if (enabled != state.testMode) {
+        state.testMode = enabled;
+        emit owner.testModeChanged(state.testMode);
+    }
+}
+
+void handleBS(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    if (cmd.length() < 3)
+        return;
+    bool enabled = (cmd.mid(2, 1) == "1");
+    if (enabled != state.bSetEnabled) {
+        state.bSetEnabled = enabled;
+        emit owner.bSetChanged(state.bSetEnabled);
+    }
+}
+
+void setBSetEnabled(RxTxMeterState &state, RadioState &owner, bool enabled) {
+    if (enabled != state.bSetEnabled) {
+        state.bSetEnabled = enabled;
+        emit owner.bSetChanged(state.bSetEnabled);
+    }
+}
+
+} // namespace RxTxMeterHandlers

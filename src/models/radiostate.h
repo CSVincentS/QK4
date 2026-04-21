@@ -14,6 +14,7 @@
 #include "radiostate/frequencyvfostate.h"
 #include "radiostate/modefilterstate.h"
 #include "radiostate/processingstate.h"
+#include "radiostate/rxtxmeterstate.h"
 #include "radiostate/spectrumdisplaystate.h"
 #include "radiostate/textdecodestate.h"
 
@@ -128,25 +129,25 @@ public:
     void setNoiseReductionLevel(int level);
     void setNoiseReductionLevelB(int level);
 
-    // Meters
-    double sMeter() const { return m_sMeter; }
-    double sMeterB() const { return m_sMeterB; }
+    // Meters — backed by m_rxTxMeterState.
+    double sMeter() const { return m_rxTxMeterState.sMeter; }
+    double sMeterB() const { return m_rxTxMeterState.sMeterB; }
 
-    double swrMeter() const { return m_swrMeter; }
+    double swrMeter() const { return m_rxTxMeterState.swrMeter; }
 
     // TX Meter data (TM command)
-    int alcMeter() const { return m_alcMeter; }
-    int compressionDb() const { return m_compressionDb; }
-    double forwardPower() const { return m_forwardPower; }
+    int alcMeter() const { return m_rxTxMeterState.alcMeter; }
+    int compressionDb() const { return m_rxTxMeterState.compressionDb; }
+    double forwardPower() const { return m_rxTxMeterState.forwardPower; }
 
     // Power supply info (SIFP command)
-    double supplyVoltage() const { return m_supplyVoltage; }
-    double supplyCurrent() const { return m_supplyCurrent; }
+    double supplyVoltage() const { return m_rxTxMeterState.supplyVoltage; }
+    double supplyCurrent() const { return m_rxTxMeterState.supplyCurrent; }
 
     // Control states
-    bool isTransmitting() const { return m_isTransmitting; }
-    bool subReceiverEnabled() const { return m_subReceiverEnabled; }
-    bool diversityEnabled() const { return m_diversityEnabled; }
+    bool isTransmitting() const { return m_rxTxMeterState.isTransmitting; }
+    bool subReceiverEnabled() const { return m_rxTxMeterState.subReceiverEnabled; }
+    bool diversityEnabled() const { return m_rxTxMeterState.diversityEnabled; }
     bool splitEnabled() const { return m_frequencyVfoState.splitEnabled; }
 
     // Processing (NB/NR/PA/RA/GT + NA/NM) — backed by m_processingState.
@@ -186,10 +187,10 @@ public:
     AGCSpeed agcSpeedB() const { return static_cast<AGCSpeed>(m_processingState.agcSpeedB); }
 
     // Radio info
-    QString radioID() const { return m_radioID; }
-    QString radioModel() const { return m_radioModel; }
-    QString optionModules() const { return m_optionModules; }
-    QMap<QString, QString> firmwareVersions() const { return m_firmwareVersions; }
+    QString radioID() const { return m_rxTxMeterState.radioID; }
+    QString radioModel() const { return m_rxTxMeterState.radioModel; }
+    QString optionModules() const { return m_rxTxMeterState.optionModules; }
+    QMap<QString, QString> firmwareVersions() const { return m_rxTxMeterState.firmwareVersions; }
 
     // Antenna — backed by m_antennaState (Phase 1 subsystem).
     int txAntenna() const { return m_antennaState.selectedAntenna; }
@@ -209,8 +210,8 @@ public:
     bool ritEnabledB() const { return m_frequencyVfoState.ritEnabledB; }
     int ritXitOffsetB() const { return m_frequencyVfoState.ritXitOffsetB; }
 
-    // Message bank
-    int messageBank() const { return m_messageBank; }
+    // Message bank (MN)
+    int messageBank() const { return m_rxTxMeterState.messageBank; }
 
     // VOX
     bool voxCW() const { return m_audioEffectsState.voxCW; }
@@ -224,21 +225,16 @@ public:
     bool qskEnabled() const { return m_qskEnabled; }
 
     // TEST mode (TX test)
-    bool testMode() const { return m_testMode; }
+    bool testMode() const { return m_rxTxMeterState.testMode; }
 
     // ATU mode (0=not installed, 1=bypass, 2=auto)
     int atuMode() const { return m_antennaState.atuMode; }
 
     // B SET (Target B) - controls whether feature menu commands target Sub RX
     // State is tracked internally (toggled when SW44 is sent)
-    bool bSetEnabled() const { return m_bSetEnabled; }
-    void setBSetEnabled(bool enabled) {
-        if (enabled != m_bSetEnabled) {
-            m_bSetEnabled = enabled;
-            emit bSetChanged(m_bSetEnabled);
-        }
-    }
-    void toggleBSet() { setBSetEnabled(!m_bSetEnabled); }
+    bool bSetEnabled() const { return m_rxTxMeterState.bSetEnabled; }
+    void setBSetEnabled(bool enabled);
+    void toggleBSet() { setBSetEnabled(!m_rxTxMeterState.bSetEnabled); }
 
     // Streaming Latency (SL command)
     int streamingLatency() const { return m_dataControlState.streamingLatency; }
@@ -729,23 +725,10 @@ private:
     int m_squelchLevelB = -1; // Sub RX squelch
     // Keyer speed / iambic / paddle / weight live on m_modeFilterState.
 
-    // Meters
-    double m_sMeter = 0.0;
-    double m_sMeterB = 0.0;
-
-    double m_swrMeter = 1.0;
-    int m_alcMeter = 0;
-    int m_compressionDb = 0;
-    double m_forwardPower = 0.0;
-
-    // Power supply (from SIFP)
-    double m_supplyVoltage = 0.0;
-    double m_supplyCurrent = 0.0;
-
-    // Control states
-    bool m_isTransmitting = false;
-    bool m_subReceiverEnabled = false;
-    bool m_diversityEnabled = false;
+    // Meters, TX/RX transition, control toggles (SB/DV/TS/BS), message bank,
+    // supply voltage/current, and radio identity (ID/OM/RV.) all live on
+    // m_rxTxMeterState. See models/radiostate/rxtxmeterstate.h.
+    RxTxMeterState m_rxTxMeterState;
     // splitEnabled lives on m_frequencyVfoState.
 
     // Processing state (NB/NR/PA/RA/GT/NA/NM) — see models/radiostate/processingstate.h.
@@ -760,19 +743,14 @@ private:
 
     // RIT/XIT state lives on m_frequencyVfoState.
 
-    // Message bank
-    int m_messageBank = -1;
+    // Message bank lives on m_rxTxMeterState.
 
     // VOX flags / gain / anti-VOX live on m_audioEffectsState.
 
     // QSK (full break-in) - extracted from SD command x flag
     bool m_qskEnabled = false;
 
-    // TEST mode (TX test)
-    bool m_testMode = false;
-
-    // B SET (Target B) - feature menu commands target Sub RX when enabled
-    bool m_bSetEnabled = false;
+    // TEST / B SET live on m_rxTxMeterState.
 
     // QSK/VOX Delay per mode (in 10ms increments)
     int m_qskDelayCW = -1;
@@ -797,11 +775,7 @@ private:
     // #NBL$, plus EXT variants) — see models/radiostate/spectrumdisplaystate.h.
     SpectrumDisplayState m_spectrumDisplayState;
 
-    // Radio info
-    QString m_radioID;
-    QString m_radioModel;
-    QString m_optionModules;
-    QMap<QString, QString> m_firmwareVersions;
+    // Radio identity (ID/OM/RV.) lives on m_rxTxMeterState.
 
     // Data sub-mode + rate + optimistic cooldown timestamps live on m_dataControlState.
 

@@ -28,23 +28,8 @@ void RadioState::reset() {
     m_squelchLevelB = -1;
     // Keyer speed / iambic / paddle / weight reset via m_modeFilterState.reset() above.
 
-    // Meters
-    m_sMeter = 0.0;
-    m_sMeterB = 0.0;
-
-    m_swrMeter = 1.0;
-    m_alcMeter = 0;
-    m_compressionDb = 0;
-    m_forwardPower = 0.0;
-
-    // Power supply
-    m_supplyVoltage = 0.0;
-    m_supplyCurrent = 0.0;
-
-    // Control states
-    m_isTransmitting = false;
-    m_subReceiverEnabled = false;
-    m_diversityEnabled = false;
+    // Meters / TX state / control toggles / supply / radio identity / message bank.
+    m_rxTxMeterState.reset();
     // splitEnabled reset via m_frequencyVfoState.reset() above.
 
     // Processing state (NB/NR/PA/RA/GT + NA/NM for both VFOs).
@@ -55,16 +40,11 @@ void RadioState::reset() {
 
     // RIT/XIT state reset via m_frequencyVfoState.reset() above.
 
-    // Message bank
-    m_messageBank = -1;
-
     // Audio pipeline state (VOX/FX/AP/mix/balance/ML/LO/LI/MI/MS/RE/TE/VG/VI/ES).
     m_audioEffectsState.reset();
 
-    // QSK / TEST / B SET
+    // QSK (TEST/B SET live on m_rxTxMeterState)
     m_qskEnabled = false;
-    m_testMode = false;
-    m_bSetEnabled = false;
 
     // QSK/VOX Delay
     m_qskDelayCW = -1;
@@ -80,11 +60,7 @@ void RadioState::reset() {
     // AVG, PKM, FXT, FXA, FRZ, VFA, VFB, AR, NB$, NBL$ + EXT variants).
     m_spectrumDisplayState.reset();
 
-    // Radio info
-    m_radioID.clear();
-    m_radioModel.clear();
-    m_optionModules.clear();
-    m_firmwareVersions.clear();
+    // Radio identity cleared by m_rxTxMeterState.reset().
 
     // Data-mode + rate + optimistic cooldowns reset via m_dataControlState.reset().
 
@@ -916,68 +892,19 @@ void RadioState::setKeyingWeight(int weight) {
 // =============================================================================
 
 void RadioState::handleSM(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int bars = cmd.mid(2).toInt(&ok);
-    if (ok) {
-        if (bars <= 18) {
-            m_sMeter = bars / 2.0;
-        } else {
-            int dbAboveS9 = (bars - 18) * 3;
-            m_sMeter = 9.0 + dbAboveS9 / 10.0;
-        }
-        emit sMeterChanged(m_sMeter);
-    }
+    RxTxMeterHandlers::handleSM(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleSMSub(const QString &cmd) {
-    if (cmd.length() <= 3)
-        return;
-    bool ok;
-    int bars = cmd.mid(3).toInt(&ok);
-    if (ok) {
-        if (bars <= 18) {
-            m_sMeterB = bars / 2.0;
-        } else {
-            int dbAboveS9 = (bars - 18) * 3;
-            m_sMeterB = 9.0 + dbAboveS9 / 10.0;
-        }
-        emit sMeterBChanged(m_sMeterB);
-    }
+    RxTxMeterHandlers::handleSMSub(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handlePO(const QString &cmd) {
-    Q_UNUSED(cmd)
-    // PO (raw power meter) is received but unused — forward power
-    // is already available through the TM handler's txMeterChanged signal.
+    RxTxMeterHandlers::handlePO(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleTM(const QString &cmd) {
-    // TX Meter Data (TM) - TMaaabbbcccddd; (ALC, CMP, FWD, SWR) - 3-digit fields
-    if (cmd.length() < 14)
-        return;
-    QString data = cmd.mid(2);
-    if (data.length() < 12)
-        return;
-
-    bool ok1, ok2, ok3, ok4;
-    int alc = data.mid(0, 3).toInt(&ok1);
-    int cmp = data.mid(3, 3).toInt(&ok2);
-    int fwd = data.mid(6, 3).toInt(&ok3);
-    int swrRaw = data.mid(9, 3).toInt(&ok4);
-
-    if (!ok1 || !ok2 || !ok3 || !ok4)
-        return;
-
-    m_alcMeter = alc;
-    m_compressionDb = cmp;
-    // FWD is watts in QRO, tenths in QRP
-    m_forwardPower = m_isQrpMode ? fwd / 10.0 : fwd;
-    m_swrMeter = swrRaw / 10.0; // SWR in 1/10th units
-
-    emit txMeterChanged(m_alcMeter, m_compressionDb, m_forwardPower, m_swrMeter);
-    emit swrChanged(m_swrMeter);
+    RxTxMeterHandlers::handleTM(m_rxTxMeterState, *this, cmd);
 }
 
 // =============================================================================
@@ -985,19 +912,11 @@ void RadioState::handleTM(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleTX(const QString &cmd) {
-    Q_UNUSED(cmd)
-    if (!m_isTransmitting) {
-        m_isTransmitting = true;
-        emit transmitStateChanged(true);
-    }
+    RxTxMeterHandlers::handleTX(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleRX(const QString &cmd) {
-    Q_UNUSED(cmd)
-    if (m_isTransmitting) {
-        m_isTransmitting = false;
-        emit transmitStateChanged(false);
-    }
+    RxTxMeterHandlers::handleRX(m_rxTxMeterState, *this, cmd);
 }
 
 // =============================================================================
@@ -1179,47 +1098,23 @@ void RadioState::handleSL(const QString &cmd) {
 }
 
 void RadioState::handleSB(const QString &cmd) {
-    // SB - Sub Receiver: SB0=off, SB1=on, SB3=on (diversity)
-    if (cmd.length() <= 2)
-        return;
-    bool newState = (cmd.mid(2) != "0");
-    if (newState != m_subReceiverEnabled) {
-        m_subReceiverEnabled = newState;
-        emit subRxEnabledChanged(m_subReceiverEnabled);
-    }
+    RxTxMeterHandlers::handleSB(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleDV(const QString &cmd) {
-    // DV - Diversity
-    if (cmd.length() <= 2)
-        return;
-    bool newState = (cmd.mid(2) == "1");
-    if (newState != m_diversityEnabled) {
-        m_diversityEnabled = newState;
-        emit diversityChanged(m_diversityEnabled);
-    }
+    RxTxMeterHandlers::handleDV(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleTS(const QString &cmd) {
-    // TS - Test Mode
-    if (cmd.length() < 3)
-        return;
-    bool enabled = (cmd.mid(2, 1) == "1");
-    if (enabled != m_testMode) {
-        m_testMode = enabled;
-        emit testModeChanged(m_testMode);
-    }
+    RxTxMeterHandlers::handleTS(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleBS(const QString &cmd) {
-    // BS - B SET
-    if (cmd.length() < 3)
-        return;
-    bool enabled = (cmd.mid(2, 1) == "1");
-    if (enabled != m_bSetEnabled) {
-        m_bSetEnabled = enabled;
-        emit bSetChanged(m_bSetEnabled);
-    }
+    RxTxMeterHandlers::handleBS(m_rxTxMeterState, *this, cmd);
+}
+
+void RadioState::setBSetEnabled(bool enabled) {
+    RxTxMeterHandlers::setBSetEnabled(m_rxTxMeterState, *this, enabled);
 }
 
 // =============================================================================
@@ -1313,91 +1208,25 @@ void RadioState::handleTE(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleID(const QString &cmd) {
-    if (cmd.length() > 2)
-        m_radioID = cmd.mid(2);
+    RxTxMeterHandlers::handleID(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleOM(const QString &cmd) {
-    // OM format: 12-char string where each position indicates an option
-    // Positions: 0=ATU, 1=PA, 2=XVTR, 3=SubRX, 4=HD, 5=Mini, 6=Linear, 7=KPA1500, 8=model marker
-    if (cmd.length() <= 2)
-        return;
-    m_optionModules = cmd.mid(2).trimmed();
-    if (m_optionModules.length() > 8) {
-        bool hasS = m_optionModules.length() > 3 && m_optionModules[3] == 'S';
-        bool hasH = m_optionModules.length() > 4 && m_optionModules[4] == 'H';
-        bool has4 = m_optionModules.length() > 8 && m_optionModules[8] == '4';
-
-        if (hasH && hasS && has4) {
-            m_radioModel = "K4HD";
-        } else if (hasS && has4) {
-            m_radioModel = "K4D";
-        } else if (has4) {
-            m_radioModel = "K4";
-        }
-    }
+    RxTxMeterHandlers::handleOM(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleRV(const QString &cmd) {
-    // RV.COMPONENT-VERSION format (e.g., "RV.DDC0-00.65 (0:35)")
-    if (cmd.length() <= 3)
-        return;
-    QString versionData = cmd.mid(3);
-    int dashIndex = versionData.indexOf('-');
-    if (dashIndex > 0) {
-        QString component = versionData.left(dashIndex);
-        QString version = versionData.mid(dashIndex + 1);
-        m_firmwareVersions[component] = version;
-    }
+    RxTxMeterHandlers::handleRV(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleSIFP(const QString &cmd) {
-    QString data = cmd.mid(4);
-    // Parse VS (voltage)
-    int vsIndex = data.indexOf("VS:");
-    if (vsIndex >= 0) {
-        int commaIndex = data.indexOf(',', vsIndex);
-        QString vsStr =
-            (commaIndex > vsIndex) ? data.mid(vsIndex + 3, commaIndex - vsIndex - 3) : data.mid(vsIndex + 3);
-        bool ok;
-        double voltage = vsStr.toDouble(&ok);
-        if (ok && voltage != m_supplyVoltage) {
-            m_supplyVoltage = voltage;
-            emit supplyVoltageChanged(m_supplyVoltage);
-        }
-    }
-    // Parse IS (current)
-    int isIndex = data.indexOf("IS:");
-    if (isIndex >= 0) {
-        int commaIndex = data.indexOf(',', isIndex);
-        QString isStr =
-            (commaIndex > isIndex) ? data.mid(isIndex + 3, commaIndex - isIndex - 3) : data.mid(isIndex + 3);
-        bool ok;
-        double current = isStr.toDouble(&ok);
-        if (ok && current != m_supplyCurrent) {
-            m_supplyCurrent = current;
-            emit supplyCurrentChanged(m_supplyCurrent);
-        }
-    }
+    RxTxMeterHandlers::handleSIFP(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleMN(const QString &cmd) {
-    if (cmd.length() < 3)
-        return;
-    bool ok;
-    int bank = cmd.mid(2).toInt(&ok);
-    if (ok && bank >= 1 && bank <= 4 && bank != m_messageBank) {
-        m_messageBank = bank;
-        emit messageBankChanged(m_messageBank);
-    }
+    RxTxMeterHandlers::handleMN(m_rxTxMeterState, *this, cmd);
 }
 
 void RadioState::handleER(const QString &cmd) {
-    int colonPos = cmd.indexOf(':');
-    if (colonPos > 2) {
-        bool ok;
-        int errorCode = cmd.mid(2, colonPos - 2).toInt(&ok);
-        if (ok)
-            emit errorNotificationReceived(errorCode, cmd.mid(colonPos + 1));
-    }
+    RxTxMeterHandlers::handleER(m_rxTxMeterState, *this, cmd);
 }

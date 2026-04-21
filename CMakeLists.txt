@@ -119,6 +119,7 @@ set(SOURCES
     src/models/radiostate/frequencyvfostate.cpp
     src/models/radiostate/modefilterstate.cpp
     src/models/radiostate/processingstate.cpp
+    src/models/radiostate/rxtxmeterstate.cpp
     src/models/radiostate/spectrumdisplaystate.cpp
     src/models/radiostate/textdecodestate.cpp
     src/models/menumodel.cpp
