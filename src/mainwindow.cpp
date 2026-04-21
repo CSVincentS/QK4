@@ -1020,9 +1020,9 @@ void MainWindow::setupUi() {
         m_bottomMenuBar->setPttActive(false);
     });
 
-    // Note: audio buffer flushing on mode/filter changes was removed — AudioEngine now runs
-    // on a dedicated thread with a properly sized jitter buffer, so stale audio lag no longer
-    // occurs. Flushing would cause a brief audio dropout on every mode/filter switch.
+    // WHY: no audio flush on mode/filter change. AudioEngine runs on a dedicated thread with
+    // a properly sized jitter buffer, so stale audio doesn't accumulate; a flush here would
+    // cause a brief dropout on every mode/filter switch.
 }
 
 void MainWindow::setupVfoSection(QWidget *parent) {

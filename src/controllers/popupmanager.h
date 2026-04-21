@@ -127,9 +127,6 @@ signals:
     void txButtonClicked(int index);
     void txButtonRightClicked(int index);
 
-    // ESSB toggle affects the USB/LSB mode label suffix (USB+ / LSB+).
-    // PopupManager flags this so MainWindow's updateModeLabels() can run.
-
 private:
     RadioState *m_radioState;                 // injected, not owned
     ConnectionController *m_connection;       // injected, not owned

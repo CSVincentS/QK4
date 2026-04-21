@@ -96,8 +96,6 @@ void RadioState::parseCATCommand(const QString &command) {
             return;
         }
     }
-
-    // Unknown command - no handler matched
 }
 
 RadioState::Mode RadioState::modeFromCode(int code) {

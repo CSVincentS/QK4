@@ -75,8 +75,6 @@ private slots:
     void toggleTxPopup();
     void closeAllPopups();
 
-    // Display FPS (synthetic menu item)
-
 private:
     void setupMenuBar();
     void setupUi();
