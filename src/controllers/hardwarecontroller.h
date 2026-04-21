@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QThread>
+#include <atomic>
 
 class KpodDevice;
 class HalikeyDevice;
@@ -61,6 +62,13 @@ private:
     // Local sidetone generator (dedicated thread)
     SidetoneGenerator *m_sidetoneGenerator;
     QThread *m_sidetoneThread = nullptr;
+
+    // WHY: HaliKey paddle state is delivered via DirectConnection (zero-latency CW keying)
+    // from the HaliKey worker thread. That path must know the current operating mode to
+    // route dit/PTT correctly, but reading m_radioState->mode() from the worker thread
+    // races with parseCATCommand writing it on the main thread. Mirror mode into this
+    // atomic from a queued modeChanged connection; the DirectConnection lambda reads it.
+    std::atomic<int> m_cachedMode{0}; // initialized to RadioState::Unknown in the .cpp
 };
 
 #endif // HARDWARECONTROLLER_H

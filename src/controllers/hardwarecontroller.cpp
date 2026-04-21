@@ -168,10 +168,19 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // HaliKey MIDI sends note 20 (dit) + note 31 (PTT) together on every Tip-to-Sleeve closure.
     // In CW mode: forward dit to keyer, ignore PTT (TX handled by KZ commands).
     // In voice mode: forward PTT to MainWindow, suppress dit (no keying in SSB/AM/FM).
+    //
+    // WHY read m_cachedMode instead of m_radioState->mode(): this lambda runs on the HaliKey
+    // worker thread (DirectConnection from halikeydevice.cpp). m_radioState->mode() reads a
+    // non-atomic subsystem field concurrently with parseCATCommand()'s writes on the main
+    // thread — data race. The atomic cache below is updated from a queued modeChanged.
+    m_cachedMode.store(static_cast<int>(m_radioState->mode()), std::memory_order_relaxed);
+    connect(m_radioState, &RadioState::modeChanged, this,
+            [this](RadioState::Mode mode) { m_cachedMode.store(static_cast<int>(mode), std::memory_order_relaxed); });
+
     connect(
         m_halikeyDevice, &HalikeyDevice::ditStateChanged, this,
         [this](bool pressed) {
-            auto mode = m_radioState->mode();
+            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
             if (mode == RadioState::CW || mode == RadioState::CW_R) {
                 m_iambicKeyer->setDitPaddle(pressed);
             }
@@ -183,7 +192,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
 
     // HaliKey PTT → MainWindow (voice/data modes only)
     connect(m_halikeyDevice, &HalikeyDevice::pttStateChanged, this, [this](bool active) {
-        auto mode = m_radioState->mode();
+        auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
         if (mode != RadioState::CW && mode != RadioState::CW_R) {
             emit pttRequested(active);
         }
