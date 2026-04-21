@@ -44,21 +44,11 @@ public:
     void setSpotMaxAge(int seconds);
     void clearSpots();
 
-    // Legacy single-cluster API (used by MainWindow auto-connect)
-    void connectToCluster(const QString &host, quint16 port, const QString &callsign);
-    void disconnectFromCluster();
-    DxClusterClient::ConnectionState connectionState() const;
-
 signals:
     void clusterStateChanged(int index, DxClusterClient::ConnectionState state);
     void clusterError(int index, const QString &error);
     void clusterLineReceived(int index, const QString &line);
     void spotsUpdated();
-
-    // Legacy signals (for SpectrumController compatibility)
-    void connectionStateChanged(DxClusterClient::ConnectionState state);
-    void errorOccurred(const QString &error);
-    void rawLineReceived(const QString &line);
 
 private slots:
     void onAgingTimer();
@@ -73,7 +63,6 @@ private:
     QVector<DxSpot> m_spots;
     QTimer *m_agingTimer;
     int m_spotMaxAgeSec = 600;
-    int m_legacyIndex = -1; // Track which index was used via legacy API
 };
 
 #endif // DXCLUSTERCONTROLLER_H

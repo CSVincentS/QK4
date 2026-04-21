@@ -1,5 +1,4 @@
 #include "dxclustercontroller.h"
-#include "settings/radiosettings.h"
 
 #include <QDebug>
 #include <QMetaObject>
@@ -54,14 +53,9 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
                 emit spotsUpdated();
             }
             emit clusterStateChanged(index, s);
-            if (index == m_legacyIndex)
-                emit connectionStateChanged(s);
         });
-        connect(inst.client, &DxClusterClient::errorOccurred, this, [this, index](const QString &error) {
-            emit clusterError(index, error);
-            if (index == m_legacyIndex)
-                emit errorOccurred(error);
-        });
+        connect(inst.client, &DxClusterClient::errorOccurred, this,
+                [this, index](const QString &error) { emit clusterError(index, error); });
         connect(inst.client, &DxClusterClient::rawLineReceived, this, [this, index](const QString &line) {
             if (m_instances.contains(index)) {
                 auto &buf = m_instances[index].consoleBuffer;
@@ -70,8 +64,6 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
                     buf.removeFirst();
             }
             emit clusterLineReceived(index, line);
-            if (index == m_legacyIndex)
-                emit rawLineReceived(line);
         });
         connect(inst.client, &DxClusterClient::spotReceived, this, [this](const DxSpot &spot) {
             qDebug() << "[DxCluster] Spot received:" << spot.spottedCall << spot.frequencyHz << spot.mode;
@@ -175,36 +167,6 @@ void DxClusterController::clearSpots() {
         m_spots.clear();
         emit spotsUpdated();
     }
-}
-
-// Legacy single-cluster API (used by MainWindow auto-connect and SpectrumController)
-void DxClusterController::connectToCluster(const QString &host, quint16 port, const QString &callsign) {
-    // Find matching index in settings, or use 0
-    auto clusters = RadioSettings::instance()->dxClusters();
-    m_legacyIndex = 0;
-    for (int i = 0; i < clusters.size(); ++i) {
-        if (clusters[i].host == host && clusters[i].port == port) {
-            m_legacyIndex = i;
-            break;
-        }
-    }
-    connectCluster(m_legacyIndex, host, port, callsign);
-}
-
-void DxClusterController::disconnectFromCluster() {
-    if (m_legacyIndex >= 0)
-        disconnectCluster(m_legacyIndex);
-}
-
-DxClusterClient::ConnectionState DxClusterController::connectionState() const {
-    // Return Connected if any cluster is connected
-    for (auto it = m_instances.constBegin(); it != m_instances.constEnd(); ++it) {
-        if (it.value().state == DxClusterClient::Connected)
-            return DxClusterClient::Connected;
-        if (it.value().state == DxClusterClient::Connecting)
-            return DxClusterClient::Connecting;
-    }
-    return DxClusterClient::Disconnected;
 }
 
 void DxClusterController::onAgingTimer() {
