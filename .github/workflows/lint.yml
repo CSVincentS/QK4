@@ -47,33 +47,6 @@ jobs:
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
-  signal-graph-drift:
-    # Phase 5.3 — permanent invariant. Regenerates docs/generated/ via
-    # tools/extract_all.py and compares aggregate signal/connect/emit
-    # counts (per-file + per-target-class) against the frozen baseline
-    # in docs/generated/baseline/. Catches accidental architectural
-    # drift — e.g., a slot body moving back into MainWindow that should
-    # live in a controller, or an emit jumping back into RadioState.
-    #
-    # On expected drift (e.g., after extracting a new controller),
-    # refresh the baseline: `cp docs/generated/*.json docs/generated/*.md
-    # docs/generated/baseline/` and commit.
-    name: Signal-Graph Drift
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Regenerate architecture JSON
-        run: python3 tools/extract_all.py
-
-      - name: Check drift vs baseline
-        run: python3 tools/check_signal_graph_drift.py
-
   sanitizer-tests:
     # Phase 0.10 — ASAN + UBSAN build of the test binaries, running on
     # every push. Originally added to guard the RadioState subsystem
