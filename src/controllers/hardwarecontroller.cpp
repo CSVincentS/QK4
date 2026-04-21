@@ -126,7 +126,12 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
 
     // Update sidetone and keyer speed when WPM changes
     connect(m_radioState, &RadioState::keyerSpeedChanged, this, [this](int wpm) {
-        m_sidetoneGenerator->setKeyerSpeed(wpm);
+        // WHY use invokeMethod instead of a direct call: SidetoneGenerator lives on
+        // m_sidetoneThread. setKeyerSpeed only writes a std::atomic<int> today (safe direct),
+        // but the matching invokeMethod for m_iambicKeyer on the next line establishes the
+        // cross-thread pattern — future changes to setKeyerSpeed that touch non-atomic
+        // members would otherwise introduce a silent race with no call-site warning.
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "setKeyerSpeed", Qt::QueuedConnection, Q_ARG(int, wpm));
         QMetaObject::invokeMethod(m_iambicKeyer, "setSpeed", Qt::QueuedConnection, Q_ARG(int, wpm));
         // Sync element length with K4 server
         int ditMs = 1200 / wpm;
