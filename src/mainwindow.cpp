@@ -18,6 +18,7 @@
 #include "controllers/subdivindicatorcontroller.h"
 #include "controllers/txstatecontroller.h"
 #include "controllers/sidecontroldisplaycontroller.h"
+#include "controllers/filterindicatorcontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -143,6 +144,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
                               m_vfoB, m_txIndicator, m_txTriangle, m_txTriangleB, this);
 
     m_sideControlDisplayController = new SideControlDisplayController(m_radioState, m_sideControlPanel, this);
+
+    m_filterIndicatorController = new FilterIndicatorController(m_radioState, m_filterAWidget, m_filterBWidget, this);
 
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
@@ -278,123 +281,9 @@ void MainWindow::setupRadioStateWiring() {
     // RIT/XIT label state + wheel/click handling owned by RitXitController.
 
     // Filter position indicators
-    connect(m_radioState, &RadioState::filterPositionChanged, this,
-            [this](int pos) { m_filterAWidget->setFilterPosition(pos); });
-    connect(m_radioState, &RadioState::filterPositionBChanged, this,
-            [this](int pos) { m_filterBWidget->setFilterPosition(pos); });
-
-    // Filter bandwidth and shift → FilterIndicatorWidget shape
-    connect(m_radioState, &RadioState::filterBandwidthChanged, this,
-            [this](int bw) { m_filterAWidget->setBandwidth(bw); });
-    connect(m_radioState, &RadioState::filterBandwidthBChanged, this,
-            [this](int bw) { m_filterBWidget->setBandwidth(bw); });
-    connect(m_radioState, &RadioState::ifShiftChanged, this, [this](int shift) { m_filterAWidget->setShift(shift); });
-    connect(m_radioState, &RadioState::ifShiftBChanged, this, [this](int shift) { m_filterBWidget->setShift(shift); });
-    // Mode affects filter indicator shift center calculation
-    connect(m_radioState, &RadioState::modeChanged, this,
-            [this](RadioState::Mode mode) { m_filterAWidget->setMode(RadioState::modeToString(mode)); });
-    connect(m_radioState, &RadioState::modeBChanged, this,
-            [this](RadioState::Mode mode) { m_filterBWidget->setMode(RadioState::modeToString(mode)); });
-    // DATA submode affects filter indicator shape (RTTY dual triangles)
-    connect(m_radioState, &RadioState::dataSubModeChanged, this,
-            [this](int subMode) { m_filterAWidget->setDataSubMode(subMode); });
-    connect(m_radioState, &RadioState::dataSubModeBChanged, this,
-            [this](int subMode) { m_filterBWidget->setDataSubMode(subMode); });
-
-    // RadioState signals -> Processing state updates (AGC, PRE, ATT, NB, NR)
-
-    // RadioState signals -> MAIN RX / SUB RX popup button label updates
-    // AFX button: primary = "AFX ON/OFF", alternate = mode (DELAY/PITCH/OFF)
-    connect(m_radioState, &RadioState::afxModeChanged, this, [this](int mode) {
-        QString primary = (mode == 0) ? "AFX OFF" : "AFX ON";
-        QString alternate;
-        switch (mode) {
-        case 0:
-            alternate = "OFF";
-            break;
-        case 1:
-            alternate = "DELAY";
-            break;
-        case 2:
-            alternate = "PITCH";
-            break;
-        }
-        if (m_popupManager->mainRxPopupAnchor())
-            m_popupManager->setMainRxButtonLabel(3, primary, alternate);
-        if (m_popupManager->subRxPopupAnchor())
-            m_popupManager->setSubRxButtonLabel(3, primary, alternate);
-    });
-
-    // AGC button: primary = speed (AGC-S/AGC-F), alternate = ON/OFF
-    connect(m_radioState, &RadioState::processingChanged, this, [this]() {
-        QString primary;
-        QString alternate;
-        switch (m_radioState->agcSpeed()) {
-        case RadioState::AGC_Off:
-            primary = "AGC";
-            alternate = "OFF";
-            break;
-        case RadioState::AGC_Slow:
-            primary = "AGC-S";
-            alternate = "ON";
-            break;
-        case RadioState::AGC_Fast:
-            primary = "AGC-F";
-            alternate = "ON";
-            break;
-        }
-        if (m_popupManager->mainRxPopupAnchor())
-            m_popupManager->setMainRxButtonLabel(4, primary, alternate);
-    });
-
-    connect(m_radioState, &RadioState::processingChangedB, this, [this]() {
-        QString primary;
-        QString alternate;
-        switch (m_radioState->agcSpeedB()) {
-        case RadioState::AGC_Off:
-            primary = "AGC";
-            alternate = "OFF";
-            break;
-        case RadioState::AGC_Slow:
-            primary = "AGC-S";
-            alternate = "ON";
-            break;
-        case RadioState::AGC_Fast:
-            primary = "AGC-F";
-            alternate = "ON";
-            break;
-        }
-        if (m_popupManager->subRxPopupAnchor())
-            m_popupManager->setSubRxButtonLabel(4, primary, alternate);
-    });
-
-    // APF button: Main RX APF state -> MAIN RX popup and VFO A indicator
-    connect(m_radioState, &RadioState::apfChanged, this, [this](bool enabled, int width) {
-        QString alternate;
-        if (!enabled) {
-            alternate = "OFF";
-        } else {
-            static const char *bwNames[] = {"30Hz", "50Hz", "150Hz"};
-            alternate = bwNames[qBound(0, width, 2)];
-        }
-        if (m_popupManager->mainRxPopupAnchor())
-            m_popupManager->setMainRxButtonLabel(5, "APF", alternate);
-        m_vfoA->setApf(enabled, width);
-    });
-
-    // APF button: Sub RX APF state -> SUB RX popup and VFO B indicator
-    connect(m_radioState, &RadioState::apfBChanged, this, [this](bool enabled, int width) {
-        QString alternate;
-        if (!enabled) {
-            alternate = "OFF";
-        } else {
-            static const char *bwNames[] = {"30Hz", "50Hz", "150Hz"};
-            alternate = bwNames[qBound(0, width, 2)];
-        }
-        if (m_popupManager->subRxPopupAnchor())
-            m_popupManager->setSubRxButtonLabel(5, "APF", alternate);
-        m_vfoB->setApf(enabled, width);
-    });
+    // Filter indicator widgets (VFO A/B) driven by FilterIndicatorController.
+    // AFX / AGC / APF button labels + APF VFO indicator driven by PopupManager's
+    // wireRxRowButtonLabels() — logical home since PopupManager owns those buttons.
 
     // RadioState waterfall height -> mini-pans (panadapter wiring is in SpectrumController)
     connect(m_radioState, &RadioState::waterfallHeightChanged, this, [this](int percent) {

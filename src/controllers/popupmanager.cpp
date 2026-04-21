@@ -143,6 +143,7 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
     wireMicPopups();
     wireVoxAndSsbPopups();
     wireKeyingWeightPopup();
+    wireRxRowButtonLabels();
 
     // RadioState EQ echoes → refresh popup bands.
     connect(m_radioState, &RadioState::rxEqChanged, this,
@@ -982,4 +983,73 @@ void PopupManager::showKeyingWeightAbove(QWidget *anchor) {
         m_keyingWeightPopup->setWeight(weight);
     if (anchor)
         m_keyingWeightPopup->showAboveWidget(anchor);
+}
+
+void PopupManager::wireRxRowButtonLabels() {
+    // AFX (button 3, Main + Sub rows share same global state).
+    connect(m_radioState, &RadioState::afxModeChanged, this, [this](int mode) {
+        const QString primary = (mode == 0) ? "AFX OFF" : "AFX ON";
+        QString alternate;
+        switch (mode) {
+        case 0:
+            alternate = "OFF";
+            break;
+        case 1:
+            alternate = "DELAY";
+            break;
+        case 2:
+            alternate = "PITCH";
+            break;
+        }
+        if (m_mainRxRow)
+            m_mainRxRow->setButtonLabel(3, primary, alternate);
+        if (m_subRxRow)
+            m_subRxRow->setButtonLabel(3, primary, alternate);
+    });
+
+    // AGC (button 4, per-VFO — Main uses GT, Sub uses GT$).
+    auto agcLabel = [](RadioState::AGCSpeed speed) -> std::pair<QString, QString> {
+        switch (speed) {
+        case RadioState::AGC_Off:
+            return {"AGC", "OFF"};
+        case RadioState::AGC_Slow:
+            return {"AGC-S", "ON"};
+        case RadioState::AGC_Fast:
+            return {"AGC-F", "ON"};
+        }
+        return {"AGC", "OFF"};
+    };
+    connect(m_radioState, &RadioState::processingChanged, this, [this, agcLabel]() {
+        if (!m_mainRxRow)
+            return;
+        const auto [primary, alternate] = agcLabel(m_radioState->agcSpeed());
+        m_mainRxRow->setButtonLabel(4, primary, alternate);
+    });
+    connect(m_radioState, &RadioState::processingChangedB, this, [this, agcLabel]() {
+        if (!m_subRxRow)
+            return;
+        const auto [primary, alternate] = agcLabel(m_radioState->agcSpeedB());
+        m_subRxRow->setButtonLabel(4, primary, alternate);
+    });
+
+    // APF (button 5, per-VFO). Also forwards to the VFO APF indicator —
+    // same state drives both.
+    auto apfLabel = [](bool enabled, int width) -> QString {
+        if (!enabled)
+            return "OFF";
+        static const char *bwNames[] = {"30Hz", "50Hz", "150Hz"};
+        return bwNames[qBound(0, width, 2)];
+    };
+    connect(m_radioState, &RadioState::apfChanged, this, [this, apfLabel](bool enabled, int width) {
+        if (m_mainRxRow)
+            m_mainRxRow->setButtonLabel(5, "APF", apfLabel(enabled, width));
+        if (m_vfoA)
+            m_vfoA->setApf(enabled, width);
+    });
+    connect(m_radioState, &RadioState::apfBChanged, this, [this, apfLabel](bool enabled, int width) {
+        if (m_subRxRow)
+            m_subRxRow->setButtonLabel(5, "APF", apfLabel(enabled, width));
+        if (m_vfoB)
+            m_vfoB->setApf(enabled, width);
+    });
 }

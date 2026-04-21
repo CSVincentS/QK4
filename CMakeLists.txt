@@ -97,6 +97,7 @@ set(SOURCES
     src/controllers/subdivindicatorcontroller.cpp
     src/controllers/txstatecontroller.cpp
     src/controllers/sidecontroldisplaycontroller.cpp
+    src/controllers/filterindicatorcontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -201,6 +202,7 @@ set(HEADERS
     src/controllers/subdivindicatorcontroller.h
     src/controllers/txstatecontroller.h
     src/controllers/sidecontroldisplaycontroller.h
+    src/controllers/filterindicatorcontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

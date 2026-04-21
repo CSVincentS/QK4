@@ -167,6 +167,10 @@ private:
     void wireMicPopups();
     void wireVoxAndSsbPopups();
     void wireKeyingWeightPopup();
+    // Wires RadioState observers that update Main RX / Sub RX button-row
+    // labels for AFX, AGC, and APF. APF also forwards to the VFO APF
+    // indicator since it's the same state.
+    void wireRxRowButtonLabels();
 };
 
 #endif // POPUPMANAGER_H
