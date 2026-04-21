@@ -15,6 +15,7 @@
 #include "controllers/ritxitcontroller.h"
 #include "controllers/modelabelcontroller.h"
 #include "controllers/vfofrequencycontroller.h"
+#include "controllers/subdivindicatorcontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -131,6 +132,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_modeLabelController = new ModeLabelController(m_radioState, m_modeALabel, m_modeBLabel, this);
 
     m_vfoFrequencyController = new VfoFrequencyController(m_radioState, m_vfoA, m_vfoB, this);
+
+    m_subDivIndicatorController = new SubDivIndicatorController(m_radioState, m_spectrumController, m_vfoB, m_subLabel,
+                                                                m_divLabel, m_modeBLabel, this);
 
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
@@ -309,83 +313,8 @@ void MainWindow::setupRadioStateWiring() {
         }
     });
 
-    // SUB indicator - green when sub RX enabled, grey when off
-    // Also updates DIV indicator since DIV requires SUB to be on
-    // Also dims VFO B frequency and mode labels when SUB RX is off
-    connect(m_radioState, &RadioState::subRxEnabledChanged, this, [this](bool enabled) {
-        if (enabled) {
-            m_subLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: black;"
-                                              "font-size: %2px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::StatusGreen)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-            // If DIV is also on, light up the DIV indicator (handles timing when SB3 comes after DV1)
-            if (m_radioState->diversityEnabled()) {
-                m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                                  "color: black;"
-                                                  "font-size: %2px;"
-                                                  "font-weight: bold;"
-                                                  "border-radius: 2px;")
-                                              .arg(K4Styles::Colors::StatusGreen)
-                                              .arg(K4Styles::Dimensions::FontSizeNormal));
-            }
-            // Restore VFO B frequency and mode to normal white
-            m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::TextWhite));
-            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                            .arg(K4Styles::Colors::TextWhite)
-                                            .arg(K4Styles::Dimensions::FontSizeLarge));
-        } else {
-            m_subLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: %2;"
-                                              "font-size: %3px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-            // DIV requires SUB - turn off DIV indicator when SUB is off
-            m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: %2;"
-                                              "font-size: %3px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-            // Dim VFO B frequency and mode to indicate SUB RX is off
-            m_vfoB->frequencyDisplay()->setNormalColor(QColor(K4Styles::Colors::InactiveGray));
-            m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                            .arg(K4Styles::Colors::InactiveGray)
-                                            .arg(K4Styles::Dimensions::FontSizeLarge));
-
-            // Auto-hide mini pan B if VFOs are on different bands (can't have mini pan B without SUB RX)
-            m_spectrumController->checkAndHideMiniPanB();
-        }
-    });
-
-    // DIV indicator - green only when BOTH diversity AND sub RX are enabled
-    // (DIV requires SUB to be on - can't have DIV without SUB)
-    connect(m_radioState, &RadioState::diversityChanged, this, [this](bool enabled) {
-        // DIV only shows green if both diversity is enabled AND sub RX is enabled
-        bool showActive = enabled && m_radioState->subReceiverEnabled();
-        if (showActive) {
-            m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: black;"
-                                              "font-size: %2px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::StatusGreen)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-        } else {
-            m_divLabel->setStyleSheet(QString("background-color: %1;"
-                                              "color: %2;"
-                                              "font-size: %3px;"
-                                              "font-weight: bold;"
-                                              "border-radius: 2px;")
-                                          .arg(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop)
-                                          .arg(K4Styles::Dimensions::FontSizeNormal));
-        }
-    });
+    // SUB / DIV indicator styling + VFO B dim-state + auto-hide mini pan B
+    // are owned by SubDivIndicatorController (created later in constructor).
 
     // VFO Lock indicators - show lock arc on VFO A/B squares when locked
     connect(m_radioState, &RadioState::lockAChanged, this, [this](bool locked) { m_vfoRow->setLockA(locked); });
