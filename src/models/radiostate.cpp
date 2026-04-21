@@ -14,16 +14,8 @@ void RadioState::reset() {
     // Data-mode + tuning step + streaming latency.
     m_dataControlState.reset();
 
-    // Mode and filter
-    m_mode = Unknown;
-    m_modeB = Unknown;
-    m_filterBandwidth = -1;
-    m_filterBandwidthB = -1;
-    m_filterPosition = -1;
-    m_filterPositionB = -1;
-    m_ifShift = -1;
-    m_ifShiftB = -1;
-    m_cwPitch = -1;
+    // Mode / filter / CW pitch / keyer config — subsystem struct.
+    m_modeFilterState.reset();
 
     // Power and levels
     m_rfPower = -1.0;
@@ -34,10 +26,7 @@ void RadioState::reset() {
     m_squelchLevel = -1;
     m_rfGainB = -999;
     m_squelchLevelB = -1;
-    m_keyerSpeed = -1;
-    m_iambicMode = QChar();
-    m_paddleOrientation = QChar();
-    m_keyingWeight = -1;
+    // Keyer speed / iambic / paddle / weight reset via m_modeFilterState.reset() above.
 
     // Meters
     m_sMeter = 0.0;
@@ -263,7 +252,7 @@ QString RadioState::modeToString(Mode mode) {
 }
 
 QString RadioState::modeString() const {
-    return modeToString(m_mode);
+    return modeToString(mode());
 }
 
 QString RadioState::dataSubModeToString(int subMode) {
@@ -282,34 +271,26 @@ QString RadioState::dataSubModeToString(int subMode) {
 }
 
 QString RadioState::modeStringFull() const {
-    // For DATA/DATA-R modes, show the sub-mode instead
-    if (m_mode == DATA || m_mode == DATA_R) {
+    // For DATA / DATA-R modes, show the sub-mode instead.
+    const Mode m = mode();
+    if (m == DATA || m == DATA_R)
         return dataSubModeToString(m_dataControlState.dataSubMode);
-    }
-    return modeToString(m_mode);
+    return modeToString(m);
 }
 
 QString RadioState::modeStringFullB() const {
-    // For DATA/DATA-R modes, show the sub-mode instead
-    if (m_modeB == DATA || m_modeB == DATA_R) {
+    const Mode m = modeB();
+    if (m == DATA || m == DATA_R)
         return dataSubModeToString(m_dataControlState.dataSubModeB);
-    }
-    return modeToString(m_modeB);
+    return modeToString(m);
 }
 
-// Optimistic setters for scroll wheel updates (radio doesn't echo these commands)
+// Mode/filter/CW pitch/keyer optimistic setters — delegate to ModeFilterHandlers.
 void RadioState::setKeyerSpeed(int wpm) {
-    if (m_keyerSpeed != wpm) {
-        m_keyerSpeed = wpm;
-        emit keyerSpeedChanged(m_keyerSpeed);
-    }
+    ModeFilterHandlers::setKeyerSpeed(m_modeFilterState, *this, wpm);
 }
-
 void RadioState::setCwPitch(int pitchHz) {
-    if (m_cwPitch != pitchHz) {
-        m_cwPitch = pitchHz;
-        emit cwPitchChanged(m_cwPitch);
-    }
+    ModeFilterHandlers::setCwPitch(m_modeFilterState, *this, pitchHz);
 }
 
 void RadioState::setRfPower(double watts) {
@@ -328,31 +309,16 @@ void RadioState::setRfPower(double watts) {
 }
 
 void RadioState::setFilterBandwidth(int bwHz) {
-    if (m_filterBandwidth != bwHz) {
-        m_filterBandwidth = bwHz;
-        emit filterBandwidthChanged(m_filterBandwidth);
-    }
+    ModeFilterHandlers::setFilterBandwidth(m_modeFilterState, *this, bwHz);
 }
-
 void RadioState::setIfShift(int shift) {
-    if (m_ifShift != shift) {
-        m_ifShift = shift;
-        emit ifShiftChanged(m_ifShift);
-    }
+    ModeFilterHandlers::setIfShift(m_modeFilterState, *this, shift);
 }
-
 void RadioState::setFilterBandwidthB(int bwHz) {
-    if (m_filterBandwidthB != bwHz) {
-        m_filterBandwidthB = bwHz;
-        emit filterBandwidthBChanged(m_filterBandwidthB);
-    }
+    ModeFilterHandlers::setFilterBandwidthB(m_modeFilterState, *this, bwHz);
 }
-
 void RadioState::setIfShiftB(int shift) {
-    if (m_ifShiftB != shift) {
-        m_ifShiftB = shift;
-        emit ifShiftBChanged(m_ifShiftB);
-    }
+    ModeFilterHandlers::setIfShiftB(m_modeFilterState, *this, shift);
 }
 
 void RadioState::setRfGain(int gain) {
@@ -835,25 +801,16 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"DR$", [this](const QString &c) { handleDRSub(c); }});
     m_commandHandlers.append({"DT$", [this](const QString &c) { handleDTSub(c); }});
     m_commandHandlers.append({"MD$", [this](const QString &c) { handleMDSub(c); }});
-    // BW$, IS$, FP$ — deduplicated via handleIntPair (prefixLen 3)
-    m_commandHandlers.append({"BW$", [this](const QString &c) {
-                                  if (c.length() <= 3)
-                                      return;
-                                  bool ok;
-                                  int bw = c.mid(3).toInt(&ok);
-                                  if (ok) {
-                                      int newBw = bw * 10;
-                                      if (m_filterBandwidthB != newBw) {
-                                          m_filterBandwidthB = newBw;
-                                          emit filterBandwidthBChanged(m_filterBandwidthB);
-                                      }
-                                  }
-                              }});
+    // BW$, IS$, FP$ — deduplicated via handleIntPair / ModeFilterHandlers.
+    m_commandHandlers.append(
+        {"BW$", [this](const QString &c) { ModeFilterHandlers::handleBWSub(m_modeFilterState, *this, c); }});
     m_commandHandlers.append({"IS$", [this](const QString &c) {
-                                  handleIntPair(c, 3, m_ifShiftB, -99999, 99999, &RadioState::ifShiftBChanged);
+                                  handleIntPair(c, 3, m_modeFilterState.ifShiftB, -99999, 99999,
+                                                &RadioState::ifShiftBChanged);
                               }});
     m_commandHandlers.append({"FP$", [this](const QString &c) {
-                                  handleIntPair(c, 3, m_filterPositionB, 1, 3, &RadioState::filterPositionBChanged);
+                                  handleIntPair(c, 3, m_modeFilterState.filterPositionB, 1, 3,
+                                                &RadioState::filterPositionBChanged);
                               }});
     // RG$ — strips leading dash before parsing
     // WHY: K4 reports RF gain as an attenuation in the range -0..-60 dB
@@ -919,30 +876,21 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"FA", [this](const QString &c) { handleFA(c); }});
     m_commandHandlers.append({"FB", [this](const QString &c) { handleFB(c); }});
     m_commandHandlers.append({"FT", [this](const QString &c) { handleFT(c); }});
-    // FP — deduplicated via handleIntPair
+    // FP — deduplicated via handleIntPair.
     m_commandHandlers.append({"FP", [this](const QString &c) {
-                                  handleIntPair(c, 2, m_filterPosition, 1, 3, &RadioState::filterPositionChanged);
+                                  handleIntPair(c, 2, m_modeFilterState.filterPosition, 1, 3,
+                                                &RadioState::filterPositionChanged);
                               }});
     m_commandHandlers.append({"FX", [this](const QString &c) { handleFX(c); }});
     m_commandHandlers.append({"MD", [this](const QString &c) { handleMD(c); }});
     m_commandHandlers.append({"BL", [this](const QString &c) { handleBL(c); }});
-    // BW — deduplicated inline (×10 multiplier)
-    m_commandHandlers.append({"BW", [this](const QString &c) {
-                                  if (c.length() <= 2)
-                                      return;
-                                  bool ok;
-                                  int bw = c.mid(2).toInt(&ok);
-                                  if (ok) {
-                                      int newBw = bw * 10;
-                                      if (m_filterBandwidth != newBw) {
-                                          m_filterBandwidth = newBw;
-                                          emit filterBandwidthChanged(m_filterBandwidth);
-                                      }
-                                  }
-                              }});
-    // IS — deduplicated via handleIntPair
+    // BW — deduplicated via ModeFilterHandlers (×10 multiplier).
+    m_commandHandlers.append(
+        {"BW", [this](const QString &c) { ModeFilterHandlers::handleBW(m_modeFilterState, *this, c); }});
+    // IS — deduplicated via handleIntPair.
     m_commandHandlers.append({"IS", [this](const QString &c) {
-                                  handleIntPair(c, 2, m_ifShift, -99999, 99999, &RadioState::ifShiftChanged);
+                                  handleIntPair(c, 2, m_modeFilterState.ifShift, -99999, 99999,
+                                                &RadioState::ifShiftChanged);
                               }});
     m_commandHandlers.append({"CW", [this](const QString &c) { handleCW(c); }});
     // RG — deduplicated inline (strips leading dash)
@@ -1048,35 +996,10 @@ void RadioState::handleFT(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleMD(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int modeCode = cmd.mid(2).toInt(&ok);
-    if (ok) {
-        Mode newMode = modeFromCode(modeCode);
-        if (m_mode != newMode) {
-            m_mode = newMode;
-            emit modeChanged(m_mode);
-            int currentDelay = delayForCurrentMode();
-            if (currentDelay >= 0) {
-                emit qskDelayChanged(currentDelay);
-            }
-        }
-    }
+    ModeFilterHandlers::handleMD(m_modeFilterState, *this, cmd);
 }
-
 void RadioState::handleMDSub(const QString &cmd) {
-    if (cmd.length() <= 3)
-        return;
-    bool ok;
-    int modeCode = cmd.mid(3).toInt(&ok);
-    if (ok) {
-        Mode newMode = modeFromCode(modeCode);
-        if (m_modeB != newMode) {
-            m_modeB = newMode;
-            emit modeBChanged(m_modeB);
-        }
-    }
+    ModeFilterHandlers::handleMDSub(m_modeFilterState, *this, cmd);
 }
 
 // =============================================================================
@@ -1084,18 +1007,7 @@ void RadioState::handleMDSub(const QString &cmd) {
 // =============================================================================
 
 void RadioState::handleCW(const QString &cmd) {
-    // CW pitch - but skip CW-R mode strings
-    if (cmd.length() < 4 || cmd.startsWith("CW-"))
-        return;
-    bool ok;
-    int pitchCode = cmd.mid(2).toInt(&ok);
-    if (ok && pitchCode >= 25 && pitchCode <= 95) {
-        int pitchHz = pitchCode * 10;
-        if (pitchHz != m_cwPitch) {
-            m_cwPitch = pitchHz;
-            emit cwPitchChanged(m_cwPitch);
-        }
-    }
+    ModeFilterHandlers::handleCW(m_modeFilterState, *this, cmd);
 }
 
 // =============================================================================
@@ -1262,64 +1174,20 @@ void RadioState::handlePC(const QString &cmd) {
 }
 
 void RadioState::handleKS(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int wpm = cmd.mid(2).toInt(&ok);
-    if (ok && m_keyerSpeed != wpm) {
-        m_keyerSpeed = wpm;
-        emit keyerSpeedChanged(m_keyerSpeed);
-    }
+    ModeFilterHandlers::handleKS(m_modeFilterState, *this, cmd);
 }
-
 void RadioState::handleKP(const QString &cmd) {
-    // KPionnn; where i=iambic(A/B), o=paddle(N/R), nnn=weight(090-125)
-    if (cmd.length() < 7)
-        return;
-    QChar iambic = cmd[2];
-    QChar paddle = cmd[3];
-    bool ok;
-    int weight = cmd.mid(4, 3).toInt(&ok);
-    if (!ok)
-        return;
-    bool changed = false;
-    if (m_iambicMode != iambic) {
-        m_iambicMode = iambic;
-        changed = true;
-    }
-    if (m_paddleOrientation != paddle) {
-        m_paddleOrientation = paddle;
-        changed = true;
-    }
-    if (m_keyingWeight != weight) {
-        m_keyingWeight = weight;
-        changed = true;
-    }
-    if (changed) {
-        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
-    }
+    ModeFilterHandlers::handleKP(m_modeFilterState, *this, cmd);
 }
 
 void RadioState::setIambicMode(QChar mode) {
-    if (m_iambicMode != mode) {
-        m_iambicMode = mode;
-        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
-    }
+    ModeFilterHandlers::setIambicMode(m_modeFilterState, *this, mode);
 }
-
 void RadioState::setPaddleOrientation(QChar orientation) {
-    if (m_paddleOrientation != orientation) {
-        m_paddleOrientation = orientation;
-        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
-    }
+    ModeFilterHandlers::setPaddleOrientation(m_modeFilterState, *this, orientation);
 }
-
 void RadioState::setKeyingWeight(int weight) {
-    weight = qBound(90, weight, 125);
-    if (m_keyingWeight != weight) {
-        m_keyingWeight = weight;
-        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
-    }
+    ModeFilterHandlers::setKeyingWeight(m_modeFilterState, *this, weight);
 }
 
 // =============================================================================
@@ -1757,20 +1625,21 @@ void RadioState::handleSD(const QString &cmd) {
     }
 
     bool isCurrentMode = false;
+    const Mode current = mode();
     if (modeChar == 'C') {
         if (m_qskDelayCW != delay) {
             m_qskDelayCW = delay;
-            isCurrentMode = (m_mode == CW || m_mode == CW_R);
+            isCurrentMode = (current == CW || current == CW_R);
         }
     } else if (modeChar == 'V') {
         if (m_qskDelayVoice != delay) {
             m_qskDelayVoice = delay;
-            isCurrentMode = (m_mode == LSB || m_mode == USB || m_mode == AM || m_mode == FM);
+            isCurrentMode = (current == LSB || current == USB || current == AM || current == FM);
         }
     } else if (modeChar == 'D') {
         if (m_qskDelayData != delay) {
             m_qskDelayData = delay;
-            isCurrentMode = (m_mode == DATA || m_mode == DATA_R);
+            isCurrentMode = (current == DATA || current == DATA_R);
         }
     }
     if (isCurrentMode) {

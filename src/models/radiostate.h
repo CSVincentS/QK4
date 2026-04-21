@@ -11,6 +11,7 @@
 #include "radiostate/antennastate.h"
 #include "radiostate/datacontrolstate.h"
 #include "radiostate/frequencyvfostate.h"
+#include "radiostate/modefilterstate.h"
 #include "radiostate/processingstate.h"
 #include "radiostate/textdecodestate.h"
 
@@ -67,25 +68,25 @@ public:
     int tuningStep() const { return m_dataControlState.tuningStep; }
     int tuningStepB() const { return m_dataControlState.tuningStepB; }
 
-    // Mode and filter
-    Mode mode() const { return m_mode; }
-    Mode modeB() const { return m_modeB; }
+    // Mode and filter — backed by m_modeFilterState.
+    Mode mode() const { return static_cast<Mode>(m_modeFilterState.mode); }
+    Mode modeB() const { return static_cast<Mode>(m_modeFilterState.modeB); }
     QString modeString() const;
-    int filterBandwidth() const { return m_filterBandwidth; }
-    int filterBandwidthB() const { return m_filterBandwidthB; }
-    int filterPosition() const { return m_filterPosition; }
-    int filterPositionB() const { return m_filterPositionB; }
-    int ifShift() const { return m_ifShift; }
-    int shiftHz() const { return m_ifShift * 10; } // Convert raw IS value to Hz (IS0050 = 500 Hz)
-    int ifShiftB() const { return m_ifShiftB; }
-    int shiftBHz() const { return m_ifShiftB * 10; } // Sub RX IF shift in Hz
-    int cwPitch() const { return m_cwPitch; }
-    int keyerSpeed() const { return m_keyerSpeed; }
+    int filterBandwidth() const { return m_modeFilterState.filterBandwidth; }
+    int filterBandwidthB() const { return m_modeFilterState.filterBandwidthB; }
+    int filterPosition() const { return m_modeFilterState.filterPosition; }
+    int filterPositionB() const { return m_modeFilterState.filterPositionB; }
+    int ifShift() const { return m_modeFilterState.ifShift; }
+    int shiftHz() const { return m_modeFilterState.ifShift * 10; }
+    int ifShiftB() const { return m_modeFilterState.ifShiftB; }
+    int shiftBHz() const { return m_modeFilterState.ifShiftB * 10; }
+    int cwPitch() const { return m_modeFilterState.cwPitch; }
+    int keyerSpeed() const { return m_modeFilterState.keyerSpeed; }
 
-    // Keyer Paddle settings (KP command)
-    QChar iambicMode() const { return m_iambicMode; }               // A or B
-    QChar paddleOrientation() const { return m_paddleOrientation; } // N(ormal) or R(everse)
-    int keyingWeight() const { return m_keyingWeight; }             // 090-125 (ratio * 100)
+    // Keyer paddle (KP) — backed by m_modeFilterState.
+    QChar iambicMode() const { return m_modeFilterState.iambicMode; }
+    QChar paddleOrientation() const { return m_modeFilterState.paddleOrientation; }
+    int keyingWeight() const { return m_modeFilterState.keyingWeight; }
 
     // Power and levels
     double rfPower() const { return m_rfPower; }
@@ -260,7 +261,7 @@ public:
     int monitorLevelData() const { return m_monitorLevelData; }
     int monitorLevelVoice() const { return m_monitorLevelVoice; }
     int monitorLevelForCurrentMode() const {
-        switch (m_mode) {
+        switch (mode()) {
         case CW:
         case CW_R:
             return m_monitorLevelCW;
@@ -273,7 +274,7 @@ public:
     }
     // Returns the ML mode code (0/1/2) for the current operating mode
     int monitorModeCode() const {
-        switch (m_mode) {
+        switch (mode()) {
         case CW:
         case CW_R:
             return 0;
@@ -301,7 +302,7 @@ public:
 
     // Returns VOX state for current operating mode
     bool voxForCurrentMode() const {
-        switch (m_mode) {
+        switch (mode()) {
         case CW:
         case CW_R:
             return m_voxCW;
@@ -319,7 +320,7 @@ public:
     int qskDelayData() const { return m_qskDelayData; }
     // Returns delay for current operating mode (in 10ms increments)
     int delayForCurrentMode() const {
-        switch (m_mode) {
+        switch (mode()) {
         case CW:
         case CW_R:
             return m_qskDelayCW;
@@ -334,7 +335,7 @@ public:
     // Optimistic setters for QSK/VOX delay (in 10ms increments, 0-255)
     void setDelayForCurrentMode(int delay) {
         delay = qBound(0, delay, 255);
-        switch (m_mode) {
+        switch (mode()) {
         case CW:
         case CW_R:
             if (m_qskDelayCW != delay) {
@@ -537,7 +538,7 @@ public:
     // VOX Gain (VG command) - per mode (0=voice, 1=data)
     int voxGainVoice() const { return m_voxGainVoice; } // 0-60
     int voxGainData() const { return m_voxGainData; }   // 0-60
-    int voxGainForCurrentMode() const { return (m_mode == DATA || m_mode == DATA_R) ? m_voxGainData : m_voxGainVoice; }
+    int voxGainForCurrentMode() const { return (mode() == DATA || mode() == DATA_R) ? m_voxGainData : m_voxGainVoice; }
 
     // Anti-VOX (VI command) - voice modes only
     int antiVox() const { return m_antiVox; } // 0-60
@@ -738,30 +739,19 @@ private:
     // Data-mode + tuning step + streaming latency — see radiostate/datacontrolstate.h.
     DataControlState m_dataControlState;
 
-    // Mode and filter
-    Mode m_mode = Unknown;
-    Mode m_modeB = Unknown;
-    int m_filterBandwidth = -1;
-    int m_filterBandwidthB = -1;
-    int m_filterPosition = -1;
-    int m_filterPositionB = -1;
-    int m_ifShift = -1;  // IF shift position (0-99, 50=centered) - init to -1 to ensure first emit
-    int m_ifShiftB = -1; // Sub RX IF shift
-    int m_cwPitch = -1;  // Init to -1 to ensure first emit
+    // Mode / filter / CW pitch / keyer — see radiostate/modefilterstate.h.
+    ModeFilterState m_modeFilterState;
 
     // Power and levels
     double m_rfPower = -1.0; // Init to invalid to ensure first emit
     bool m_isQrpMode = false;
-    int m_micGain = -1;        // Init to invalid to ensure first emit (0-80)
-    int m_compression = -1;    // Init to invalid to ensure first emit (0-30, SSB only)
-    int m_rfGain = -999;       // Init to invalid to ensure first emit
-    int m_squelchLevel = -1;   // Init to invalid to ensure first emit
-    int m_rfGainB = -999;      // Sub RX RF gain
-    int m_squelchLevelB = -1;  // Sub RX squelch
-    int m_keyerSpeed = -1;     // WPM - init to -1 to ensure first emit
-    QChar m_iambicMode;        // A or B (null = not yet received)
-    QChar m_paddleOrientation; // N(ormal) or R(everse) (null = not yet received)
-    int m_keyingWeight = -1;   // 090-125 (ratio * 100), -1 = not yet received
+    int m_micGain = -1;       // Init to invalid to ensure first emit (0-80)
+    int m_compression = -1;   // Init to invalid to ensure first emit (0-30, SSB only)
+    int m_rfGain = -999;      // Init to invalid to ensure first emit
+    int m_squelchLevel = -1;  // Init to invalid to ensure first emit
+    int m_rfGainB = -999;     // Sub RX RF gain
+    int m_squelchLevelB = -1; // Sub RX squelch
+    // Keyer speed / iambic / paddle / weight live on m_modeFilterState.
 
     // Meters
     double m_sMeter = 0.0;

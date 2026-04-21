@@ -116,6 +116,7 @@ set(SOURCES
     src/models/radiostate/antennastate.cpp
     src/models/radiostate/datacontrolstate.cpp
     src/models/radiostate/frequencyvfostate.cpp
+    src/models/radiostate/modefilterstate.cpp
     src/models/radiostate/processingstate.cpp
     src/models/radiostate/textdecodestate.cpp
     src/models/menumodel.cpp
@@ -226,6 +227,7 @@ set(HEADERS
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h
     src/models/radiostate/frequencyvfostate.h
+    src/models/radiostate/modefilterstate.h
     src/models/radiostate/processingstate.h
     src/models/radiostate/textdecodestate.h
     src/models/menumodel.h
