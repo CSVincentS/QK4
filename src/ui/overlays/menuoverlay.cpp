@@ -364,6 +364,12 @@ void MenuOverlayWidget::populateItems() {
     updateSelection();
     updateButtonLabels();
     updateNormButton();
+
+    // WHY: QScrollArea's scrollbar value is owned by the scroll area, not by the
+    // child widgets we just destroyed + recreated — so without this explicit reset
+    // the scrollbar keeps its previous numeric value, leaving the highlight (item 0)
+    // off-screen above the visible area on reopen or on search-filter clear.
+    m_scrollArea->verticalScrollBar()->setValue(0);
 }
 
 void MenuOverlayWidget::show() {
