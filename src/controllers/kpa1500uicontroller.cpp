@@ -69,13 +69,18 @@ KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, Kpa1500
 }
 
 KPA1500UiController::~KPA1500UiController() {
-    // WHY: block inbound signals before Qt child-destruction tears down
-    // m_miniPanel callbacks — avoids use-after-free on shutdown. See
-    // CONVENTIONS.md → Architecture Rule 11.
-    disconnect(this);
+    // WHY: sever BOTH directions before triggering disconnectFromHost() —
+    // that call synchronously emits disconnected signals. If we only cut
+    // outgoing connections (`disconnect(this)` where this is sender), the
+    // client's disconnected signal still reaches our onDisconnected slot,
+    // which then calls into sibling controllers' widgets — and those
+    // widgets may already be gone under Qt's child-destruction order.
+    // See CONVENTIONS.md → Architecture Rule 11.
     if (m_client) {
+        disconnect(m_client, nullptr, this, nullptr);
         m_client->disconnectFromHost();
     }
+    disconnect(this);
 }
 
 void KPA1500UiController::connectIfEnabled() {
