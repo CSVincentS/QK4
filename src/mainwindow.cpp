@@ -17,6 +17,7 @@
 #include "controllers/vfofrequencycontroller.h"
 #include "controllers/subdivindicatorcontroller.h"
 #include "controllers/txstatecontroller.h"
+#include "controllers/sidecontroldisplaycontroller.h"
 #include "controllers/popupmanager.h"
 #include "models/macroids.h"
 #include "ui/optionsdialog.h"
@@ -140,6 +141,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_txStateController =
         new TxStateController(m_radioState, m_statusBarController, m_sideControlPanel, m_vfoFrequencyController, m_vfoA,
                               m_vfoB, m_txIndicator, m_txTriangle, m_txTriangleB, this);
+
+    m_sideControlDisplayController = new SideControlDisplayController(m_radioState, m_sideControlPanel, this);
 
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
@@ -266,59 +269,8 @@ void MainWindow::setupRadioStateWiring() {
     connect(m_radioState, &RadioState::lockAChanged, this, [this](bool locked) { m_vfoRow->setLockA(locked); });
     connect(m_radioState, &RadioState::lockBChanged, this, [this](bool locked) { m_vfoRow->setLockB(locked); });
 
-    // RadioState signals -> Side control panel updates (BW/SHFT/HI/LO)
-    // Helper to update all 4 filter display values (called on BW or SHFT change)
-    // When B SET is enabled, shows VFO B (Sub RX) filter values instead of VFO A
-    auto updateFilterDisplay = [this]() {
-        bool bSet = m_radioState->bSetEnabled();
-
-        // Get bandwidth and shift from correct VFO
-        int bwHz = bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth();
-        int shiftHz = bSet ? m_radioState->shiftBHz() : m_radioState->shiftHz();
-
-        // BW/SHFT in kHz
-        m_sideControlPanel->setBandwidth(bwHz / 1000.0);
-        m_sideControlPanel->setShift(shiftHz / 1000.0);
-
-        // Calculate and set HI/LO in kHz (clamp LO to 0, then derive HI from LO + BW)
-        int lowHz = qMax(0, shiftHz - (bwHz / 2));
-        int highHz = lowHz + bwHz;
-        m_sideControlPanel->setHighCut(highHz / 1000.0);
-        m_sideControlPanel->setLowCut(lowHz / 1000.0);
-    };
-    connect(m_radioState, &RadioState::filterBandwidthChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::ifShiftChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::filterBandwidthBChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::ifShiftBChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::bSetChanged, this, updateFilterDisplay);
-    connect(m_radioState, &RadioState::keyerSpeedChanged, m_sideControlPanel, &SideControlPanel::setWpm);
-    connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitch) {
-        m_sideControlPanel->setPitch(pitch / 1000.0); // Hz to kHz (500Hz = 0.50)
-    });
-    connect(m_radioState, &RadioState::rfPowerChanged, this,
-            [this](double watts, bool) { m_sideControlPanel->setPower(watts); });
-    connect(m_radioState, &RadioState::qskDelayChanged, this, [this](int delay) {
-        m_sideControlPanel->setDelay(delay / 100.0); // 10ms units to seconds (20 -> 0.20)
-    });
-    connect(m_radioState, &RadioState::rfGainChanged, m_sideControlPanel, &SideControlPanel::setMainRfGain);
-    connect(m_radioState, &RadioState::squelchChanged, m_sideControlPanel, &SideControlPanel::setMainSquelch);
-    connect(m_radioState, &RadioState::rfGainBChanged, m_sideControlPanel, &SideControlPanel::setSubRfGain);
-    connect(m_radioState, &RadioState::squelchBChanged, m_sideControlPanel, &SideControlPanel::setSubSquelch);
-    connect(m_radioState, &RadioState::micGainChanged, m_sideControlPanel, &SideControlPanel::setMicGain);
-    connect(m_radioState, &RadioState::compressionChanged, m_sideControlPanel, &SideControlPanel::setCompression);
-    // Mode-dependent WPM/PTCH vs MIC/CMP display
-    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
-        bool isCW = (mode == RadioState::CW || mode == RadioState::CW_R);
-        m_sideControlPanel->setDisplayMode(isCW);
-        // Refresh values after mode switch
-        if (isCW) {
-            m_sideControlPanel->setWpm(m_radioState->keyerSpeed());
-            m_sideControlPanel->setPitch(m_radioState->cwPitch() / 1000.0);
-        } else {
-            m_sideControlPanel->setMicGain(m_radioState->micGain());
-            m_sideControlPanel->setCompression(m_radioState->compression());
-        }
-    });
+    // Side control panel state (BW/SHFT/HI/LO, knob values, CW↔voice display
+    // swap) owned by SideControlDisplayController (created later in ctor).
 
     // RadioState signals -> Center section updates
     // VFO-row indicator labels (split / vox / qsk / test / atu / msg bank)
