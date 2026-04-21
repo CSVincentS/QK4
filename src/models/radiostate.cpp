@@ -98,11 +98,7 @@ void RadioState::parseCATCommand(const QString &command) {
     }
 
     // Unknown command - no handler matched
-    // qDebug() << "Unhandled CAT command:" << cmd;
 }
-
-// Legacy parseCATCommand content removed - now using handler registry above
-// Old implementation was ~1500 lines of if-else chain
 
 RadioState::Mode RadioState::modeFromCode(int code) {
     switch (code) {

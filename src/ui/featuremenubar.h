@@ -24,7 +24,7 @@ public:
     Feature currentFeature() const { return m_currentFeature; }
     bool isMenuVisible() const { return isVisible(); }
 
-    // State updates (for Phase 2 RadioState integration)
+    // State updates
     void setFeatureEnabled(bool enabled);
     void setValue(int value);
     void setValueUnit(const QString &unit);

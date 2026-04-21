@@ -17,9 +17,7 @@ class VFOWidget;
 // widgets. It exists to lift the ~60-LOC onProcessingChanged pair out
 // of MainWindow and keep per-VFO display mirroring in one place.
 //
-// See PATTERNS.md → Controller Pattern. Candidate for Phase 4 direct-
-// observation collapse if VFOWidget ever takes a RadioState pointer
-// and observes these signals itself.
+// See PATTERNS.md → Controller Pattern.
 class ProcessingDisplayController : public QObject {
     Q_OBJECT
 

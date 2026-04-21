@@ -143,9 +143,6 @@ void VFOWidget::setupUi() {
     }
     mainLayout->addLayout(stackedRow);
 
-    // NOTE: TX Meter (m_txMeter) is now created in normal content area above
-    // It displays multifunction meters: S/Po, ALC, COMP, SWR, Id
-
     // Install event filter for click-to-toggle on normal content
     m_normalContent->installEventFilter(this);
 }

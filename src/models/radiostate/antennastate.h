@@ -7,13 +7,12 @@
 
 class RadioState;
 
-// Antenna state extracted from RadioState (Phase 1 subsystem split).
-// Covers TX antenna selection (AN), RX antenna selection per VFO (AR/AR$),
-// ATU mode (AT), per-index antenna names (ACN), and the three antenna
-// config masks (ACM/ACS/ACT) that determine which antennas appear in the
-// menu popups.
+// Antenna state: TX antenna selection (AN), RX antenna selection per VFO
+// (AR/AR$), ATU mode (AT), per-index antenna names (ACN), and the three
+// antenna config masks (ACM/ACS/ACT) that determine which antennas appear
+// in the menu popups.
 //
-// Plain struct — follows Pattern C established in TextDecodeState.
+// Plain struct — follows Pattern C (see PATTERNS.md → Subsystem State).
 struct AntennaState {
     int selectedAntenna = -1;        // AN (1-6)
     int receiveAntenna = -1;         // AR (0-7)

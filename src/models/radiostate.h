@@ -192,7 +192,7 @@ public:
     QString optionModules() const { return m_rxTxMeterState.optionModules; }
     QMap<QString, QString> firmwareVersions() const { return m_rxTxMeterState.firmwareVersions; }
 
-    // Antenna — backed by m_antennaState (Phase 1 subsystem).
+    // Antenna — backed by m_antennaState (see src/models/radiostate/antennastate.h).
     int txAntenna() const { return m_antennaState.selectedAntenna; }
     int rxAntennaMain() const { return m_antennaState.receiveAntenna; }
     int rxAntennaSub() const { return m_antennaState.receiveAntennaSub; }
@@ -535,8 +535,7 @@ public:
     void setMicRearBias(int bias);
 
     // Text Decode (TD$ command) - Main RX. Backed by m_textDecodeState (see
-    // models/radiostate/textdecodestate.h). Public getters unchanged — Phase 1
-    // subsystem split preserves the external API byte-for-byte.
+    // models/radiostate/textdecodestate.h).
     int textDecodeMode() const { return m_textDecodeState.textDecodeMode; }           // 0=off, 2-4=CW WPM
     int textDecodeThreshold() const { return m_textDecodeState.textDecodeThreshold; } // 0=AUTO, 1-9
     int textDecodeLines() const { return m_textDecodeState.textDecodeLines; }         // 1-10 lines
@@ -784,9 +783,9 @@ private:
 
     // Antenna config masks live on m_antennaState (declared above).
 
-    // Text Decode state (TD / TD$ / TD$$ + TB / TB$) — Phase 1 subsystem.
-    // See models/radiostate/textdecodestate.h for the field layout and the
-    // handler functions that mutate it.
+    // Text Decode (TD / TD$ / TD$$ + TB / TB$). See
+    // models/radiostate/textdecodestate.h for the field layout and the handler
+    // functions that mutate it.
     TextDecodeState m_textDecodeState;
 
     // =========================================================================

@@ -36,7 +36,6 @@ void SsbBwPopupWidget::setupUi() {
         K4Styles::Dimensions::ShadowMargin + ContentMargin, K4Styles::Dimensions::ShadowMargin + 8);
     layout->setSpacing(6);
 
-    // Title label - will be updated based on ESSB state
     m_titleLabel = new QPushButton("SSB TX BANDWIDTH", this);
     m_titleLabel->setFixedSize(TitleWidth, K4Styles::Dimensions::ButtonHeightMedium);
     m_titleLabel->setFocusPolicy(Qt::NoFocus);

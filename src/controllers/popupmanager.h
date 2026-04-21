@@ -38,9 +38,6 @@ class QWidget;
 // Both are exposed as signals on PopupManager so MainWindow connects to
 // them at construction without reaching into owned widgets.
 //
-// Secondary popups (EQ, antenna, line, mic, vox, ssb bw, keying weight,
-// mode, button-row) will move here in later Phase 3 slices.
-//
 // See PATTERNS.md → Controller Pattern.
 class PopupManager : public QObject {
     Q_OBJECT

@@ -16,8 +16,7 @@ class NetHealthWidget;
 // Observes RadioState directly for voltage/current/SWR updates so MainWindow
 // no longer needs onSupplyVoltageChanged / onSupplyCurrentChanged / onSwrChanged
 // slots for the purpose of updating status-bar labels. MainWindow keeps those
-// slots only to update the side panel readouts (will collapse further once
-// SideControlPanel absorbs them in Phase 4).
+// slots only to update the side panel readouts.
 //
 // Forward power (the power label) is TX-meter-driven, not RFPower-driven, so
 // the controller exposes setForwardPower() for MainWindow's txMeterChanged

@@ -191,12 +191,6 @@ MainWindow::~MainWindow() {
     // disconnects from the amplifier — Qt handles its deletion as a child.
 }
 
-// ============================================================================
-// Phase 2 mechanical extractions — constructor setup helpers.
-// Pure cut/paste from the constructor body; no behavior change. See
-// PATTERNS.md → Controller Pattern for what will migrate in Phase 3.
-// ============================================================================
-
 void MainWindow::setupControllers() {
     // Connection controller owns TcpClient, I/O thread, and NetworkMetrics
     m_connectionController = new ConnectionController(m_radioState, this);
@@ -418,7 +412,7 @@ void MainWindow::setupUi() {
     setMinimumSize(1340, 840);
     resize(1340, 840); // Default to minimum size on launch
 
-    // NOTE: Do NOT set WA_NativeWindow here!
+    // WHY: WA_NativeWindow is not set here.
     // Qt 6.10.1 bug on macOS Tahoe: WA_NativeWindow forces native window creation
     // before QRhiWidget can configure it for MetalSurface, causing
     // "QMetalSwapChain only supports MetalSurface windows" crash.
@@ -1419,9 +1413,6 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     // Add the VFO row to main layout
     mainVLayout->addWidget(vfoRowWidget);
-
-    // NOTE: TX meters are now integrated into VFOWidgets as multifunction S/Po meters
-    // (see VFOWidget::m_txMeter - displays S-meter when RX, Po when TX)
 
     // ===== Antenna Row (below VFO section) =====
     // Layout: [RX Ant A (left)] --- [TX Antenna (center)] --- [RX Ant B (right)]

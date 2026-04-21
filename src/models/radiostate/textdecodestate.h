@@ -5,8 +5,7 @@
 
 class RadioState;
 
-// Text-decode state (TD / TD$ / TD$$) and text-buffer pass-through (TB / TB$)
-// extracted from RadioState as part of the Phase 1 subsystem split.
+// Text-decode state (TD / TD$ / TD$$) and text-buffer pass-through (TB / TB$).
 //
 // WHY — Pattern C (plain-struct + façade re-read):
 // Each subsystem is a plain struct, not a QObject. RadioState remains the
@@ -14,9 +13,7 @@ class RadioState;
 // explosion, and avoid destructor signal-ordering traps. Handler fragments
 // live as free functions in the subsystem's .cpp and take a reference to
 // both the owning state struct AND RadioState — the latter lets them emit
-// signals through the façade. This pattern is used uniformly across all
-// Phase 1 subsystems (see docs/controllers.md → Phase 1 notes once split
-// is complete).
+// signals through the façade. See PATTERNS.md → Subsystem State.
 struct TextDecodeState {
     // Text Decode (TD) — Main RX
     int textDecodeMode = -1;      // 0=off, 1=DATA/SSB on, 2=8-45WPM, 3=8-60WPM, 4=8-90WPM

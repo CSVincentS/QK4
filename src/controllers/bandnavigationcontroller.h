@@ -14,9 +14,7 @@ class PopupManager;
 // redundant band change.
 //
 // BN / BN$ CAT echoes are parsed in MainWindow::onCatResponse and
-// forwarded here via setCurrentBand() — today. Once RadioState absorbs
-// those prefixes (Phase 1 subsystem split), it will emit a dedicated
-// signal that this controller can observe directly.
+// forwarded here via setCurrentBand().
 class BandNavigationController : public QObject {
     Q_OBJECT
 
