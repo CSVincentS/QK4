@@ -113,6 +113,7 @@ set(SOURCES
     src/dsp/minipan_rhi.cpp
     src/settings/radiosettings.cpp
     src/models/radiostate.cpp
+    src/models/radiostate/antennastate.cpp
     src/models/radiostate/textdecodestate.cpp
     src/models/menumodel.cpp
     src/ui/radiomanagerdialog.cpp
@@ -219,6 +220,7 @@ set(HEADERS
     src/dsp/minipan_rhi.h
     src/settings/radiosettings.h
     src/models/radiostate.h
+    src/models/radiostate/antennastate.h
     src/models/radiostate/textdecodestate.h
     src/models/menumodel.h
     src/models/macroids.h

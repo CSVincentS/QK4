@@ -8,6 +8,7 @@
 #include <QVector>
 #include <functional>
 
+#include "radiostate/antennastate.h"
 #include "radiostate/textdecodestate.h"
 
 /**
@@ -187,14 +188,16 @@ public:
     QString optionModules() const { return m_optionModules; }
     QMap<QString, QString> firmwareVersions() const { return m_firmwareVersions; }
 
-    // Antenna
-    int txAntenna() const { return m_selectedAntenna; }
-    int rxAntennaMain() const { return m_receiveAntenna; }
-    int rxAntennaSub() const { return m_receiveAntennaSub; }
-    QString antennaName(int index) const { return m_antennaNames.value(index, QString("ANT%1").arg(index)); }
-    QString txAntennaName() const { return antennaName(m_selectedAntenna); }
-    QString rxAntennaMainName() const { return antennaName(m_receiveAntenna); }
-    QString rxAntennaSubName() const { return antennaName(m_receiveAntennaSub); }
+    // Antenna — backed by m_antennaState (Phase 1 subsystem).
+    int txAntenna() const { return m_antennaState.selectedAntenna; }
+    int rxAntennaMain() const { return m_antennaState.receiveAntenna; }
+    int rxAntennaSub() const { return m_antennaState.receiveAntennaSub; }
+    QString antennaName(int index) const {
+        return m_antennaState.antennaNames.value(index, QString("ANT%1").arg(index));
+    }
+    QString txAntennaName() const { return antennaName(m_antennaState.selectedAntenna); }
+    QString rxAntennaMainName() const { return antennaName(m_antennaState.receiveAntenna); }
+    QString rxAntennaSubName() const { return antennaName(m_antennaState.receiveAntennaSub); }
 
     // RIT/XIT
     bool ritEnabled() const { return m_ritEnabled; }
@@ -219,7 +222,7 @@ public:
     bool testMode() const { return m_testMode; }
 
     // ATU mode (0=not installed, 1=bypass, 2=auto)
-    int atuMode() const { return m_atuMode; }
+    int atuMode() const { return m_antennaState.atuMode; }
 
     // B SET (Target B) - controls whether feature menu commands target Sub RX
     // State is tracked internally (toggled when SW44 is sent)
@@ -475,21 +478,26 @@ public:
     void setTxEqBand(int index, int dB);
     void setTxEqBands(const QVector<int> &bands);
 
-    // Antenna Configuration Masks (ACM/ACS/ACT commands)
-    // ACM - Main RX antenna access mask
-    bool mainRxDisplayAll() const { return m_mainRxDisplayAll; }
-    bool mainRxAntEnabled(int index) const { return (index >= 0 && index < 7) ? m_mainRxAntMask[index] : false; }
-    QVector<bool> mainRxAntMask() const { return QVector<bool>(m_mainRxAntMask, m_mainRxAntMask + 7); }
+    // Antenna Configuration Masks (ACM/ACS/ACT) — backed by m_antennaState.
+    bool mainRxDisplayAll() const { return m_antennaState.mainRxDisplayAll; }
+    bool mainRxAntEnabled(int index) const {
+        return (index >= 0 && index < 7) ? m_antennaState.mainRxAntMask[index] : false;
+    }
+    QVector<bool> mainRxAntMask() const {
+        return QVector<bool>(m_antennaState.mainRxAntMask, m_antennaState.mainRxAntMask + 7);
+    }
 
-    // ACS - Sub RX antenna access mask
-    bool subRxDisplayAll() const { return m_subRxDisplayAll; }
-    bool subRxAntEnabled(int index) const { return (index >= 0 && index < 7) ? m_subRxAntMask[index] : false; }
-    QVector<bool> subRxAntMask() const { return QVector<bool>(m_subRxAntMask, m_subRxAntMask + 7); }
+    bool subRxDisplayAll() const { return m_antennaState.subRxDisplayAll; }
+    bool subRxAntEnabled(int index) const {
+        return (index >= 0 && index < 7) ? m_antennaState.subRxAntMask[index] : false;
+    }
+    QVector<bool> subRxAntMask() const {
+        return QVector<bool>(m_antennaState.subRxAntMask, m_antennaState.subRxAntMask + 7);
+    }
 
-    // ACT - TX antenna access mask
-    bool txDisplayAll() const { return m_txDisplayAll; }
-    bool txAntEnabled(int index) const { return (index >= 0 && index < 3) ? m_txAntMask[index] : false; }
-    QVector<bool> txAntMask() const { return QVector<bool>(m_txAntMask, m_txAntMask + 3); }
+    bool txDisplayAll() const { return m_antennaState.txDisplayAll; }
+    bool txAntEnabled(int index) const { return (index >= 0 && index < 3) ? m_antennaState.txAntMask[index] : false; }
+    QVector<bool> txAntMask() const { return QVector<bool>(m_antennaState.txAntMask, m_antennaState.txAntMask + 3); }
 
     // Optimistic setters for antenna config (radio doesn't echo)
     void setMainRxAntConfig(bool displayAll, const QVector<bool> &mask);
@@ -811,12 +819,8 @@ private:
     bool m_attenuatorEnabledB = false;
     AGCSpeed m_agcSpeedB = AGC_Slow;
 
-    // Antenna
-    int m_selectedAntenna = -1;
-    int m_receiveAntenna = -1;
-    int m_receiveAntennaSub = -1;
-    int m_atuMode = -1;
-    QMap<int, QString> m_antennaNames;
+    // Antenna state — see models/radiostate/antennastate.h.
+    AntennaState m_antennaState;
 
     // RIT/XIT
     bool m_ritEnabled = false;
@@ -949,18 +953,7 @@ private:
     // Range: -16 to +16 dB, init to 0 (flat)
     int m_txEqBands[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    // Antenna Configuration Masks (ACM/ACS/ACT commands)
-    // ACM - Main RX: z=displayAll, a-g = ANT1, ANT2, ANT3, RX1, RX2, =TX ANT, =OPP TX ANT
-    bool m_mainRxDisplayAll = true;
-    bool m_mainRxAntMask[7] = {false, false, false, false, false, false, false};
-
-    // ACS - Sub RX: same format as ACM
-    bool m_subRxDisplayAll = true;
-    bool m_subRxAntMask[7] = {false, false, false, false, false, false, false};
-
-    // ACT - TX: z=displayAll, a-c = TX ANT1, TX ANT2, TX ANT3
-    bool m_txDisplayAll = true;
-    bool m_txAntMask[3] = {false, false, false};
+    // Antenna config masks live on m_antennaState (declared above).
 
     // Line Out levels (LO command)
     int m_lineOutLeft = -1;  // 0-40, init to -1 to ensure first emit

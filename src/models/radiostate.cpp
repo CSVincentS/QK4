@@ -96,11 +96,7 @@ void RadioState::reset() {
     m_agcSpeedB = AGC_Slow;
 
     // Antenna
-    m_selectedAntenna = -1;
-    m_receiveAntenna = -1;
-    m_receiveAntennaSub = -1;
-    m_atuMode = -1;
-    m_antennaNames.clear();
+    m_antennaState.reset();
 
     // RIT/XIT
     m_ritEnabled = false;
@@ -204,12 +200,7 @@ void RadioState::reset() {
     std::fill(std::begin(m_txEqBands), std::end(m_txEqBands), 0);
 
     // Antenna config masks
-    m_mainRxDisplayAll = true;
-    std::fill(std::begin(m_mainRxAntMask), std::end(m_mainRxAntMask), false);
-    m_subRxDisplayAll = true;
-    std::fill(std::begin(m_subRxAntMask), std::end(m_subRxAntMask), false);
-    m_txDisplayAll = true;
-    std::fill(std::begin(m_txAntMask), std::end(m_txAntMask), false);
+    // Antenna masks reset as part of m_antennaState.reset() above.
 
     // Line Out
     m_lineOutLeft = -1;
@@ -670,55 +661,15 @@ void RadioState::setTxEqBands(const QVector<int> &bands) {
     }
 }
 
+// Antenna config setters — delegate to AntennaHandlers namespace.
 void RadioState::setMainRxAntConfig(bool displayAll, const QVector<bool> &mask) {
-    bool changed = false;
-    if (displayAll != m_mainRxDisplayAll) {
-        m_mainRxDisplayAll = displayAll;
-        changed = true;
-    }
-    for (int i = 0; i < qMin(mask.size(), 7); i++) {
-        if (mask[i] != m_mainRxAntMask[i]) {
-            m_mainRxAntMask[i] = mask[i];
-            changed = true;
-        }
-    }
-    if (changed) {
-        emit mainRxAntCfgChanged();
-    }
+    AntennaHandlers::setMainRxAntConfig(m_antennaState, *this, displayAll, mask);
 }
-
 void RadioState::setSubRxAntConfig(bool displayAll, const QVector<bool> &mask) {
-    bool changed = false;
-    if (displayAll != m_subRxDisplayAll) {
-        m_subRxDisplayAll = displayAll;
-        changed = true;
-    }
-    for (int i = 0; i < qMin(mask.size(), 7); i++) {
-        if (mask[i] != m_subRxAntMask[i]) {
-            m_subRxAntMask[i] = mask[i];
-            changed = true;
-        }
-    }
-    if (changed) {
-        emit subRxAntCfgChanged();
-    }
+    AntennaHandlers::setSubRxAntConfig(m_antennaState, *this, displayAll, mask);
 }
-
 void RadioState::setTxAntConfig(bool displayAll, const QVector<bool> &mask) {
-    bool changed = false;
-    if (displayAll != m_txDisplayAll) {
-        m_txDisplayAll = displayAll;
-        changed = true;
-    }
-    for (int i = 0; i < qMin(mask.size(), 3); i++) {
-        if (mask[i] != m_txAntMask[i]) {
-            m_txAntMask[i] = mask[i];
-            changed = true;
-        }
-    }
-    if (changed) {
-        emit txAntCfgChanged();
-    }
+    AntennaHandlers::setTxAntConfig(m_antennaState, *this, displayAll, mask);
 }
 
 void RadioState::setLineOutLeft(int level) {
@@ -1059,16 +1010,8 @@ void RadioState::registerCommandHandlers() {
                                   }
                               }});
     // AR$ — deduplicated inline (3-arg signal)
-    m_commandHandlers.append({"AR$", [this](const QString &c) {
-                                  if (c.length() <= 3)
-                                      return;
-                                  bool ok;
-                                  int ar = c.mid(3).toInt(&ok);
-                                  if (ok && ar >= 0 && ar <= 7 && ar != m_receiveAntennaSub) {
-                                      m_receiveAntennaSub = ar;
-                                      emit antennaChanged(m_selectedAntenna, m_receiveAntenna, m_receiveAntennaSub);
-                                  }
-                              }});
+    m_commandHandlers.append(
+        {"AR$", [this](const QString &c) { AntennaHandlers::handleARSub(m_antennaState, *this, c); }});
     // RO$ — inline (custom multi-arg signal).
     // WHY a separate RO$ handler (RIT/XIT offset routing on the K4):
     //   - No split, RIT or XIT active  → offset lives in `RO`  (VFO A, handled below)
@@ -1212,16 +1155,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"BS", [this](const QString &c) { handleBS(c); }});
     m_commandHandlers.append({"AN", [this](const QString &c) { handleAN(c); }});
     // AR — deduplicated inline (3-arg signal)
-    m_commandHandlers.append({"AR", [this](const QString &c) {
-                                  if (c.length() <= 2)
-                                      return;
-                                  bool ok;
-                                  int ar = c.mid(2).toInt(&ok);
-                                  if (ok && ar >= 0 && ar <= 7 && ar != m_receiveAntenna) {
-                                      m_receiveAntenna = ar;
-                                      emit antennaChanged(m_selectedAntenna, m_receiveAntenna, m_receiveAntennaSub);
-                                  }
-                              }});
+    m_commandHandlers.append({"AR", [this](const QString &c) { AntennaHandlers::handleAR(m_antennaState, *this, c); }});
     m_commandHandlers.append({"AT", [this](const QString &c) { handleAT(c); }});
     m_commandHandlers.append({"RT", [this](const QString &c) { handleRT(c); }});
     m_commandHandlers.append({"XT", [this](const QString &c) { handleXT(c); }});
@@ -2352,91 +2286,24 @@ void RadioState::handleBS(const QString &cmd) {
 // Individual Command Handlers - Antenna
 // =============================================================================
 
+// Antenna CAT handlers — delegate to AntennaHandlers namespace.
 void RadioState::handleAN(const QString &cmd) {
-    if (cmd.length() <= 2)
-        return;
-    bool ok;
-    int an = cmd.mid(2).toInt(&ok);
-    if (ok && an >= 1 && an <= 6 && an != m_selectedAntenna) {
-        m_selectedAntenna = an;
-        emit antennaChanged(m_selectedAntenna, m_receiveAntenna, m_receiveAntennaSub);
-    }
+    AntennaHandlers::handleAN(m_antennaState, *this, cmd);
 }
-
 void RadioState::handleAT(const QString &cmd) {
-    if (cmd.length() < 3)
-        return;
-    bool ok;
-    int at = cmd.mid(2).toInt(&ok);
-    if (ok && at >= 0 && at <= 2 && at != m_atuMode) {
-        m_atuMode = at;
-        emit atuModeChanged(m_atuMode);
-    }
+    AntennaHandlers::handleAT(m_antennaState, *this, cmd);
 }
-
 void RadioState::handleACN(const QString &cmd) {
-    if (cmd.length() < 4)
-        return;
-    bool ok;
-    int index = cmd.mid(3, 1).toInt(&ok);
-    if (ok && index >= 1 && index <= 7) {
-        QString name = cmd.mid(4).trimmed();
-        if (!name.isEmpty() && name != m_antennaNames.value(index)) {
-            m_antennaNames[index] = name;
-            emit antennaNameChanged(index, name);
-        }
-    }
+    AntennaHandlers::handleACN(m_antennaState, *this, cmd);
 }
-
 void RadioState::handleACM(const QString &cmd) {
-    if (cmd.length() < 11)
-        return;
-    bool displayAll = (cmd.at(3) == '1');
-    bool changed = (displayAll != m_mainRxDisplayAll);
-    m_mainRxDisplayAll = displayAll;
-    for (int i = 0; i < 7; i++) {
-        bool enabled = (cmd.at(4 + i) == '1');
-        if (enabled != m_mainRxAntMask[i]) {
-            m_mainRxAntMask[i] = enabled;
-            changed = true;
-        }
-    }
-    if (changed)
-        emit mainRxAntCfgChanged();
+    AntennaHandlers::handleACM(m_antennaState, *this, cmd);
 }
-
 void RadioState::handleACS(const QString &cmd) {
-    if (cmd.length() < 11)
-        return;
-    bool displayAll = (cmd.at(3) == '1');
-    bool changed = (displayAll != m_subRxDisplayAll);
-    m_subRxDisplayAll = displayAll;
-    for (int i = 0; i < 7; i++) {
-        bool enabled = (cmd.at(4 + i) == '1');
-        if (enabled != m_subRxAntMask[i]) {
-            m_subRxAntMask[i] = enabled;
-            changed = true;
-        }
-    }
-    if (changed)
-        emit subRxAntCfgChanged();
+    AntennaHandlers::handleACS(m_antennaState, *this, cmd);
 }
-
 void RadioState::handleACT(const QString &cmd) {
-    if (cmd.length() < 7)
-        return;
-    bool displayAll = (cmd.at(3) == '1');
-    bool changed = (displayAll != m_txDisplayAll);
-    m_txDisplayAll = displayAll;
-    for (int i = 0; i < 3; i++) {
-        bool enabled = (cmd.at(4 + i) == '1');
-        if (enabled != m_txAntMask[i]) {
-            m_txAntMask[i] = enabled;
-            changed = true;
-        }
-    }
-    if (changed)
-        emit txAntCfgChanged();
+    AntennaHandlers::handleACT(m_antennaState, *this, cmd);
 }
 
 // =============================================================================

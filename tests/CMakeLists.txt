@@ -16,6 +16,7 @@ endif()
 # RadioState CAT command parser tests
 add_executable(test_radiostate test_radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
 )
 target_include_directories(test_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -25,6 +26,7 @@ add_test(NAME RadioStateTests COMMAND test_radiostate)
 # RadioState command-registry structural invariant tests
 add_executable(test_radiostate_registry test_radiostate_registry.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
 )
 target_include_directories(test_radiostate_registry PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -37,6 +39,7 @@ add_test(NAME RadioStateRegistryTests COMMAND test_radiostate_registry)
 # safety net for Phase 1 refactor work.
 add_executable(test_radiostate_golden test_radiostate_golden.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
 )
 target_include_directories(test_radiostate_golden PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -48,6 +51,7 @@ add_test(NAME RadioStateGoldenTests COMMAND test_radiostate_golden)
 # invoke explicitly when checking for perf regressions.
 add_executable(bench_radiostate bench_radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
 )
 target_include_directories(bench_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -74,6 +78,7 @@ add_executable(test_catserver test_catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/network/catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
 )
 target_include_directories(test_catserver PRIVATE ${CMAKE_SOURCE_DIR}/src)
