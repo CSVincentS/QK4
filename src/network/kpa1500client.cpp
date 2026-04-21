@@ -117,8 +117,18 @@ void KPA1500Client::onSocketDisconnected() {
 }
 
 void KPA1500Client::onReadyRead() {
+    // WHY: cap the receive buffer per CONVENTIONS.md Rule 5. KPA1500 responses are short and
+    // always ';'-terminated; 64KB is generous headroom for split reads. A malformed response
+    // that never terminates would otherwise grow this unbounded.
+    static constexpr int kMaxBufferSize = 64 * 1024;
     QByteArray data = m_socket->readAll();
     m_receiveBuffer.append(QString::fromLatin1(data));
+    if (m_receiveBuffer.size() > kMaxBufferSize) {
+        qCWarning(netKpa) << "Buffer overflow (" << m_receiveBuffer.size() << "bytes) — disconnecting";
+        m_receiveBuffer.clear();
+        disconnectFromHost();
+        return;
+    }
 
     // Parse complete responses (terminated by ';')
     parseResponse(m_receiveBuffer);
@@ -127,7 +137,7 @@ void KPA1500Client::onReadyRead() {
 void KPA1500Client::onSocketError(QAbstractSocket::SocketError error) {
     Q_UNUSED(error)
     QString errorString = m_socket->errorString();
-    qWarning() << "KPA1500Client: Socket error:" << errorString;
+    qCWarning(netKpa) << "KPA1500Client: Socket error:" << errorString;
     emit errorOccurred(errorString);
 
     stopPolling();
