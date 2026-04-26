@@ -883,6 +883,10 @@ void SpectrumController::updateSpotOverlays() {
             if (!spots.isEmpty())
                 qCDebug(qk4Spectrum) << "Overlay A:" << spots.size() << "spots in range" << startFreq << "-" << endFreq
                                      << "overlay size:" << m_spotOverlayA->size();
+        } else {
+            // WHY: still propagate clears when freq/span aren't valid yet (e.g., K4 not streaming).
+            // Otherwise stale labels from a prior layout remain on screen after spots are cleared.
+            m_spotOverlayA->setSpots({});
         }
     }
 
@@ -896,6 +900,8 @@ void SpectrumController::updateSpotOverlays() {
             auto spots = m_dxClusterController->spotsForFrequencyRange(startFreq, endFreq);
             m_spotOverlayB->setFrequencyRange(center, span);
             m_spotOverlayB->setSpots(spots);
+        } else {
+            m_spotOverlayB->setSpots({});
         }
     }
 }
