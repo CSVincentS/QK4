@@ -135,8 +135,17 @@ void AudioController::setPttActive(bool active) {
         m_pttActive = active;
         if (active) {
             m_txSequence = 0;
+            // Open the mic device on the audio thread (idempotent — first PTT press in
+            // a session pays the OS audio backend cold-start; subsequent presses are
+            // a no-op). Flush any partial-frame tail left from the previous transmission
+            // so it can't leak into this one's first frame. Frame-level send-gating is
+            // performed in onMicrophoneFrame via m_pttActive.
+            QMetaObject::invokeMethod(m_audioEngine, "openMic", Qt::QueuedConnection);
+            QMetaObject::invokeMethod(m_audioEngine, "flushMicBuffer", Qt::QueuedConnection);
         }
-        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, active));
+        // PTT release: do nothing to the engine. The mic stays open, the poll timer keeps
+        // running, and onMicrophoneFrame drops frames because m_pttActive is now false.
+        // The mic is closed only on K4 disconnect / app shutdown via AudioEngine::stop().
         emit pttStateChanged(active);
     }
 }

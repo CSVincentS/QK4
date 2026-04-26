@@ -29,14 +29,15 @@ AudioEngine::AudioEngine(QObject *parent)
     m_feedTimer->setInterval(FEED_INTERVAL_MS);
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
-    // WHY setupAudioInput() is deferred until the first setMicEnabled(true):
+    // WHY setupAudioInput() is deferred until the first openMic() call:
     // Qt's mic-permission callback on macOS runs on the main-thread runloop. During connection
     // startup, AudioController calls into the AudioEngine from the IO thread via
     // BlockingQueuedConnection; if we opened the input here we would block the IO thread waiting
     // for the main thread to deliver the permission result, while the main thread would be
     // blocked on the `RDY;` round-trip waiting on the same IO thread. Deferring to the first PTT
-    // / mic-enable request breaks the cycle: by that point the connection is fully up and the
-    // main thread is free to process the permission dialog.
+    // press breaks the cycle: by that point the connection is fully up and the main thread is
+    // free to process the permission dialog. Once opened, the mic stays open for the remainder
+    // of the connection so subsequent PTT presses are instant — see openMic() for details.
 }
 
 AudioEngine::~AudioEngine() {
@@ -51,10 +52,8 @@ bool AudioEngine::start() {
         m_feedTimer->start();
     }
 
-    // Audio input setup deferred to first setMicEnabled(true) call
-    // to avoid triggering macOS mic permission dialog during connection
-    // (the permission callback needs the main thread runloop, which would
-    // deadlock if start() were called via BlockingQueuedConnection)
+    // Audio input setup deferred to the first openMic() call (first PTT press) to avoid
+    // triggering the macOS mic permission dialog during connection — see ctor comment.
 
     return outputOk;
 }
@@ -343,38 +342,48 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
     }
 }
 
-void AudioEngine::setMicEnabled(bool enabled) {
-    if (m_micEnabled.load(std::memory_order_relaxed) == enabled)
+void AudioEngine::openMic() {
+    // Idempotent: already open → return immediately so subsequent PTT presses don't pay
+    // the OS audio backend renegotiation cost.
+    if (m_micEnabled.load(std::memory_order_relaxed) && m_audioSourceDevice)
         return;
 
-    m_micEnabled.store(enabled, std::memory_order_relaxed);
-
-    if (enabled) {
-        // Lazy mic initialization — deferred from start() to avoid triggering
-        // macOS mic permission dialog during connection (which would deadlock)
-        if (!m_audioSource) {
-            if (!setupAudioInput()) {
-                qCWarning(qk4Audio) << "AudioEngine: Failed to setup audio input";
-                m_micEnabled.store(false, std::memory_order_relaxed);
-                return;
-            }
+    // Lazy mic initialization — deferred from start() to avoid triggering the macOS mic
+    // permission dialog during connection (which would deadlock; see ctor comment).
+    if (!m_audioSource) {
+        if (!setupAudioInput()) {
+            qCWarning(qk4Audio) << "AudioEngine: Failed to setup audio input";
+            return;
         }
-        m_audioSourceDevice = m_audioSource->start();
-        if (m_audioSourceDevice) {
-            // Use timer-based polling instead of readyRead signal
-            // (readyRead doesn't fire reliably on all platforms)
-            m_micPollTimer->start();
-        } else {
-            qCWarning(qk4Audio) << "AudioEngine: Failed to start microphone device";
-        }
-    } else {
-        m_micPollTimer->stop();
-        if (m_audioSource) {
-            m_audioSource->stop();
-        }
-        m_audioSourceDevice = nullptr;
-        m_micBuffer.clear(); // Clear any buffered data
     }
+
+    m_audioSourceDevice = m_audioSource->start();
+    if (!m_audioSourceDevice) {
+        qCWarning(qk4Audio) << "AudioEngine: Failed to start microphone device";
+        return;
+    }
+
+    m_micEnabled.store(true, std::memory_order_relaxed);
+    // Use timer-based polling instead of readyRead signal
+    // (readyRead doesn't fire reliably on all platforms).
+    m_micPollTimer->start();
+}
+
+void AudioEngine::closeMic() {
+    if (!m_micEnabled.load(std::memory_order_relaxed))
+        return;
+
+    m_micEnabled.store(false, std::memory_order_relaxed);
+    m_micPollTimer->stop();
+    if (m_audioSource) {
+        m_audioSource->stop();
+    }
+    m_audioSourceDevice = nullptr;
+    m_micBuffer.clear();
+}
+
+void AudioEngine::flushMicBuffer() {
+    m_micBuffer.clear();
 }
 
 QByteArray AudioEngine::resample48kTo12k(const QByteArray &input48k) {
@@ -484,21 +493,21 @@ void AudioEngine::setMicDevice(const QString &deviceId) {
     if (m_selectedMicDeviceId != deviceId) {
         m_selectedMicDeviceId = deviceId;
 
-        // If mic is currently enabled, we need to restart it with the new device
-        bool wasEnabled = m_micEnabled.load(std::memory_order_relaxed);
-        if (wasEnabled) {
-            setMicEnabled(false);
+        // If mic is currently open, restart it with the new device.
+        bool wasOpen = m_micEnabled.load(std::memory_order_relaxed);
+        if (wasOpen) {
+            closeMic();
         }
 
-        // Tear down existing audio source — it will be recreated lazily
-        // by the next setMicEnabled(true) call with the new device ID
+        // Tear down the existing audio source — it will be recreated lazily by the next
+        // openMic() call with the new device ID.
         if (m_audioSource) {
             delete m_audioSource;
             m_audioSource = nullptr;
         }
 
-        if (wasEnabled) {
-            setMicEnabled(true);
+        if (wasOpen) {
+            openMic();
         }
     }
 }
