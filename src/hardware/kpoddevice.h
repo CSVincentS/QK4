@@ -8,6 +8,11 @@
 // Forward declaration for hidapi
 typedef struct hid_device_ hid_device;
 
+#ifdef Q_OS_LINUX
+class KpodUdevWorker;
+class QThread;
+#endif
+
 struct KpodDeviceInfo {
     bool detected = false;
     QString productName;
@@ -86,12 +91,22 @@ private:
     quint8 m_lastButtonState = 0; // Button number (1-8) or 0 for none
     bool m_holdEmitted = false;   // Track if hold signal was already emitted for current press
 
-    // Hotplug monitoring via periodic enumeration
-    // Note: We use hid_enumerate() instead of IOKit callbacks because hidapi
-    // internally uses IOHIDManager on macOS, and two managers conflict.
+    // Hotplug monitoring.
+    // macOS / Windows: periodic hid_enumerate() — we use this instead of IOKit callbacks
+    //   because hidapi internally uses IOHIDManager on macOS, and two managers conflict.
+    //   On those platforms hid_enumerate() reads cached USB descriptors from the OS and is
+    //   cheap.
+    // Linux: kernel-driven udev USB hotplug events on a worker thread. hid_enumerate() on
+    //   Linux is implemented via libusb_get_device_list() and is far heavier than on
+    //   macOS/Windows; polling it dominated idle CPU on the user's laptop.
+#ifdef Q_OS_LINUX
+    KpodUdevWorker *m_udevWorker = nullptr;
+    QThread *m_udevThread = nullptr;
+#else
     QTimer *m_presenceTimer = nullptr;
     static const int PRESENCE_CHECK_INTERVAL_MS = 2000;
     void checkDevicePresence();
+#endif
 };
 
 #endif // KPODDEVICE_H

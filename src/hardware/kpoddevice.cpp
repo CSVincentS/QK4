@@ -7,6 +7,10 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
+#ifdef Q_OS_LINUX
+#include "kpodudevworker.h"
+#endif
+
 Q_LOGGING_CATEGORY(hwKpod, "hw.kpod")
 
 // Debug logging helper. Routes through the hw.kpod logging category — filter at runtime via
@@ -447,15 +451,48 @@ KpodDeviceInfo KpodDevice::detectDevice() {
 
 // ============== Hotplug Monitoring ==============
 //
-// Note: We use periodic hid_enumerate() instead of IOKit's IOHIDManager callbacks
-// because hidapi internally uses IOHIDManager on macOS. Having two IOHIDManagers
-// for the same device causes crashes due to resource conflicts.
+// macOS / Windows: periodic hid_enumerate(). On macOS we use this instead of IOKit's
+// IOHIDManager callbacks because hidapi internally uses IOHIDManager and two managers for
+// the same device cause crashes due to resource conflicts. On both platforms hid_enumerate
+// reads cached USB descriptors from the OS and is cheap.
 //
-// The periodic check is very lightweight - hid_enumerate() only reads USB
-// descriptors from the OS kernel, no device I/O.
+// Linux: kernel-driven udev netlink monitor on a dedicated worker thread. hidapi's
+// libusb backend implements hid_enumerate() by walking the USB topology and opening each
+// candidate device; polling it every 2 s dominated idle CPU on Linux laptops. The udev
+// monitor wakes only on actual hotplug events.
+
+#ifdef Q_OS_LINUX
 
 void KpodDevice::setupHotplugMonitoring() {
-    // Create a timer for periodic device presence checking
+    m_udevWorker = new KpodUdevWorker(VENDOR_ID, PRODUCT_ID);
+    m_udevThread = new QThread(this);
+    m_udevThread->setObjectName("KpodUdev");
+    m_udevWorker->moveToThread(m_udevThread);
+
+    connect(m_udevThread, &QThread::started, m_udevWorker, &KpodUdevWorker::start);
+    connect(m_udevWorker, &KpodUdevWorker::deviceArrived, this, &KpodDevice::onDeviceArrived, Qt::QueuedConnection);
+    connect(m_udevWorker, &KpodUdevWorker::deviceRemoved, this, &KpodDevice::onDeviceRemoved, Qt::QueuedConnection);
+    connect(m_udevThread, &QThread::finished, m_udevWorker, &QObject::deleteLater);
+
+    m_udevThread->start();
+}
+
+void KpodDevice::teardownHotplugMonitoring() {
+    if (m_udevWorker) {
+        m_udevWorker->stop(); // wakes the poll() loop via self-pipe
+    }
+    if (m_udevThread) {
+        m_udevThread->quit();
+        m_udevThread->wait(2000);
+        m_udevThread->deleteLater();
+        m_udevThread = nullptr;
+    }
+    m_udevWorker = nullptr; // owned by the thread, deleted via QThread::finished
+}
+
+#else // Q_OS_LINUX
+
+void KpodDevice::setupHotplugMonitoring() {
     m_presenceTimer = new QTimer(this);
     m_presenceTimer->setInterval(PRESENCE_CHECK_INTERVAL_MS);
     connect(m_presenceTimer, &QTimer::timeout, this, &KpodDevice::checkDevicePresence);
@@ -471,7 +508,7 @@ void KpodDevice::teardownHotplugMonitoring() {
 }
 
 void KpodDevice::checkDevicePresence() {
-    // Quick check using hid_enumerate - very lightweight, no device I/O
+    // Quick check using hid_enumerate - very lightweight on macOS/Windows, no device I/O.
     struct hid_device_info *devs = hid_enumerate(VENDOR_ID, PRODUCT_ID);
     bool nowDetected = (devs != nullptr);
     hid_free_enumeration(devs);
@@ -479,13 +516,13 @@ void KpodDevice::checkDevicePresence() {
     bool wasDetected = m_deviceInfo.detected;
 
     if (!wasDetected && nowDetected) {
-        // Device just arrived
         onDeviceArrived();
     } else if (wasDetected && !nowDetected) {
-        // Device just departed
         onDeviceRemoved();
     }
 }
+
+#endif // Q_OS_LINUX
 
 void KpodDevice::onDeviceArrived() {
     // Refresh device info

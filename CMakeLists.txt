@@ -67,6 +67,7 @@ else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(OPUS REQUIRED opus)
     pkg_check_modules(HIDAPI REQUIRED hidapi-libusb)
+    pkg_check_modules(LIBUDEV REQUIRED libudev)
 endif()
 set(SOURCES
     src/main.cpp
@@ -185,6 +186,10 @@ set(SOURCES
     third_party/rtmidi/RtMidi.cpp
 )
 
+if(UNIX AND NOT APPLE)
+    list(APPEND SOURCES src/hardware/kpodudevworker.cpp)
+endif()
+
 set(HEADERS
     src/mainwindow.h
     src/utils/radioutils.h
@@ -298,6 +303,10 @@ set(HEADERS
     src/hardware/iambickeyer.h
 )
 
+if(UNIX AND NOT APPLE)
+    list(APPEND HEADERS src/hardware/kpodudevworker.h)
+endif()
+
 # On macOS, create an app bundle
 if(APPLE)
     set(MACOSX_BUNDLE_BUNDLE_NAME ${PROJECT_NAME})
@@ -336,6 +345,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${OPUS_INCLUDE_DIRS}
     ${HIDAPI_INCLUDE_DIRS}
 )
+
+if(UNIX AND NOT APPLE)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${LIBUDEV_INCLUDE_DIRS})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBUDEV_LIBRARIES})
+endif()
 
 # Pass version to source code as compile definition
 target_compile_definitions(${PROJECT_NAME} PRIVATE

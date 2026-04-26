@@ -12,11 +12,12 @@ constexpr int kSpotAgingIntervalMs = 30000;
 
 DxClusterController::DxClusterController(RadioState *radioState, QObject *parent)
     : QObject(parent), m_radioState(radioState) {
-    // Aging timer runs on UI thread — prunes expired spots every 30s
+    // Aging timer runs on UI thread — prunes expired spots every 30s. Started on demand
+    // when the first cluster instance is added and stopped when the last one goes away,
+    // so an idle app with no clusters connected does no periodic work here.
     m_agingTimer = new QTimer(this);
     m_agingTimer->setInterval(kSpotAgingIntervalMs);
     connect(m_agingTimer, &QTimer::timeout, this, &DxClusterController::onAgingTimer);
-    m_agingTimer->start();
 }
 
 DxClusterController::~DxClusterController() {
@@ -96,6 +97,8 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
         });
 
         m_instances[index] = inst;
+        if (!m_agingTimer->isActive())
+            m_agingTimer->start();
     }
     return m_instances[index];
 }
@@ -111,6 +114,8 @@ void DxClusterController::destroyInstance(int index) {
     }
     delete inst.client;
     m_instances.remove(index);
+    if (m_instances.isEmpty())
+        m_agingTimer->stop();
 }
 
 void DxClusterController::connectCluster(int index, const QString &host, quint16 port, const QString &callsign) {
