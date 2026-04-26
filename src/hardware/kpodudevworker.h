@@ -1,6 +1,8 @@
 #ifndef KPODUDEVWORKER_H
 #define KPODUDEVWORKER_H
 
+#include <QtGlobal>
+
 #ifdef Q_OS_LINUX
 
 #include <QObject>

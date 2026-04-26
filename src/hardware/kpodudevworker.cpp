@@ -1,5 +1,7 @@
 #include "kpodudevworker.h"
 
+#include <QtGlobal>
+
 #ifdef Q_OS_LINUX
 
 #include <QByteArray>
