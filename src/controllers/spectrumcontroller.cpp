@@ -226,6 +226,31 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_spotOverlayB = new DxSpotOverlay(m_panadapterB);
     m_spotOverlayB->show();
 
+    // WHY: wire click-to-tune here (where overlays are created), not in setDxClusterController.
+    // mainwindow calls setDxClusterController BEFORE setupSpectrumUI, so the overlays don't yet
+    // exist at that point and the if (m_spotOverlayA) guard there silently skips the connect.
+    // WHY: cluster spots report DIAL frequencies (the spotter's dial reading), so we tune our
+    // dial to that exact freq — no cwPitch math. Click-tune from the panadapter spectrum is
+    // different: that click x maps to an RF position via xToFreq, which is why it needs the
+    // pitch correction. Spot freq is already a dial freq, so applying it would mistune by ~pitch.
+    connect(m_spotOverlayA, &DxSpotOverlay::spotClicked, this, [this](qint64 freq) {
+        if (!m_connectionController->isConnected() || freq <= 0)
+            return;
+        if (m_radioState->lockA())
+            return;
+        m_connectionController->sendCAT(QString("FA%1;").arg(freq, 11, 10, QChar('0')));
+        // Query back so the UI updates — K4 doesn't echo SET commands
+        m_connectionController->sendCAT("FA;");
+    });
+    connect(m_spotOverlayB, &DxSpotOverlay::spotClicked, this, [this](qint64 freq) {
+        if (!m_connectionController->isConnected() || freq <= 0)
+            return;
+        if (m_radioState->lockB())
+            return;
+        m_connectionController->sendCAT(QString("FB%1;").arg(freq, 11, 10, QChar('0')));
+        m_connectionController->sendCAT("FB;");
+    });
+
     // Install event filter to reposition span buttons when panadapters resize
     m_panadapterA->installEventFilter(this);
     m_panadapterB->installEventFilter(this);
@@ -851,19 +876,9 @@ void SpectrumController::setDxClusterController(DxClusterController *controller)
     connect(m_radioState, &RadioState::spanChanged, this, &SpectrumController::updateSpotOverlays);
     connect(m_radioState, &RadioState::spanBChanged, this, &SpectrumController::updateSpotOverlays);
 
-    // Click-to-tune from spot overlay
-    if (m_spotOverlayA) {
-        connect(m_spotOverlayA, &DxSpotOverlay::spotClicked, this, [this](qint64 freq) {
-            qint64 adjusted = adjustClickFreqForMode(freq, false);
-            m_connectionController->sendCAT(QString("FA%1;").arg(adjusted, 11, 10, QChar('0')));
-        });
-    }
-    if (m_spotOverlayB) {
-        connect(m_spotOverlayB, &DxSpotOverlay::spotClicked, this, [this](qint64 freq) {
-            qint64 adjusted = adjustClickFreqForMode(freq, true);
-            m_connectionController->sendCAT(QString("FB%1;").arg(adjusted, 11, 10, QChar('0')));
-        });
-    }
+    // Click-to-tune is wired in setupSpectrumUI() right after the overlays are created.
+    // It cannot be done here because mainwindow may call setDxClusterController() before
+    // the overlays exist (and the if (m_spotOverlayA) guard would silently skip the connect).
 }
 
 void SpectrumController::updateSpotOverlays() {
@@ -872,6 +887,9 @@ void SpectrumController::updateSpotOverlays() {
 
     // Update panadapter A overlay
     if (m_spotOverlayA && m_panadapterA) {
+        // WHY: cluster spot freqs are dial freqs, so use raw centerFreq (matches the bottom
+        // dial-frequency labels, which are positioned the same way). Don't use the IF-shifted
+        // effectiveCenter — that would offset spot labels relative to where the user's dial is.
         qint64 center = m_panadapterA->centerFreq();
         int span = m_panadapterA->span();
         if (center > 0 && span > 0) {
@@ -888,6 +906,11 @@ void SpectrumController::updateSpotOverlays() {
             // Otherwise stale labels from a prior layout remain on screen after spots are cleared.
             m_spotOverlayA->setSpots({});
         }
+        // WHY: re-assert top of stack on every update so clicks reach the overlay's mousePressEvent
+        // instead of falling through to the panadapter's click-tune. The initial raise() in the
+        // resize handler isn't always enough — sibling widgets parented to the panadapter can
+        // shift z-order, causing label clicks to hit the panadapter underneath.
+        m_spotOverlayA->raise();
     }
 
     // Update panadapter B overlay
@@ -903,5 +926,6 @@ void SpectrumController::updateSpotOverlays() {
         } else {
             m_spotOverlayB->setSpots({});
         }
+        m_spotOverlayB->raise();
     }
 }
