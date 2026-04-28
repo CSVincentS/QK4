@@ -52,7 +52,7 @@ Pre-built releases are available on the [Releases](https://github.com/mikeg-dal/
 | C++ compiler | Xcode Command Line Tools | Visual Studio 2019+ Build Tools | `apt install g++` |
 | CMake | `brew install cmake` | Included with VS Build Tools | `apt install cmake` |
 | Qt 6.7+ | `brew install qt` | [Qt Online Installer](https://www.qt.io/download-qt-installer) or [aqtinstall](https://github.com/miurahr/aqtinstall) | `apt install qt6-base-dev qt6-base-private-dev` |
-| Qt modules | Included with Homebrew Qt | Multimedia, ShaderTools, SerialPort | `apt install qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev` |
+| Qt modules | Included with Homebrew Qt | Multimedia, ShaderTools, SerialPort, Svg | `apt install qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev` |
 | libopus | `brew install opus` | `vcpkg install opus:x64-windows` | `apt install libopus-dev` |
 | OpenSSL 3 | `brew install openssl@3` | `vcpkg install openssl:x64-windows` | `apt install libssl-dev` |
 | HIDAPI | `brew install hidapi` | `vcpkg install hidapi:x64-windows` | `apt install libhidapi-dev` |
@@ -84,7 +84,7 @@ cmake --build build --target deploy
 vcpkg install opus:x64-windows hidapi:x64-windows openssl:x64-windows
 
 # Install Qt 6.7+ via Qt Online Installer or aqtinstall
-# Required modules: Multimedia, ShaderTools, SerialPort
+# Required modules: Multimedia, ShaderTools, SerialPort, Svg
 
 # Clone and build
 git clone https://github.com/mikeg-dal/QK4.git
@@ -100,10 +100,10 @@ cmake --build build --config Release
 
 ```bash
 # Install dependencies (Debian Trixie / Ubuntu 24.04+)
-sudo apt install cmake g++ file patchelf \
+sudo apt install cmake g++ pkg-config file patchelf \
   qt6-base-dev qt6-base-private-dev \
-  qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev \
-  libopus-dev libhidapi-dev libssl-dev \
+  qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev \
+  libopus-dev libhidapi-dev libssl-dev libudev-dev \
   libasound2-dev libpulse-dev
 
 # Clone and build
