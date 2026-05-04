@@ -10,9 +10,6 @@
 #include "ui/styling/k4styles.h"
 #include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
-#include "audio/audioengine.h"
-#include "hardware/kpoddevice.h"
-#include "hardware/halikeydevice.h"
 #include <QHBoxLayout>
 
 OptionsDialog::OptionsDialog(RadioState *radioState, AudioController *audioController,
@@ -57,7 +54,7 @@ void OptionsDialog::setupUi() {
     m_tabList->addItem("Audio Input");
     m_tabList->addItem("Audio Output");
     m_tabList->addItem("Rig Control");
-    m_tabList->addItem("CW Keyer");
+    m_tabList->addItem("HaliKey");
     m_tabList->addItem("K-Pod");
     m_tabList->addItem("KPA1500");
     m_tabList->addItem("DX Cluster");

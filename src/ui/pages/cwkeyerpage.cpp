@@ -16,7 +16,7 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, QWidget *parent)
     layout->setSpacing(K4Styles::Dimensions::PaddingLarge);
 
     // Title
-    auto *titleLabel = new QLabel("CW Keyer", this);
+    auto *titleLabel = new QLabel("HaliKey", this);
     titleLabel->setStyleSheet(K4Styles::Dialog::titleLabel());
     layout->addWidget(titleLabel);
 
