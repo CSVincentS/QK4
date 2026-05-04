@@ -196,13 +196,24 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, m_iambicKeyer, &IambicKeyer::setDahPaddle,
             Qt::DirectConnection);
 
-    // HaliKey PTT → MainWindow (voice/data modes only)
-    connect(m_halikeyDevice, &HalikeyDevice::pttStateChanged, this, [this](bool active) {
-        auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
-        if (mode != RadioState::CW && mode != RadioState::CW_R) {
-            emit pttRequested(active);
-        }
-    });
+    // HaliKey PTT → MainWindow (voice/data modes) or paddle dit (CW mode, V1.4 only).
+    // WHY: V1.4 serial firmware can't distinguish foot pedal from paddle dit lever — both
+    // drive CTS. We demux by mode here: in CW the CTS edge is treated as the dit-paddle
+    // press, in voice it's the foot pedal → PTT. The MIDI variant has a distinct note for
+    // the pedal so its CW behavior stays mode-gated to silence (no spurious dit injection).
+    connect(
+        m_halikeyDevice, &HalikeyDevice::pttStateChanged, this,
+        [this](bool active) {
+            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
+            const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
+            const bool isV14 = (RadioSettings::instance()->halikeyDeviceType() != 1);
+            if (inCw && isV14) {
+                m_iambicKeyer->setDitPaddle(active);
+            } else if (!inCw) {
+                emit pttRequested(active);
+            }
+        },
+        Qt::DirectConnection);
 
     // Enable keyer when radio connects, disable on disconnect
     connect(m_connectionController, &ConnectionController::radioReady, this, [this]() {

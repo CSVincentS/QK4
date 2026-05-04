@@ -75,8 +75,11 @@ bool HaliKeyV14Worker::openNativePort() {
         return false;
     }
 
-    // Set up event mask for CTS and DSR changes
-    if (!SetCommMask(m_handle, EV_CTS | EV_DSR)) {
+    // Set up event mask for CTS, DSR, and DCD (RLSD = Receive Line Signal Detect = DCD).
+    // WHY: DCD is the third unused modem-status pin; HaliKey V1.4 firmware drives the
+    // foot-pedal/PTT input on it (CTS=dit, DSR=dah, DTR+RTS=power). Mirrors the MIDI
+    // variant's NOTE_PTT=31 dispatch. Fallback if firmware uses RI instead: swap to EV_RING.
+    if (!SetCommMask(m_handle, EV_CTS | EV_DSR | EV_RLSD)) {
         QString error = "Failed to set comm mask for " + m_portName;
         qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
@@ -148,22 +151,49 @@ void HaliKeyV14Worker::closeNativePort() {
 #endif
 }
 
-bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState) {
+bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttState) {
+    // WHY: HaliKey V1.4 firmware exposes raw modem-status pin states. Empirically (verified via
+    // qk4.hardware.debug logs in this user's setup, NORMAL paddle wiring):
+    //
+    //   physical dah lever  → DCD AND DSR transition together (always paired)
+    //   physical dit lever  → CTS only
+    //   foot pedal          → CTS only (indistinguishable from dit lever on the wire)
+    //
+    // We map the three logical signals as follows:
+    //
+    //   ditState = false                (V1.4 cannot uniquely identify the dit lever — both
+    //                                    pedal and dit lever drive CTS. dit-vs-pedal demux
+    //                                    happens in HardwareController based on operating
+    //                                    mode: in CW we treat CTS as dit, in voice as PTT.)
+    //   dahState = DCD || DSR           (paddle dah lever — both pins fire together; OR collapses
+    //                                    them into one stable edge.)
+    //   pttState = CTS                  (mode-routed downstream: voice → PTT, CW → setDitPaddle.)
+    //
+    // The MIDI worker is unaffected — it has true distinct sources for dit/dah/PTT (notes
+    // 20/21/31), so HardwareController's mode-routing only kicks in for the V1.4 variant.
 #ifdef Q_OS_WIN
     DWORD modemStatus = 0;
     if (!GetCommModemStatus(m_handle, &modemStatus)) {
         return false;
     }
-    ditState = (modemStatus & MS_CTS_ON) != 0;
-    dahState = (modemStatus & MS_DSR_ON) != 0;
+    bool cts = (modemStatus & MS_CTS_ON) != 0;
+    bool dsr = (modemStatus & MS_DSR_ON) != 0;
+    bool dcd = (modemStatus & MS_RLSD_ON) != 0;
+    ditState = false;
+    dahState = dcd || dsr;
+    pttState = cts;
     return true;
 #else
     int status = 0;
     if (ioctl(m_fd, TIOCMGET, &status) < 0) {
         return false;
     }
-    ditState = (status & TIOCM_CTS) != 0;
-    dahState = (status & TIOCM_DSR) != 0;
+    bool cts = (status & TIOCM_CTS) != 0;
+    bool dsr = (status & TIOCM_DSR) != 0;
+    bool dcd = (status & TIOCM_CD) != 0;
+    ditState = false;
+    dahState = dcd || dsr;
+    pttState = cts;
     return true;
 #endif
 }
@@ -171,25 +201,31 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState) {
 void HaliKeyV14Worker::monitorLoop() {
     bool lastDitState = false;
     bool lastDahState = false;
+    bool lastPttState = false;
 
     // Raw states and debounce counters
     bool rawDitState = false;
     bool rawDahState = false;
+    bool rawPttState = false;
     int ditDebounceCounter = 0;
     int dahDebounceCounter = 0;
+    int pttDebounceCounter = 0;
 
     // Read initial state
-    readPinState(lastDitState, lastDahState);
+    readPinState(lastDitState, lastDahState, lastPttState);
     rawDitState = lastDitState;
     rawDahState = lastDahState;
+    rawPttState = lastPttState;
     ditDebounceCounter = DEBOUNCE_COUNT;
     dahDebounceCounter = DEBOUNCE_COUNT;
+    pttDebounceCounter = DEBOUNCE_COUNT;
 
 #ifdef Q_OS_LINUX
     // Linux: use TIOCMIWAIT for kernel-level interrupt-driven monitoring
     while (m_running) {
-        // Wait for CTS or DSR change — blocks in kernel until edge detected
-        if (ioctl(m_fd, TIOCMIWAIT, TIOCM_CTS | TIOCM_DSR) < 0) {
+        // Wait for CTS, DSR, or DCD change — blocks in kernel until edge detected.
+        // DCD added so foot-pedal/PTT presses wake the loop the same way paddles do.
+        if (ioctl(m_fd, TIOCMIWAIT, TIOCM_CTS | TIOCM_DSR | TIOCM_CD) < 0) {
             if (!m_running)
                 break;
             if (errno == EINTR)
@@ -204,8 +240,8 @@ void HaliKeyV14Worker::monitorLoop() {
             break;
 
         // Read new state
-        bool ditState = false, dahState = false;
-        if (!readPinState(ditState, dahState)) {
+        bool ditState = false, dahState = false, pttState = false;
+        if (!readPinState(ditState, dahState, pttState)) {
             if (!m_running)
                 break;
             QString error = "Failed to read pin state";
@@ -218,12 +254,12 @@ void HaliKeyV14Worker::monitorLoop() {
         bool stable = true;
         for (int i = 1; i < DEBOUNCE_COUNT && m_running; ++i) {
             usleep(500);
-            bool d = false, h = false;
-            if (!readPinState(d, h)) {
+            bool d = false, h = false, p = false;
+            if (!readPinState(d, h, p)) {
                 stable = false;
                 break;
             }
-            if (d != ditState || h != dahState) {
+            if (d != ditState || h != dahState || p != pttState) {
                 stable = false;
                 break;
             }
@@ -238,6 +274,11 @@ void HaliKeyV14Worker::monitorLoop() {
         if (dahState != lastDahState) {
             lastDahState = dahState;
             emit dahStateChanged(dahState);
+        }
+        if (pttState != lastPttState) {
+            lastPttState = pttState;
+            qCDebug(hwHalikey) << "HaliKeyV14Worker: ptt edge:" << pttState;
+            emit pttStateChanged(pttState);
         }
     }
 
@@ -284,8 +325,8 @@ void HaliKeyV14Worker::monitorLoop() {
         ResetEvent(ov.hEvent);
 
         // Read new state
-        bool ditState = false, dahState = false;
-        if (!readPinState(ditState, dahState)) {
+        bool ditState = false, dahState = false, pttState = false;
+        if (!readPinState(ditState, dahState, pttState)) {
             if (!m_running)
                 break;
             emit errorOccurred("Failed to read pin state");
@@ -317,6 +358,19 @@ void HaliKeyV14Worker::monitorLoop() {
             rawDahState = dahState;
             dahDebounceCounter = 1;
         }
+
+        if (pttState == rawPttState) {
+            if (pttDebounceCounter < DEBOUNCE_COUNT)
+                pttDebounceCounter++;
+            if (pttDebounceCounter >= DEBOUNCE_COUNT && pttState != lastPttState) {
+                lastPttState = pttState;
+                qCDebug(hwHalikey) << "HaliKeyV14Worker: ptt edge:" << pttState;
+                emit pttStateChanged(pttState);
+            }
+        } else {
+            rawPttState = pttState;
+            pttDebounceCounter = 1;
+        }
     }
 
     CloseHandle(ov.hEvent);
@@ -326,8 +380,8 @@ void HaliKeyV14Worker::monitorLoop() {
     while (m_running) {
         usleep(500); // 500 microseconds
 
-        bool ditState = false, dahState = false;
-        if (!readPinState(ditState, dahState)) {
+        bool ditState = false, dahState = false, pttState = false;
+        if (!readPinState(ditState, dahState, pttState)) {
             if (!m_running)
                 break;
             QString error = QString("HaliKey monitor error: %1").arg(QString::fromLocal8Bit(strerror(errno)));
@@ -342,6 +396,7 @@ void HaliKeyV14Worker::monitorLoop() {
                 ditDebounceCounter++;
             if (ditDebounceCounter >= DEBOUNCE_COUNT && ditState != lastDitState) {
                 lastDitState = ditState;
+                qCDebug(hwHalikey) << "HaliKeyV14Worker: dit edge:" << ditState;
                 emit ditStateChanged(ditState);
             }
         } else {
@@ -355,11 +410,26 @@ void HaliKeyV14Worker::monitorLoop() {
                 dahDebounceCounter++;
             if (dahDebounceCounter >= DEBOUNCE_COUNT && dahState != lastDahState) {
                 lastDahState = dahState;
+                qCDebug(hwHalikey) << "HaliKeyV14Worker: dah edge:" << dahState;
                 emit dahStateChanged(dahState);
             }
         } else {
             rawDahState = dahState;
             dahDebounceCounter = 1;
+        }
+
+        // Debounce ptt
+        if (pttState == rawPttState) {
+            if (pttDebounceCounter < DEBOUNCE_COUNT)
+                pttDebounceCounter++;
+            if (pttDebounceCounter >= DEBOUNCE_COUNT && pttState != lastPttState) {
+                lastPttState = pttState;
+                qCDebug(hwHalikey) << "HaliKeyV14Worker: ptt edge:" << pttState;
+                emit pttStateChanged(pttState);
+            }
+        } else {
+            rawPttState = pttState;
+            pttDebounceCounter = 1;
         }
     }
 #endif
