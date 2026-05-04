@@ -70,6 +70,7 @@ private:
     void updateThresholdControls();
     void updateModeVisibility();
     QString controlButtonStyle(bool selected = false) const;
+    void applyTextFontSize();
 
     Receiver m_receiver;
     OperatingMode m_operatingMode = ModeCW;
@@ -91,8 +92,11 @@ private:
     QLabel *m_thresholdValueLabel;
     QPushButton *m_thresholdPlusBtn;
     QPushButton *m_clearBtn;
+    QPushButton *m_fontMinusBtn;
+    QPushButton *m_fontPlusBtn;
     QPushButton *m_closeBtn;
     QPlainTextEdit *m_textDisplay;
+    int m_textFontSize = 9;
 
     // Drag/resize state
     QPoint m_dragPosition;

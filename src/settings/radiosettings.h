@@ -137,6 +137,10 @@ public:
     void setTxEqPreset(int index, const EqPreset &preset); // Set preset 0-3
     void clearTxEqPreset(int index);                       // Clear preset 0-3
 
+    // CW/data text-decode popup font size (per receiver, pixel value)
+    int textDecodeFontSize(bool subRx) const;
+    void setTextDecodeFontSize(bool subRx, int sizePx);
+
 signals:
     void radiosChanged();
     void kpodEnabledChanged(bool enabled);

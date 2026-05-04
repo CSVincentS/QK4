@@ -1,4 +1,5 @@
 #include "ui/dialogs/textdecodewindow.h"
+#include "settings/radiosettings.h"
 #include "ui/styling/k4styles.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -7,6 +8,7 @@
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QTextBlockFormat>
+#include <QTextCursor>
 #include <QWheelEvent>
 
 namespace {
@@ -89,6 +91,21 @@ void TextDecodeWindow::setupUi() {
     m_clearBtn->setCursor(Qt::PointingHandCursor);
     m_clearBtn->setStyleSheet(controlButtonStyle(false));
 
+    // A- / A+ buttons - shrink/grow decoded-text font size (per receiver, persisted)
+    m_fontMinusBtn = new QPushButton(QString::fromUtf8("A−"), titleBar); // A−
+    m_fontMinusBtn->setFixedHeight(ControlButtonHeight);
+    m_fontMinusBtn->setMinimumWidth(36);
+    m_fontMinusBtn->setCursor(Qt::PointingHandCursor);
+    m_fontMinusBtn->setStyleSheet(controlButtonStyle(false));
+    m_fontMinusBtn->setToolTip("Decrease decoded text size");
+
+    m_fontPlusBtn = new QPushButton("A+", titleBar);
+    m_fontPlusBtn->setFixedHeight(ControlButtonHeight);
+    m_fontPlusBtn->setMinimumWidth(36);
+    m_fontPlusBtn->setCursor(Qt::PointingHandCursor);
+    m_fontPlusBtn->setStyleSheet(controlButtonStyle(false));
+    m_fontPlusBtn->setToolTip("Increase decoded text size");
+
     // Title label - smaller, right-aligned
     QString titleText = (m_receiver == MainRx) ? "MAIN RX" : "SUB RX";
     m_titleLabel = new QLabel(titleText, titleBar);
@@ -114,7 +131,7 @@ void TextDecodeWindow::setupUi() {
                                   .arg(K4Styles::Colors::DarkBackground)
                                   .arg(K4Styles::Dimensions::FontSizePopup));
 
-    // Layout: [ON][WPM][AUTO][-][5][+][CLR] <stretch> TITLE [X]
+    // Layout: [ON][WPM][AUTO][-][5][+][CLR][A-][A+] <stretch> TITLE [X]
     titleLayout->addWidget(m_onOffBtn);
     titleLayout->addWidget(m_wpmBtn);
     titleLayout->addWidget(m_autoManualBtn);
@@ -122,6 +139,8 @@ void TextDecodeWindow::setupUi() {
     titleLayout->addWidget(m_thresholdValueLabel);
     titleLayout->addWidget(m_thresholdPlusBtn);
     titleLayout->addWidget(m_clearBtn);
+    titleLayout->addWidget(m_fontMinusBtn);
+    titleLayout->addWidget(m_fontPlusBtn);
     titleLayout->addStretch();
     titleLayout->addWidget(m_titleLabel);
     titleLayout->addWidget(m_closeBtn);
@@ -130,41 +149,10 @@ void TextDecodeWindow::setupUi() {
     m_textDisplay = new QPlainTextEdit(this);
     m_textDisplay->setReadOnly(true);
     m_textDisplay->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-    m_textDisplay->setStyleSheet(QString("QPlainTextEdit {"
-                                         "  background: %1;"
-                                         "  color: %2;"
-                                         "  border: none;"
-                                         "  font-family: '%6';"
-                                         "  font-size: %3px;"
-                                         "  padding: 8px;"
-                                         "}"
-                                         "QScrollBar:vertical {"
-                                         "  background: %4;"
-                                         "  width: 10px;"
-                                         "  border-radius: 5px;"
-                                         "}"
-                                         "QScrollBar::handle:vertical {"
-                                         "  background: %5;"
-                                         "  border-radius: 5px;"
-                                         "  min-height: 20px;"
-                                         "}"
-                                         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                                         "  height: 0px;"
-                                         "}")
-                                     .arg(K4Styles::Colors::DarkBackground)
-                                     .arg(K4Styles::Colors::TextWhite)
-                                     .arg(K4Styles::Dimensions::FontSizeNormal)
-                                     .arg(K4Styles::Colors::Background)
-                                     .arg(K4Styles::Colors::BorderNormal)
-                                     .arg(K4Styles::Fonts::Data));
 
-    // Set 1.5x line spacing
-    QTextCursor cursor = m_textDisplay->textCursor();
-    QTextBlockFormat blockFormat;
-    blockFormat.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
-    cursor.select(QTextCursor::Document);
-    cursor.mergeBlockFormat(blockFormat);
-    m_textDisplay->setTextCursor(cursor);
+    // Initial font size from persisted settings (per receiver), then apply stylesheet + line spacing.
+    m_textFontSize = RadioSettings::instance()->textDecodeFontSize(m_receiver == SubRx);
+    applyTextFontSize();
 
     mainLayout->addWidget(titleBar);
     mainLayout->addWidget(m_textDisplay, 1);
@@ -174,6 +162,22 @@ void TextDecodeWindow::setupUi() {
 
     // CLR button - clear local text buffer
     connect(m_clearBtn, &QPushButton::clicked, this, [this]() { clearText(); });
+
+    // A- / A+ buttons - adjust decoded-text font size, persist per receiver
+    connect(m_fontMinusBtn, &QPushButton::clicked, this, [this]() {
+        if (m_textFontSize <= 7)
+            return;
+        m_textFontSize -= 1;
+        applyTextFontSize();
+        RadioSettings::instance()->setTextDecodeFontSize(m_receiver == SubRx, m_textFontSize);
+    });
+    connect(m_fontPlusBtn, &QPushButton::clicked, this, [this]() {
+        if (m_textFontSize >= 24)
+            return;
+        m_textFontSize += 1;
+        applyTextFontSize();
+        RadioSettings::instance()->setTextDecodeFontSize(m_receiver == SubRx, m_textFontSize);
+    });
 
     // ON/OFF toggle
     connect(m_onOffBtn, &QPushButton::clicked, this, [this]() {
@@ -389,6 +393,46 @@ void TextDecodeWindow::wheelEvent(QWheelEvent *event) {
 
 QString TextDecodeWindow::controlButtonStyle(bool selected) const {
     return K4Styles::controlButton(selected);
+}
+
+void TextDecodeWindow::applyTextFontSize() {
+    // Stylesheet template — colors / scrollbar / padding identical to the original; only the
+    // font-size value changes. Re-applying mergeBlockFormat after the size change re-anchors the
+    // 1.5x line spacing on every existing block so scrollback re-flows cleanly.
+    m_textDisplay->setStyleSheet(QString("QPlainTextEdit {"
+                                         "  background: %1;"
+                                         "  color: %2;"
+                                         "  border: none;"
+                                         "  font-family: '%6';"
+                                         "  font-size: %3px;"
+                                         "  padding: 8px;"
+                                         "}"
+                                         "QScrollBar:vertical {"
+                                         "  background: %4;"
+                                         "  width: 10px;"
+                                         "  border-radius: 5px;"
+                                         "}"
+                                         "QScrollBar::handle:vertical {"
+                                         "  background: %5;"
+                                         "  border-radius: 5px;"
+                                         "  min-height: 20px;"
+                                         "}"
+                                         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                                         "  height: 0px;"
+                                         "}")
+                                     .arg(K4Styles::Colors::DarkBackground)
+                                     .arg(K4Styles::Colors::TextWhite)
+                                     .arg(m_textFontSize)
+                                     .arg(K4Styles::Colors::Background)
+                                     .arg(K4Styles::Colors::BorderNormal)
+                                     .arg(K4Styles::Fonts::Data));
+
+    QTextCursor cursor = m_textDisplay->textCursor();
+    QTextBlockFormat blockFormat;
+    blockFormat.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
+    cursor.select(QTextCursor::Document);
+    cursor.mergeBlockFormat(blockFormat);
+    m_textDisplay->setTextCursor(cursor);
 }
 
 void TextDecodeWindow::updateButtonStates() {
