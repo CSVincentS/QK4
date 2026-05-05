@@ -146,6 +146,9 @@ public:
     double supplyVoltage() const { return m_rxTxMeterState.supplyVoltage; }
     double supplyCurrent() const { return m_rxTxMeterState.supplyCurrent; }
 
+    // PA drain current (SIRF LM field, parsed from centi-amps to amps)
+    double paDrainCurrent() const { return m_rxTxMeterState.paDrainCurrent; }
+
     // Control states
     bool isTransmitting() const { return m_rxTxMeterState.isTransmitting; }
     bool subReceiverEnabled() const { return m_rxTxMeterState.subReceiverEnabled; }
@@ -531,6 +534,7 @@ signals:
     void rfPowerChanged(double watts, bool isQrp);
     void supplyVoltageChanged(double volts);
     void supplyCurrentChanged(double amps);
+    void paDrainCurrentChanged(double amps);
     void swrChanged(double swr);
     void txMeterChanged(int alc, int compression, double fwdPower, double swr);
     void splitChanged(bool enabled);
@@ -870,6 +874,7 @@ private:
     void handleOM(const QString &cmd);   // Option Modules
     void handleRV(const QString &cmd);   // Firmware Version (RV.)
     void handleSIFP(const QString &cmd); // Power Supply Info
+    void handleSIRF(const QString &cmd); // RF Deck Status (PA drain current)
 
     void handleSL(const QString &cmd); // Streaming Latency
     void handleMN(const QString &cmd); // Message Bank

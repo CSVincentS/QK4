@@ -2335,6 +2335,22 @@ private slots:
         rs.parseCATCommand("SIFPVS:13.8,IS:2.5;");
         QCOMPARE(rs.supplyVoltage(), 13.8);
         QCOMPARE(rs.supplyCurrent(), 2.5);
+
+        // SIRF carries the PA drain current as PM / 768 — matches the K4 front-panel "Id".
+        QSignalSpy idSpy(&rs, &RadioState::paDrainCurrentChanged);
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:30,LM:1196,PA:0.6,PM:12298,PT:31;");
+        QCOMPARE(rs.paDrainCurrent(), 12298.0 / 768.0); // ~16.01 A at 50 W TX
+        QCOMPARE(idSpy.count(), 1);
+        // Idle SIRF (PM:0) clears the drain reading.
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:29,LM:5,PA:0.6,PM:0,PT:30;");
+        QCOMPARE(rs.paDrainCurrent(), 0.0);
+        // Same value re-emitted should not re-fire the signal.
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:29,LM:5,PA:0.6,PM:0,PT:30;");
+        QCOMPARE(idSpy.count(), 2);
+        // 100 W steady carrier sample.
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:37,LM:1519,PA:0.6,PM:15976,PT:46;");
+        QCOMPARE(rs.paDrainCurrent(), 15976.0 / 768.0); // ~20.80 A
+        QCOMPARE(idSpy.count(), 3);
         QCOMPARE(vSpy.count(), 1);
         QCOMPARE(iSpy.count(), 1);
     }

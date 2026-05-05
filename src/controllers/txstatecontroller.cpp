@@ -19,6 +19,16 @@ TxStateController::TxStateController(RadioState *radioState, StatusBarController
       m_txTriangle(txTriangle), m_txTriangleB(txTriangleB) {
     connect(m_radioState, &RadioState::transmitStateChanged, this, &TxStateController::onTransmitStateChanged);
     connect(m_radioState, &RadioState::txMeterChanged, this, &TxStateController::onTxMeterChanged);
+    // SIRF arrives less frequently than TM; route drain-current edges straight to the meter
+    // so the Id reading refreshes the moment a new SIRF lands instead of waiting for the
+    // next TM frame to pull the cached value.
+    connect(m_radioState, &RadioState::paDrainCurrentChanged, this, [this](double amps) {
+        if (m_radioState->splitEnabled()) {
+            m_vfoB->setTxMeterCurrent(amps);
+        } else {
+            m_vfoA->setTxMeterCurrent(amps);
+        }
+    });
 }
 
 TxStateController::~TxStateController() {
@@ -61,16 +71,10 @@ void TxStateController::onTxMeterChanged(int alc, int comp, double fwdPower, dou
     m_statusBar->setForwardPower(fwdPower);
     m_sideControlPanel->setPowerReading(fwdPower);
 
-    // WHY: K4's CAT protocol exposes forward power but not PA drain current.
-    // Id = P / (V × η). Measured K4 efficiency is ~34% (80W @ 17A @ 13.8V).
-    // Gives a workable "Id" readout on the VFO multifunction meter without
-    // an extra CAT poll.
-    const double voltage = m_radioState->supplyVoltage();
-    double paCurrent = 0.0;
-    if (voltage > 0 && fwdPower > 0) {
-        constexpr double K4_PA_EFFICIENCY = 0.34;
-        paCurrent = fwdPower / (voltage * K4_PA_EFFICIENCY);
-    }
+    // PA drain current comes straight from the K4's SIRF stream (LM field, parsed in
+    // RxTxMeterState). No more efficiency-based estimation — paDrainCurrent() tracks
+    // the value the K4's own front-panel "Id" meter shows.
+    const double paCurrent = m_radioState->paDrainCurrent();
 
     // Route meter tuple + current to the active TX VFO only.
     if (m_radioState->splitEnabled()) {
