@@ -218,9 +218,11 @@ void VFOWidget::setNB(bool on) {
                                  .arg(K4Styles::Dimensions::FontSizeLarge));
 }
 
-void VFOWidget::setNR(bool on) {
+void VFOWidget::setNR(bool lmsOn, bool ssnrOn) {
+    const bool active = lmsOn || ssnrOn;
+    m_nrLabel->setText(ssnrOn ? "SSNR" : "NR");
     m_nrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                 .arg(on ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
+                                 .arg(active ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
                                  .arg(K4Styles::Dimensions::FontSizeLarge));
 }
 
@@ -358,7 +360,7 @@ void VFOWidget::resetToDefaults() {
     setPreamp(false, 0);
     setAtt(false, 0);
     setNB(false);
-    setNR(false);
+    setNR(false, false);
     setNotch(false, false);
     setApf(false, 0);
     setTuningRate(0);

@@ -28,10 +28,13 @@ FeatureMenuController::FeatureMenuController(RadioState *radioState, ConnectionC
             break;
         }
         case FeatureMenuBar::NrAdjust: {
-            const bool newState =
-                bSet ? !m_radioState->noiseReductionEnabledB() : !m_radioState->noiseReductionEnabled();
-            m_bar->setFeatureEnabled(newState);
-            m_connection->sendCAT(bSet ? "NR$/;" : "NR/;");
+            const bool ssnr = (m_bar->currentNrEngine() == FeatureMenuBar::Ssnr);
+            const bool curEnabled =
+                ssnr ? (bSet ? m_radioState->ssnrEnabledB() : m_radioState->ssnrEnabled())
+                     : (bSet ? m_radioState->noiseReductionEnabledB() : m_radioState->noiseReductionEnabled());
+            m_bar->setFeatureEnabled(!curEnabled);
+            const QString prefix = ssnr ? (bSet ? "NRS$" : "NRS") : (bSet ? "NR$" : "NR");
+            m_connection->sendCAT(prefix + "/;");
             break;
         }
         case FeatureMenuBar::ManualNotch: {
@@ -72,16 +75,28 @@ FeatureMenuController::FeatureMenuController(RadioState *radioState, ConnectionC
             break;
         }
         case FeatureMenuBar::NrAdjust: {
-            const int curLevel = bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel();
+            const bool ssnr = (m_bar->currentNrEngine() == FeatureMenuBar::Ssnr);
+            const int curLevel =
+                ssnr ? (bSet ? m_radioState->ssnrLevelB() : m_radioState->ssnrLevel())
+                     : (bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel());
             const int newLevel = qMin(curLevel + 1, 10);
-            const int enabled = bSet ? (m_radioState->noiseReductionEnabledB() ? 1 : 0)
-                                     : (m_radioState->noiseReductionEnabled() ? 1 : 0);
-            if (bSet)
-                m_radioState->setNoiseReductionLevelB(newLevel);
-            else
-                m_radioState->setNoiseReductionLevel(newLevel);
+            const int enabled =
+                ssnr ? (bSet ? (m_radioState->ssnrEnabledB() ? 1 : 0) : (m_radioState->ssnrEnabled() ? 1 : 0))
+                     : (bSet ? (m_radioState->noiseReductionEnabledB() ? 1 : 0)
+                             : (m_radioState->noiseReductionEnabled() ? 1 : 0));
+            if (ssnr) {
+                if (bSet)
+                    m_radioState->setSsnrLevelB(newLevel);
+                else
+                    m_radioState->setSsnrLevel(newLevel);
+            } else {
+                if (bSet)
+                    m_radioState->setNoiseReductionLevelB(newLevel);
+                else
+                    m_radioState->setNoiseReductionLevel(newLevel);
+            }
             m_bar->setValue(newLevel);
-            const QString prefix = bSet ? "NR$" : "NR";
+            const QString prefix = ssnr ? (bSet ? "NRS$" : "NRS") : (bSet ? "NR$" : "NR");
             m_connection->sendCAT(QString("%1%2%3;").arg(prefix).arg(newLevel, 2, 10, QChar('0')).arg(enabled));
             break;
         }
@@ -130,16 +145,28 @@ FeatureMenuController::FeatureMenuController(RadioState *radioState, ConnectionC
             break;
         }
         case FeatureMenuBar::NrAdjust: {
-            const int curLevel = bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel();
+            const bool ssnr = (m_bar->currentNrEngine() == FeatureMenuBar::Ssnr);
+            const int curLevel =
+                ssnr ? (bSet ? m_radioState->ssnrLevelB() : m_radioState->ssnrLevel())
+                     : (bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel());
             const int newLevel = qMax(curLevel - 1, 0);
-            const int enabled = bSet ? (m_radioState->noiseReductionEnabledB() ? 1 : 0)
-                                     : (m_radioState->noiseReductionEnabled() ? 1 : 0);
-            if (bSet)
-                m_radioState->setNoiseReductionLevelB(newLevel);
-            else
-                m_radioState->setNoiseReductionLevel(newLevel);
+            const int enabled =
+                ssnr ? (bSet ? (m_radioState->ssnrEnabledB() ? 1 : 0) : (m_radioState->ssnrEnabled() ? 1 : 0))
+                     : (bSet ? (m_radioState->noiseReductionEnabledB() ? 1 : 0)
+                             : (m_radioState->noiseReductionEnabled() ? 1 : 0));
+            if (ssnr) {
+                if (bSet)
+                    m_radioState->setSsnrLevelB(newLevel);
+                else
+                    m_radioState->setSsnrLevel(newLevel);
+            } else {
+                if (bSet)
+                    m_radioState->setNoiseReductionLevelB(newLevel);
+                else
+                    m_radioState->setNoiseReductionLevel(newLevel);
+            }
             m_bar->setValue(newLevel);
-            const QString prefix = bSet ? "NR$" : "NR";
+            const QString prefix = ssnr ? (bSet ? "NRS$" : "NRS") : (bSet ? "NR$" : "NR");
             m_connection->sendCAT(QString("%1%2%3;").arg(prefix).arg(newLevel, 2, 10, QChar('0')).arg(enabled));
             break;
         }
@@ -178,6 +205,26 @@ FeatureMenuController::FeatureMenuController(RadioState *radioState, ConnectionC
         const QString prefix = bSet ? "NB$" : "NB";
         m_connection->sendCAT(
             QString("%1%2%3%4;").arg(prefix).arg(level, 2, 10, QChar('0')).arg(enabled).arg(newFilter));
+    });
+
+    connect(m_bar, &FeatureMenuBar::nrEngineToggleRequested, this, [this]() {
+        const bool bSet = m_radioState->bSetEnabled();
+        const auto newEngine =
+            (m_bar->currentNrEngine() == FeatureMenuBar::Lms) ? FeatureMenuBar::Ssnr : FeatureMenuBar::Lms;
+        m_bar->setNrEngine(newEngine);
+        if (newEngine == FeatureMenuBar::Ssnr) {
+            m_bar->setFeatureEnabled(bSet ? m_radioState->ssnrEnabledB() : m_radioState->ssnrEnabled());
+            m_bar->setValue(bSet ? m_radioState->ssnrLevelB() : m_radioState->ssnrLevel());
+        } else {
+            m_bar->setFeatureEnabled(bSet ? m_radioState->noiseReductionEnabledB()
+                                          : m_radioState->noiseReductionEnabled());
+            m_bar->setValue(bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel());
+        }
+        // WHY: K4 enforces mutual exclusion between LMS NR and SSNR — sending `/` to the
+        // destination engine enables it (at its last K4-side level) and the radio auto-
+        // disables the other one. We trust the echo to reconcile state.
+        const QString prefix = (newEngine == FeatureMenuBar::Ssnr) ? (bSet ? "NRS$" : "NRS") : (bSet ? "NR$" : "NR");
+        m_connection->sendCAT(prefix + "/;");
     });
 
     // === RadioState echoes → refresh the bar while it's visible ===
@@ -221,15 +268,27 @@ void FeatureMenuController::toggleFeature(FeatureMenuBar::Feature feature, QWidg
             m_bar->setNbFilter(m_radioState->noiseBlankerFilterWidth());
         }
         break;
-    case FeatureMenuBar::NrAdjust:
-        if (bSet) {
-            m_bar->setFeatureEnabled(m_radioState->noiseReductionEnabledB());
-            m_bar->setValue(m_radioState->noiseReductionLevelB());
+    case FeatureMenuBar::NrAdjust: {
+        // Engine-pick: enabled-wins. If exactly one of LMS/SSNR is on, snap to that engine.
+        // If both off or (briefly) both on, keep the bar's current engine.
+        const bool lmsOn = bSet ? m_radioState->noiseReductionEnabledB() : m_radioState->noiseReductionEnabled();
+        const bool ssnrOn = bSet ? m_radioState->ssnrEnabledB() : m_radioState->ssnrEnabled();
+        FeatureMenuBar::NrEngine engine = m_bar->currentNrEngine();
+        if (lmsOn && !ssnrOn)
+            engine = FeatureMenuBar::Lms;
+        else if (ssnrOn && !lmsOn)
+            engine = FeatureMenuBar::Ssnr;
+        m_bar->setNrEngine(engine);
+        if (engine == FeatureMenuBar::Ssnr) {
+            m_bar->setFeatureEnabled(bSet ? m_radioState->ssnrEnabledB() : m_radioState->ssnrEnabled());
+            m_bar->setValue(bSet ? m_radioState->ssnrLevelB() : m_radioState->ssnrLevel());
         } else {
-            m_bar->setFeatureEnabled(m_radioState->noiseReductionEnabled());
-            m_bar->setValue(m_radioState->noiseReductionLevel());
+            m_bar->setFeatureEnabled(bSet ? m_radioState->noiseReductionEnabledB()
+                                          : m_radioState->noiseReductionEnabled());
+            m_bar->setValue(bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel());
         }
         break;
+    }
     case FeatureMenuBar::ManualNotch:
         if (bSet) {
             m_bar->setFeatureEnabled(m_radioState->manualNotchEnabledB());
@@ -270,15 +329,27 @@ void FeatureMenuController::refreshCurrentFeature() {
             m_bar->setNbFilter(m_radioState->noiseBlankerFilterWidth());
         }
         break;
-    case FeatureMenuBar::NrAdjust:
-        if (bSet) {
-            m_bar->setFeatureEnabled(m_radioState->noiseReductionEnabledB());
-            m_bar->setValue(m_radioState->noiseReductionLevelB());
+    case FeatureMenuBar::NrAdjust: {
+        // Engine-pick: enabled-wins. If exactly one of LMS/SSNR is on, snap to that engine.
+        // If both off or (briefly) both on, keep the bar's current engine.
+        const bool lmsOn = bSet ? m_radioState->noiseReductionEnabledB() : m_radioState->noiseReductionEnabled();
+        const bool ssnrOn = bSet ? m_radioState->ssnrEnabledB() : m_radioState->ssnrEnabled();
+        FeatureMenuBar::NrEngine engine = m_bar->currentNrEngine();
+        if (lmsOn && !ssnrOn)
+            engine = FeatureMenuBar::Lms;
+        else if (ssnrOn && !lmsOn)
+            engine = FeatureMenuBar::Ssnr;
+        m_bar->setNrEngine(engine);
+        if (engine == FeatureMenuBar::Ssnr) {
+            m_bar->setFeatureEnabled(bSet ? m_radioState->ssnrEnabledB() : m_radioState->ssnrEnabled());
+            m_bar->setValue(bSet ? m_radioState->ssnrLevelB() : m_radioState->ssnrLevel());
         } else {
-            m_bar->setFeatureEnabled(m_radioState->noiseReductionEnabled());
-            m_bar->setValue(m_radioState->noiseReductionLevel());
+            m_bar->setFeatureEnabled(bSet ? m_radioState->noiseReductionEnabledB()
+                                          : m_radioState->noiseReductionEnabled());
+            m_bar->setValue(bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel());
         }
         break;
+    }
     case FeatureMenuBar::ManualNotch:
         if (bSet) {
             m_bar->setFeatureEnabled(m_radioState->manualNotchEnabledB());

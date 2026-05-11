@@ -630,6 +630,56 @@ private slots:
         QCOMPARE(spy.count(), 0);
     }
 
+    // --- NRS / NRS$ (Spectral-subtraction NR: NRSnnm; LMS NR's peer) ---
+    void testNrsParsesLevelEnabled() {
+        RadioState rs;
+        rs.parseCATCommand("NRS061;");
+        QCOMPARE(rs.ssnrLevel(), 6);
+        QCOMPARE(rs.ssnrEnabled(), true);
+    }
+
+    void testNrsDisable() {
+        RadioState rs;
+        rs.parseCATCommand("NRS061;");
+        rs.parseCATCommand("NRS060;");
+        QCOMPARE(rs.ssnrEnabled(), false);
+    }
+
+    void testNrsSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("NRS061;");
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNrsDoesNotShadowNr() {
+        // NRS061; must dispatch to handleNRS, NOT handleNR — verify by checking
+        // the ssnr fields populate while the nr fields remain at defaults.
+        RadioState rs;
+        rs.parseCATCommand("NRS061;");
+        QCOMPARE(rs.ssnrLevel(), 6);
+        QCOMPARE(rs.ssnrEnabled(), true);
+        QCOMPARE(rs.noiseReductionLevel(), 0);
+        QCOMPARE(rs.noiseReductionEnabled(), false);
+    }
+
+    void testNrsSubParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("NRS$081;");
+        QCOMPARE(rs.ssnrLevelB(), 8);
+        QCOMPARE(rs.ssnrEnabledB(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNrsSubDoesNotShadowNrSub() {
+        RadioState rs;
+        rs.parseCATCommand("NRS$081;");
+        QCOMPARE(rs.ssnrLevelB(), 8);
+        QCOMPARE(rs.noiseReductionLevelB(), 0);
+        QCOMPARE(rs.noiseReductionEnabledB(), false);
+    }
+
     // --- PA / PA$ (Preamp: PAnm; n=level, m=on/off) ---
     void testPaParsesLevelEnabled() {
         RadioState rs;

@@ -240,6 +240,12 @@ void RadioState::setNoiseReductionLevel(int level) {
 void RadioState::setNoiseReductionLevelB(int level) {
     ProcessingHandlers::setNoiseReductionLevelB(m_processingState, *this, level);
 }
+void RadioState::setSsnrLevel(int level) {
+    ProcessingHandlers::setSsnrLevel(m_processingState, *this, level);
+}
+void RadioState::setSsnrLevelB(int level) {
+    ProcessingHandlers::setSsnrLevelB(m_processingState, *this, level);
+}
 void RadioState::setManualNotchPitch(int pitch) {
     ProcessingHandlers::setManualNotchPitch(m_processingState, *this, pitch);
 }
@@ -551,6 +557,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"SM$", [this](const QString &c) { handleSMSub(c); }});
     m_commandHandlers.append({"NB$", [this](const QString &c) { handleNBSub(c); }});
     m_commandHandlers.append({"NR$", [this](const QString &c) { handleNRSub(c); }});
+    m_commandHandlers.append({"NRS$", [this](const QString &c) { handleNRSSub(c); }});
     m_commandHandlers.append({"PA$", [this](const QString &c) { handlePASub(c); }});
     m_commandHandlers.append({"RA$", [this](const QString &c) { handleRASub(c); }});
     m_commandHandlers.append({"GT$", [this](const QString &c) { handleGTSub(c); }});
@@ -623,6 +630,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"RX", [this](const QString &c) { handleRX(c); }});
     m_commandHandlers.append({"NB", [this](const QString &c) { handleNB(c); }});
     m_commandHandlers.append({"NR", [this](const QString &c) { handleNR(c); }});
+    m_commandHandlers.append({"NRS", [this](const QString &c) { handleNRS(c); }});
     // NA — deduplicated via handleBoolPair
     m_commandHandlers.append({"NA", [this](const QString &c) {
                                   handleBoolPair(c, 2, m_processingState.autoNotchEnabled, &RadioState::notchChanged);
@@ -810,6 +818,12 @@ void RadioState::handleNR(const QString &cmd) {
 }
 void RadioState::handleNRSub(const QString &cmd) {
     ProcessingHandlers::handleNRSub(m_processingState, *this, cmd);
+}
+void RadioState::handleNRS(const QString &cmd) {
+    ProcessingHandlers::handleNRS(m_processingState, *this, cmd);
+}
+void RadioState::handleNRSSub(const QString &cmd) {
+    ProcessingHandlers::handleNRSSub(m_processingState, *this, cmd);
 }
 void RadioState::handlePA(const QString &cmd) {
     ProcessingHandlers::handlePA(m_processingState, *this, cmd);
