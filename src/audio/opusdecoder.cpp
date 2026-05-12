@@ -58,28 +58,36 @@ QByteArray OpusDecoder::decodeK4Packet(const QByteArray &packet) {
     // Decode based on encode mode — output raw normalized stereo [main, sub, main, sub, ...]
     // Volume/routing/balance is applied later at playback time in AudioEngine::feedAudioDevice()
     switch (encodeMode) {
-    case 0x00: // EM0 - RAW 32-bit signed integer stereo PCM (S32LE)
+    case 0x00: // EM0 - 32-bit container, S16-range payload (see WHY below)
     {
         const qint32 *stereoSamples = reinterpret_cast<const qint32 *>(audioData.constData());
         int totalSamples = audioData.size() / sizeof(qint32);
 
         QByteArray out(totalSamples * sizeof(float), Qt::Uninitialized);
         float *dst = reinterpret_cast<float *>(out.data());
+        // WHY: EM0 is documented as "RAW 32-bit float" but the K4 actually sends S32LE
+        // integers whose values stay in the S16 range with ~4× headroom (~±32k typical,
+        // bursts to ~131k on loud transients). Dividing by 2^31 made the audio inaudible;
+        // dividing by 2^15 (S16) clipped transients to a square wave. Empirical peak
+        // probe → 2^17 nominal range, so NORMALIZE_K4_RAW keeps headroom for transients.
         for (int i = 0; i < totalSamples; i++) {
-            dst[i] = static_cast<float>(stereoSamples[i]) * NORMALIZE_32BIT * K4_GAIN_BOOST;
+            dst[i] = static_cast<float>(stereoSamples[i]) * NORMALIZE_K4_RAW;
         }
         return out;
     }
 
-    case 0x01: // EM1 - RAW 16-bit S16LE stereo PCM (full scale, no boost needed)
+    case 0x01: // EM1 - RAW 16-bit S16LE stereo PCM
     {
         const qint16 *stereoSamples = reinterpret_cast<const qint16 *>(audioData.constData());
         int totalSamples = audioData.size() / sizeof(qint16);
 
         QByteArray out(totalSamples * sizeof(float), Qt::Uninitialized);
         float *dst = reinterpret_cast<float *>(out.data());
+        // WHY: K4 ships EM1 at ~-35 dBFS (peaks 480-600 in qint16 across many seconds of
+        // audio), which is ~18× quieter than EM0 in normalized terms. Apply 16× boost so
+        // EM1 perceived loudness matches EM0 (~0.26 typical float vs EM0's ~0.29).
         for (int i = 0; i < totalSamples; i++) {
-            dst[i] = static_cast<float>(stereoSamples[i]) * NORMALIZE_16BIT; // No boost for RAW
+            dst[i] = static_cast<float>(stereoSamples[i]) * NORMALIZE_16BIT * K4_EM1_GAIN_BOOST;
         }
         return out;
     }

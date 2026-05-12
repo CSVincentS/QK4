@@ -6,9 +6,14 @@
 
 /**
  * @brief Opus decoder wrapper for inbound K4 audio packets. Handles K4's audio-packet framing
- *        (EM0..EM3), applies the K4_GAIN_BOOST to quiet Opus/S32LE modes (EM1/S16LE already at
- *        full scale), and emits stereo Float32 PCM. Volume/mix/balance is applied later in
+ *        (EM0..EM3) and emits stereo Float32 PCM. Volume/mix/balance is applied later in
  *        AudioEngine at playback time, not here.
+ *
+ *        Per-mode gain notes:
+ *          EM0 (32-bit container, S16-range payload) — S16 normalization, no boost
+ *          EM1 (S16LE)                               — S16 normalization, no boost
+ *          EM2 (Opus → S16)                          — S16 normalization × K4_GAIN_BOOST
+ *          EM3 (Opus → float)                        — K4_GAIN_BOOST only
  */
 class OpusDecoder : public QObject {
     Q_OBJECT
@@ -38,11 +43,18 @@ private:
 
     // Normalization constants
     static constexpr float NORMALIZE_16BIT = 1.0f / 32768.0f;
-    static constexpr float NORMALIZE_32BIT = 1.0f / 2147483648.0f;
+    // WHY: K4 RAW modes (EM0/EM1) ship samples with ~4× headroom over nominal S16
+    // (empirical peaks up to ~131k = 2^17). Normalizing by 2^17 keeps transients
+    // ≤ 1.0 in float so the ±1.0 clamp in AudioEngine never hard-clips them.
+    static constexpr float NORMALIZE_K4_RAW = 1.0f / 131072.0f;
 
-    // K4-specific gain boost (Opus and S32LE audio is very quiet)
-    // Note: EM1 (S16LE RAW) is already at full scale and doesn't need boost
+    // K4-specific gain boost for Opus modes (EM2/EM3).
     static constexpr float K4_GAIN_BOOST = 32.0f;
+
+    // K4 EM1 (S16 RAW) gain boost. Empirical: K4 ships EM1 at ~-35 dBFS (peaks 480-600 in
+    // qint16 across many seconds of audio), ~18× quieter than EM0. 16× brings typical
+    // amplitude to ~0.26 in float, matching EM0's ~0.29 perceived loudness.
+    static constexpr float K4_EM1_GAIN_BOOST = 16.0f;
 };
 
 #endif // OPUSDECODER_H
