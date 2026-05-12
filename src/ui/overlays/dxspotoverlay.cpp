@@ -25,6 +25,15 @@ void DxSpotOverlay::setFrequencyRange(qint64 centerFreq, int spanHz) {
     }
 }
 
+void DxSpotOverlay::setFontPixelSize(int px) {
+    const int clamped = qBound(K4Styles::Dimensions::FontSizeSpotMin, px, K4Styles::Dimensions::FontSizeSpotMax);
+    if (m_fontPixelSize == clamped)
+        return;
+    m_fontPixelSize = clamped;
+    layoutLabels();
+    update();
+}
+
 float DxSpotOverlay::freqToX(qint64 freq) const {
     if (m_spanHz <= 0)
         return -1.0f;
@@ -37,13 +46,17 @@ void DxSpotOverlay::layoutLabels() {
     if (m_spots.isEmpty() || m_spanHz <= 0 || width() <= 0)
         return;
 
-    // Dynamic row count based on available vertical space
-    int availableHeight = height() - BOTTOM_MARGIN - TOP_MARGIN;
-    if (availableHeight < ROW_HEIGHT)
-        return;
-    int maxRows = qMin(MAX_DISPLAY_ROWS, qMax(1, availableHeight / ROW_HEIGHT));
+    // Float spots at the vertical midpoint of the spectrum area. Labels stack upward
+    // from the midpoint; the bottom of the lowest row sits exactly on height()/2.
+    const int rh = rowHeight();
+    const int stackBase = height() / 2;
 
-    QFont font = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall);
+    int availableHeight = stackBase - TOP_MARGIN;
+    if (availableHeight < rh)
+        return;
+    int maxRows = qMin(MAX_DISPLAY_ROWS, qMax(1, availableHeight / rh));
+
+    QFont font = K4Styles::Fonts::paintFont(m_fontPixelSize);
     QFontMetrics fm(font);
 
     // Pre-pass: count spots per frequency cluster (within 500 Hz) and limit each to
@@ -128,9 +141,9 @@ void DxSpotOverlay::layoutLabels() {
         label.frequencyHz = spot->frequencyHz;
         label.xPixel = xInt;
         label.row = assignedRow;
-        // Bottom-up: row 0 just above the margin, higher rows stack upward
-        int y = height() - BOTTOM_MARGIN - (assignedRow + 1) * ROW_HEIGHT;
-        label.rect = QRect(labelLeft, y, textWidth, ROW_HEIGHT);
+        // Bottom-up: row 0 just above the noise-floor anchor (or fallback margin), higher rows stack upward
+        int y = qBound(TOP_MARGIN, stackBase - (assignedRow + 1) * rh, height() - rh);
+        label.rect = QRect(labelLeft, y, textWidth, rh);
         m_labels.append(label);
     }
 
@@ -148,8 +161,8 @@ void DxSpotOverlay::layoutLabels() {
         int tw = fm.horizontalAdvance(label.callsign);
         int lx = label.xPixel - tw / 2;
         label.row = badgeRow;
-        int y = height() - BOTTOM_MARGIN - (badgeRow + 1) * ROW_HEIGHT;
-        label.rect = QRect(lx, y, tw, ROW_HEIGHT);
+        int y = qBound(TOP_MARGIN, stackBase - (badgeRow + 1) * rh, height() - rh);
+        label.rect = QRect(lx, y, tw, rh);
     }
 }
 
@@ -161,7 +174,7 @@ void DxSpotOverlay::paintEvent(QPaintEvent *event) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    QFont font = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall);
+    QFont font = K4Styles::Fonts::paintFont(m_fontPixelSize);
     painter.setFont(font);
 
     QColor textColor(K4Styles::Colors::VfoACyan);

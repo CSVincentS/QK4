@@ -314,6 +314,11 @@ constexpr int FontSizeTitle = 16;        // Large control buttons (+/-)
 constexpr int FontSizeIndicator = 18;    // TX/RX/SPLIT indicator labels
 constexpr int FontSizeFrequency = 32;    // VFO frequency displays (FrequencyDisplayWidget, VfoWidget)
 
+// DX cluster spot labels — user-configurable in Options → DX Cluster (FontSizeSpotMin..FontSizeSpotMax).
+constexpr int FontSizeSpot = 11;
+constexpr int FontSizeSpotMin = 8;
+constexpr int FontSizeSpotMax = 16;
+
 // =============================================================================
 // Popup Menu Font Sizes (standardized for horizontal control bar popups)
 // =============================================================================

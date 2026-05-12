@@ -5,6 +5,7 @@
 #include "ui/styling/k4styles.h"
 #include "ui/widgets/vfowidget.h"
 #include "dxclustercontroller.h"
+#include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 
 #include "ui/overlays/dxspotoverlay.h"
@@ -225,6 +226,19 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_spotOverlayA->show();
     m_spotOverlayB = new DxSpotOverlay(m_panadapterB);
     m_spotOverlayB->show();
+
+    // Apply persisted spot label font size, and live-update both overlays when the user
+    // changes it in Options. Reuse the existing dxClusterSettingsChanged() signal —
+    // setFontPixelSize() is a no-op when the value hasn't moved, so callsign/age changes
+    // that also fire this signal don't cause unnecessary repaints.
+    const int spotFontSize = RadioSettings::instance()->dxClusterSpotFontSize();
+    m_spotOverlayA->setFontPixelSize(spotFontSize);
+    m_spotOverlayB->setFontPixelSize(spotFontSize);
+    connect(RadioSettings::instance(), &RadioSettings::dxClusterSettingsChanged, this, [this]() {
+        const int fs = RadioSettings::instance()->dxClusterSpotFontSize();
+        m_spotOverlayA->setFontPixelSize(fs);
+        m_spotOverlayB->setFontPixelSize(fs);
+    });
 
     // WHY: wire click-to-tune here (where overlays are created), not in setDxClusterController.
     // mainwindow calls setDxClusterController BEFORE setupSpectrumUI, so the overlays don't yet

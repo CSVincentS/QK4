@@ -4,6 +4,7 @@
 #include "ui/styling/k4styles.h"
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QSpinBox>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -224,12 +225,27 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         m_ageValueLabel->setText(QString("%1 min").arg(value));
     });
 
+    auto *fontLabel = new QLabel("Spot label size:", this);
+    fontLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    fontLabel->setFixedWidth(100);
+    m_spotFontSizeSpin = new QSpinBox(this);
+    m_spotFontSizeSpin->setRange(K4Styles::Dimensions::FontSizeSpotMin, K4Styles::Dimensions::FontSizeSpotMax);
+    m_spotFontSizeSpin->setSingleStep(1);
+    m_spotFontSizeSpin->setSuffix(" px");
+    m_spotFontSizeSpin->setFixedWidth(70);
+    m_spotFontSizeSpin->setValue(RadioSettings::instance()->dxClusterSpotFontSize());
+    connect(m_spotFontSizeSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+            [](int value) { RadioSettings::instance()->setDxClusterSpotFontSize(value); });
+
     settingsRow->addWidget(callLabel);
     settingsRow->addWidget(m_callsignEdit);
     settingsRow->addSpacing(K4Styles::Dimensions::PaddingMedium);
     settingsRow->addWidget(ageLabel);
     settingsRow->addWidget(m_ageSlider, 1);
     settingsRow->addWidget(m_ageValueLabel);
+    settingsRow->addSpacing(K4Styles::Dimensions::PaddingMedium);
+    settingsRow->addWidget(fontLabel);
+    settingsRow->addWidget(m_spotFontSizeSpin);
     layout->addLayout(settingsRow);
 
     // === Separator ===

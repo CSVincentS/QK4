@@ -413,6 +413,19 @@ void RadioSettings::setDxClusterCallsign(const QString &callsign) {
     }
 }
 
+int RadioSettings::dxClusterSpotFontSize() const {
+    return m_dxClusterSpotFontSize;
+}
+
+void RadioSettings::setDxClusterSpotFontSize(int sizePx) {
+    sizePx = qBound(8, sizePx, 16); // mirrors K4Styles::Dimensions::FontSizeSpot{Min,Max}
+    if (m_dxClusterSpotFontSize != sizePx) {
+        m_dxClusterSpotFontSize = sizePx;
+        save();
+        emit dxClusterSettingsChanged();
+    }
+}
+
 void RadioSettings::load() {
     int count = m_settings.beginReadArray("radios");
     m_radios.clear();
@@ -461,6 +474,7 @@ void RadioSettings::load() {
     m_settings.endArray();
     m_dxClusterSpotAge = m_settings.value("dxCluster/spotAge", 600).toInt();
     m_dxClusterCallsign = m_settings.value("dxCluster/callsign", "").toString();
+    m_dxClusterSpotFontSize = qBound(8, m_settings.value("dxCluster/spotFontSize", 11).toInt(), 16);
 
     // Seed default cluster entry on first run
     if (m_dxClusters.isEmpty()) {
@@ -594,6 +608,7 @@ void RadioSettings::save() {
     m_settings.endArray();
     m_settings.setValue("dxCluster/spotAge", m_dxClusterSpotAge);
     m_settings.setValue("dxCluster/callsign", m_dxClusterCallsign);
+    m_settings.setValue("dxCluster/spotFontSize", m_dxClusterSpotFontSize);
 
     // RX EQ Presets (4 slots)
     for (int j = 0; j < 4; ++j) {

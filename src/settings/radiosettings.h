@@ -126,6 +126,8 @@ public:
     void setDxClusterSpotAge(int seconds);
     QString dxClusterCallsign() const;
     void setDxClusterCallsign(const QString &callsign);
+    int dxClusterSpotFontSize() const;
+    void setDxClusterSpotFontSize(int sizePx);
 
     // RX EQ Presets (4 slots)
     EqPreset rxEqPreset(int index) const;                  // Get preset 0-3
@@ -200,6 +202,7 @@ private:
     QVector<DxClusterEntry> m_dxClusters;
     int m_dxClusterSpotAge = 600; // Default 10 minutes
     QString m_dxClusterCallsign;
+    int m_dxClusterSpotFontSize = 11; // K4Styles::Dimensions::FontSizeSpot default; clamped to [8, 16]
 
     QSettings m_settings;
 };
