@@ -30,6 +30,12 @@ struct RxTxMeterState {
     double supplyVoltage = 0.0;
     double supplyCurrent = 0.0;
 
+    // PA drain current (SIRF PM divided by 768). Empirically matches the K4 front-panel
+    // "Id" meter within ~1 A across the full power range. PM is the peak-held aggregate
+    // the K4's own display shows; LM (in the same SIRF frame) is just one stage's drain
+    // and reads ~5–7 A low.
+    double paDrainCurrent = 0.0;
+
     // TX/RX transition.
     bool isTransmitting = false;
 
@@ -65,6 +71,7 @@ void handleRV(RxTxMeterState &state, RadioState &owner, const QString &cmd);
 void handleER(RxTxMeterState &state, RadioState &owner, const QString &cmd);
 void handleMN(RxTxMeterState &state, RadioState &owner, const QString &cmd);
 void handleSIFP(RxTxMeterState &state, RadioState &owner, const QString &cmd);
+void handleSIRF(RxTxMeterState &state, RadioState &owner, const QString &cmd);
 void handleSB(RxTxMeterState &state, RadioState &owner, const QString &cmd);
 void handleDV(RxTxMeterState &state, RadioState &owner, const QString &cmd);
 void handleTS(RxTxMeterState &state, RadioState &owner, const QString &cmd);

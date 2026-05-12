@@ -39,8 +39,17 @@ public:
     void enqueueAudio(const QByteArray &pcmData);
     Q_INVOKABLE void flushQueue();
 
-    Q_INVOKABLE void setMicEnabled(bool enabled);
-    bool isMicEnabled() const { return m_micEnabled.load(std::memory_order_relaxed); }
+    // Mic device lifecycle is decoupled from per-PTT send-gating: the QAudioSource is opened
+    // once on first PTT (preserving the macOS permission deferral noted in the constructor)
+    // and stays open for the lifetime of the K4 connection, so subsequent PTT presses don't
+    // pay the OS audio backend renegotiation cost (200 ms – 1.5 s on PipeWire/CoreAudio/WASAPI).
+    // openMic() is idempotent. closeMic() is only called from teardown paths (stop(), device
+    // swap) — never per-PTT. The TX send-gate lives in AudioController::onMicrophoneFrame.
+    Q_INVOKABLE void openMic();
+    Q_INVOKABLE void closeMic();
+    Q_INVOKABLE void flushMicBuffer(); // Called on PTT-on edge so a partial-frame tail from
+                                       // the previous transmission cannot leak into the new one.
+    bool isMicOpen() const { return m_micEnabled.load(std::memory_order_relaxed); }
 
     // Channel volume controls (applied at playback time for instant response)
     void setMainVolume(float volume);

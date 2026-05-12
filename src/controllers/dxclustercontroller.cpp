@@ -129,6 +129,10 @@ void DxClusterController::disconnectCluster(int index) {
     if (!m_instances.contains(index))
         return;
     QMetaObject::invokeMethod(m_instances[index].client, "disconnectFromHost", Qt::QueuedConnection);
+    // WHY: clear spots synchronously so the overlay updates immediately. The async lambda on
+    // stateChanged is unreliable here — setState() is a no-op when the socket already
+    // self-disconnected (server kick / idle timeout), leaving stale spots on screen.
+    clearSpots();
 }
 
 void DxClusterController::disconnectAll() {

@@ -191,8 +191,8 @@ private:
     int m_waterfallTierBinCount = 0; // Bin count written to current waterfall row
     float m_waterfallTierSpanHz = 0; // Tier span for current waterfall data
     // Waterfall data - sized for 4K/HiDPI displays
-    // Memory: 4096 × 1024 × 1 byte = 4 MB (trivial for modern GPUs)
-    static constexpr int BASE_WATERFALL_HISTORY = 1024;
+    // Memory: 4096 × 480 × 1 byte = ~1.9 MB (trivial for modern GPUs)
+    static constexpr int BASE_WATERFALL_HISTORY = 480;
     static constexpr int BASE_TEXTURE_WIDTH = 4096;
     int m_textureWidth = BASE_TEXTURE_WIDTH;
     int m_waterfallHistory = BASE_WATERFALL_HISTORY;

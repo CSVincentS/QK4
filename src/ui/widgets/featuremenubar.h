@@ -15,6 +15,7 @@ class FeatureMenuBar : public QWidget {
 
 public:
     enum Feature { Attenuator, NbLevel, NrAdjust, ManualNotch };
+    enum NrEngine { Lms, Ssnr };
 
     explicit FeatureMenuBar(QWidget *parent = nullptr);
 
@@ -30,11 +31,16 @@ public:
     void setValueUnit(const QString &unit);
     void setNbFilter(int filter); // 0=NONE, 1=NARROW, 2=WIDE
 
+    // NR engine selection (only meaningful when currentFeature() == NrAdjust)
+    NrEngine currentNrEngine() const { return m_nrEngine; }
+    void setNrEngine(NrEngine engine);
+
 signals:
     void toggleRequested();
     void incrementRequested();
     void decrementRequested();
     void extraButtonClicked();
+    void nrEngineToggleRequested(); // Title label clicked while showing NR ADJUST
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -47,12 +53,14 @@ private:
 
     QPushButton *m_titleLabel;
     QPushButton *m_toggleBtn;
+    QPushButton *m_nrEngineBtn; // Shown only for NrAdjust — toggles LMS / SSNR
     QPushButton *m_extraBtn;
     QPushButton *m_valueLabel;
     QPushButton *m_decrementBtn;
     QPushButton *m_incrementBtn;
 
     Feature m_currentFeature = Attenuator;
+    NrEngine m_nrEngine = Lms;
     bool m_featureEnabled = false;
     int m_value = 0;
     QString m_valueUnit;

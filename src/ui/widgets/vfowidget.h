@@ -35,7 +35,7 @@ public:
     void setPreamp(bool on, int level);
     void setAtt(bool on, int level);
     void setNB(bool on);
-    void setNR(bool on);
+    void setNR(bool lmsOn, bool ssnrOn);
     void setNotch(bool autoEnabled, bool manualEnabled);
     void setApf(bool enabled, int bandwidth); // APF: 0=30Hz, 1=50Hz, 2=150Hz
 

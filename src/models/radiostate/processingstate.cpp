@@ -11,6 +11,8 @@ void ProcessingState::reset() {
     noiseBlankerFilterWidth = 0;
     noiseReductionLevel = 0;
     noiseReductionEnabled = false;
+    ssnrLevel = 0;
+    ssnrEnabled = false;
     autoNotchEnabled = false;
     manualNotchEnabled = false;
     manualNotchPitch = 1000;
@@ -26,6 +28,8 @@ void ProcessingState::reset() {
     noiseBlankerFilterWidthB = 0;
     noiseReductionLevelB = 0;
     noiseReductionEnabledB = false;
+    ssnrLevelB = 0;
+    ssnrEnabledB = false;
     autoNotchEnabledB = false;
     manualNotchEnabledB = false;
     manualNotchPitchB = 1000;
@@ -132,6 +136,46 @@ void handleNRSub(ProcessingState &state, RadioState &owner, const QString &cmd) 
         return;
     state.noiseReductionLevelB = level;
     state.noiseReductionEnabledB = newEnabled;
+    emit owner.processingChangedB();
+}
+
+void handleNRS(ProcessingState &state, RadioState &owner, const QString &cmd) {
+    // NRSnnm : nn=level 00-10, m=on/off (peer to LMS NR, mutually exclusive on K4)
+    if (cmd.length() < 4)
+        return;
+    const QString nrStr = cmd.mid(3);
+    if (nrStr.length() < 3)
+        return;
+    bool ok1, ok2;
+    const int level = nrStr.left(2).toInt(&ok1);
+    const int enabled = nrStr.right(1).toInt(&ok2);
+    if (!ok1 || !ok2)
+        return;
+    const bool newEnabled = (enabled == 1);
+    if (level == state.ssnrLevel && newEnabled == state.ssnrEnabled)
+        return;
+    state.ssnrLevel = level;
+    state.ssnrEnabled = newEnabled;
+    emit owner.processingChanged();
+}
+
+void handleNRSSub(ProcessingState &state, RadioState &owner, const QString &cmd) {
+    // NRS$nnm : sub-RX spectral-subtraction NR
+    if (cmd.length() < 5)
+        return;
+    const QString nrStr = cmd.mid(4);
+    if (nrStr.length() < 3)
+        return;
+    bool ok1, ok2;
+    const int level = nrStr.left(2).toInt(&ok1);
+    const int enabled = nrStr.right(1).toInt(&ok2);
+    if (!ok1 || !ok2)
+        return;
+    const bool newEnabled = (enabled == 1);
+    if (level == state.ssnrLevelB && newEnabled == state.ssnrEnabledB)
+        return;
+    state.ssnrLevelB = level;
+    state.ssnrEnabledB = newEnabled;
     emit owner.processingChangedB();
 }
 
@@ -352,6 +396,20 @@ void setNoiseReductionLevel(ProcessingState &state, RadioState &owner, int level
 void setNoiseReductionLevelB(ProcessingState &state, RadioState &owner, int level) {
     if (state.noiseReductionLevelB != level) {
         state.noiseReductionLevelB = qMin(level, 10);
+        emit owner.processingChangedB();
+    }
+}
+
+void setSsnrLevel(ProcessingState &state, RadioState &owner, int level) {
+    if (state.ssnrLevel != level) {
+        state.ssnrLevel = qMin(level, 10);
+        emit owner.processingChanged();
+    }
+}
+
+void setSsnrLevelB(ProcessingState &state, RadioState &owner, int level) {
+    if (state.ssnrLevelB != level) {
+        state.ssnrLevelB = qMin(level, 10);
         emit owner.processingChangedB();
     }
 }

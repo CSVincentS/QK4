@@ -922,7 +922,11 @@ void MiniPanRhiWidget::clear() {
 }
 
 float MiniPanRhiWidget::normalizeDb(float db) {
-    return qBound(0.0f, (db - m_minDb) / (m_maxDb - m_minDb), 1.0f);
+    // WHY: Only the lower bound is clamped. Bins stronger than m_maxDb intentionally return
+    // values > 1.0 so the CPU-rasterized trace can climb to the chart's top edge (qMax pin
+    // on y) instead of flat-topping below it. The waterfall byte-cast path re-clamps via
+    // qBound(0, ..., 255), so it stays safe.
+    return qMax(0.0f, (db - m_minDb) / (m_maxDb - m_minDb));
 }
 
 int MiniPanRhiWidget::bandwidthForMode(const QString &mode) const {

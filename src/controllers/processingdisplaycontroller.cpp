@@ -38,7 +38,7 @@ void ProcessingDisplayController::refreshVfoA() {
     m_vfoA->setAtt(m_radioState->attenuatorEnabled() && m_radioState->attenuatorLevel() > 0,
                    m_radioState->attenuatorLevel());
     m_vfoA->setNB(m_radioState->noiseBlankerEnabled());
-    m_vfoA->setNR(m_radioState->noiseReductionEnabled());
+    m_vfoA->setNR(m_radioState->noiseReductionEnabled(), m_radioState->ssnrEnabled());
 }
 
 void ProcessingDisplayController::refreshVfoB() {
@@ -47,5 +47,5 @@ void ProcessingDisplayController::refreshVfoB() {
     m_vfoB->setAtt(m_radioState->attenuatorEnabledB() && m_radioState->attenuatorLevelB() > 0,
                    m_radioState->attenuatorLevelB());
     m_vfoB->setNB(m_radioState->noiseBlankerEnabledB());
-    m_vfoB->setNR(m_radioState->noiseReductionEnabledB());
+    m_vfoB->setNR(m_radioState->noiseReductionEnabledB(), m_radioState->ssnrEnabledB());
 }

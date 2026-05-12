@@ -41,7 +41,7 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "Connection to K4 / status indicator wrong" | ConnectionController + MainWindow::updateConnectionState | `src/controllers/connectioncontroller.cpp` + `src/mainwindow.cpp` |
 | "Top status bar label / KPA1500 badge wrong" | StatusBarController | `src/controllers/statusbarcontroller.cpp` |
 | "Audio (RX/TX, PTT) not working" | AudioController | `src/controllers/audiocontroller.cpp` |
-| "KPOD / HaliKey / CW keyer / sidetone not working" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
+| "KPOD / HaliKey / sidetone not working" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
 | "Spectrum / panadapter / click-tune not working" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
 | "DX cluster spots not appearing / cluster connect fail" | DxClusterController | `src/controllers/dxclustercontroller.cpp` |
 

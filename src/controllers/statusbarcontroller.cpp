@@ -99,8 +99,20 @@ StatusBarController::StatusBarController(RadioState *radioState, NetworkMetrics 
     // companion updates; label updates happen here directly.
     connect(m_radioState, &RadioState::supplyVoltageChanged, this,
             [this](double volts) { m_voltageLabel->setText(QString("%1 V").arg(volts, 0, 'f', 1)); });
-    connect(m_radioState, &RadioState::supplyCurrentChanged, this,
-            [this](double amps) { m_currentLabel->setText(QString("%1 A").arg(amps, 0, 'f', 1)); });
+    // Mirror the K4 front-panel meter: at idle show supply current (SIFP IS); during TX
+    // show PA drain current (SIRF PM/768). The drain threshold (0.1 A) keeps us on the
+    // supply value during the ~100–200 ms gap between TX-edge and the first TX-time SIRF
+    // frame — without it the display would briefly read 0 A because paDrainCurrent is
+    // still the last RX-time value (PM:0 → 0 A) until the K4 emits a fresh SIRF.
+    auto updateAmps = [this]() {
+        const double drain = m_radioState->paDrainCurrent();
+        const bool useDrain = m_radioState->isTransmitting() && drain > 0.1;
+        const double amps = useDrain ? drain : m_radioState->supplyCurrent();
+        m_currentLabel->setText(QString("%1 A").arg(amps, 0, 'f', 1));
+    };
+    connect(m_radioState, &RadioState::supplyCurrentChanged, this, updateAmps);
+    connect(m_radioState, &RadioState::paDrainCurrentChanged, this, updateAmps);
+    connect(m_radioState, &RadioState::transmitStateChanged, this, updateAmps);
     connect(m_radioState, &RadioState::swrChanged, this,
             [this](double swr) { m_swrLabel->setText(QString("%1:1").arg(swr, 0, 'f', 1)); });
 

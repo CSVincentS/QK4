@@ -154,6 +154,19 @@ void RadioSettings::setSubVolume(int value) {
     m_settings.sync();
 }
 
+int RadioSettings::textDecodeFontSize(bool subRx) const {
+    // Default 9 px matches K4Styles::Dimensions::FontSizeNormal — keep first-launch look.
+    const int defaultSize = 9;
+    int value = m_settings.value(subRx ? "textDecode/subFontSize" : "textDecode/mainFontSize", defaultSize).toInt();
+    return qBound(7, value, 24);
+}
+
+void RadioSettings::setTextDecodeFontSize(bool subRx, int sizePx) {
+    sizePx = qBound(7, sizePx, 24);
+    m_settings.setValue(subRx ? "textDecode/subFontSize" : "textDecode/mainFontSize", sizePx);
+    m_settings.sync();
+}
+
 int RadioSettings::micGain() const {
     return m_settings.value("audio/micGain", 25).toInt();
 }

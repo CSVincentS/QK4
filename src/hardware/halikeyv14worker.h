@@ -25,7 +25,7 @@ private:
     void monitorLoop(); // Platform-specific main loop
     bool openNativePort();
     void closeNativePort();
-    bool readPinState(bool &ditState, bool &dahState);
+    bool readPinState(bool &ditState, bool &dahState, bool &pttState);
 
     // Debounce: 2 consecutive reads at ~500us = ~1ms
     static constexpr int DEBOUNCE_COUNT = 2;

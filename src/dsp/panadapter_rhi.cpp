@@ -1505,7 +1505,11 @@ void PanadapterRhiWidget::updateWaterfallData() {
 }
 
 float PanadapterRhiWidget::normalizeDb(float db) {
-    return qBound(0.0f, (db - m_minDb) / (m_maxDb - m_minDb), 1.0f);
+    // WHY: Only the lower bound is clamped. Bins stronger than m_maxDb intentionally return
+    // values > 1.0 so the spectrum-fill shader (peakY = 1.0 - value) lets the trace climb to
+    // the chart's top edge instead of flat-topping at (1.0 - baseline) * 0.95. The waterfall
+    // byte-cast path re-clamps via qBound(0, ..., 255), so it stays safe.
+    return qMax(0.0f, (db - m_minDb) / (m_maxDb - m_minDb));
 }
 
 float PanadapterRhiWidget::freqToNormalized(qint64 freq) {

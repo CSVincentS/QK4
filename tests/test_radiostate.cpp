@@ -630,6 +630,56 @@ private slots:
         QCOMPARE(spy.count(), 0);
     }
 
+    // --- NRS / NRS$ (Spectral-subtraction NR: NRSnnm; LMS NR's peer) ---
+    void testNrsParsesLevelEnabled() {
+        RadioState rs;
+        rs.parseCATCommand("NRS061;");
+        QCOMPARE(rs.ssnrLevel(), 6);
+        QCOMPARE(rs.ssnrEnabled(), true);
+    }
+
+    void testNrsDisable() {
+        RadioState rs;
+        rs.parseCATCommand("NRS061;");
+        rs.parseCATCommand("NRS060;");
+        QCOMPARE(rs.ssnrEnabled(), false);
+    }
+
+    void testNrsSignalEmitted() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChanged);
+        rs.parseCATCommand("NRS061;");
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNrsDoesNotShadowNr() {
+        // NRS061; must dispatch to handleNRS, NOT handleNR — verify by checking
+        // the ssnr fields populate while the nr fields remain at defaults.
+        RadioState rs;
+        rs.parseCATCommand("NRS061;");
+        QCOMPARE(rs.ssnrLevel(), 6);
+        QCOMPARE(rs.ssnrEnabled(), true);
+        QCOMPARE(rs.noiseReductionLevel(), 0);
+        QCOMPARE(rs.noiseReductionEnabled(), false);
+    }
+
+    void testNrsSubParsesAndEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::processingChangedB);
+        rs.parseCATCommand("NRS$081;");
+        QCOMPARE(rs.ssnrLevelB(), 8);
+        QCOMPARE(rs.ssnrEnabledB(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testNrsSubDoesNotShadowNrSub() {
+        RadioState rs;
+        rs.parseCATCommand("NRS$081;");
+        QCOMPARE(rs.ssnrLevelB(), 8);
+        QCOMPARE(rs.noiseReductionLevelB(), 0);
+        QCOMPARE(rs.noiseReductionEnabledB(), false);
+    }
+
     // --- PA / PA$ (Preamp: PAnm; n=level, m=on/off) ---
     void testPaParsesLevelEnabled() {
         RadioState rs;
@@ -2335,6 +2385,22 @@ private slots:
         rs.parseCATCommand("SIFPVS:13.8,IS:2.5;");
         QCOMPARE(rs.supplyVoltage(), 13.8);
         QCOMPARE(rs.supplyCurrent(), 2.5);
+
+        // SIRF carries the PA drain current as PM / 768 — matches the K4 front-panel "Id".
+        QSignalSpy idSpy(&rs, &RadioState::paDrainCurrentChanged);
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:30,LM:1196,PA:0.6,PM:12298,PT:31;");
+        QCOMPARE(rs.paDrainCurrent(), 12298.0 / 768.0); // ~16.01 A at 50 W TX
+        QCOMPARE(idSpy.count(), 1);
+        // Idle SIRF (PM:0) clears the drain reading.
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:29,LM:5,PA:0.6,PM:0,PT:30;");
+        QCOMPARE(rs.paDrainCurrent(), 0.0);
+        // Same value re-emitted should not re-fire the signal.
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:29,LM:5,PA:0.6,PM:0,PT:30;");
+        QCOMPARE(idSpy.count(), 2);
+        // 100 W steady carrier sample.
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:37,LM:1519,PA:0.6,PM:15976,PT:46;");
+        QCOMPARE(rs.paDrainCurrent(), 15976.0 / 768.0); // ~20.80 A
+        QCOMPARE(idSpy.count(), 3);
         QCOMPARE(vSpy.count(), 1);
         QCOMPARE(iSpy.count(), 1);
     }

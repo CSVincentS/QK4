@@ -13,6 +13,7 @@ void RxTxMeterState::reset() {
     forwardPower = 0.0;
     supplyVoltage = 0.0;
     supplyCurrent = 0.0;
+    paDrainCurrent = 0.0;
     isTransmitting = false;
     subReceiverEnabled = false;
     diversityEnabled = false;
@@ -193,6 +194,38 @@ void handleSIFP(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
             state.supplyCurrent = current;
             emit owner.supplyCurrentChanged(state.supplyCurrent);
         }
+    }
+}
+
+void handleSIRF(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
+    // SIRF V8:..,V5:..,LT:..,LM:..,PA:..,PM:..,PT:.. — RF deck status. We surface PM (peak
+    // measurement) divided by 768, which matches the K4's front-panel "Id" meter to within
+    // ~1 A across the full power range:
+    //
+    //   50 W TX  PM ~12298 / 768 = 16.0 A (panel: 16 A)
+    //   90 W TX  PM ~15214 / 768 = 19.8 A (panel: 19–20 A)
+    //  100 W TX  PM ~15976 / 768 = 20.8 A (panel: 20–21 A)
+    //
+    // LM (which we used to parse) is just one stage's drain (~75 % of total) and consistently
+    // under-reads the panel by 5–7 A; PM is the peak-held aggregate the K4 actually displays.
+    QString data = cmd.mid(4);
+
+    int pmIndex = data.indexOf("PM:");
+    if (pmIndex < 0)
+        return;
+    int commaIndex = data.indexOf(',', pmIndex);
+    if (commaIndex < 0)
+        commaIndex = data.indexOf(';', pmIndex);
+    QString pmStr = (commaIndex > pmIndex) ? data.mid(pmIndex + 3, commaIndex - pmIndex - 3) : data.mid(pmIndex + 3);
+    bool ok;
+    double pmRaw = pmStr.toDouble(&ok);
+    if (!ok)
+        return;
+    constexpr double K4_PM_TO_AMPS = 768.0;
+    const double current = pmRaw / K4_PM_TO_AMPS;
+    if (!qFuzzyCompare(1.0 + current, 1.0 + state.paDrainCurrent)) {
+        state.paDrainCurrent = current;
+        emit owner.paDrainCurrentChanged(state.paDrainCurrent);
     }
 }
 

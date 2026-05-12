@@ -31,7 +31,7 @@ void FeatureMenuBar::setupUi() {
         K4Styles::Dimensions::ShadowMargin + ContentMargin, K4Styles::Dimensions::ShadowMargin + 8);
     layout->setSpacing(8);
 
-    // Title — non-interactive QPushButton so text rendering matches all other buttons
+    // Title — non-interactive label across all features.
     m_titleLabel = new QPushButton("ATTENUATOR", this);
     m_titleLabel->setFixedSize(140, K4Styles::Dimensions::ButtonHeightMedium);
     m_titleLabel->setFocusPolicy(Qt::NoFocus);
@@ -44,6 +44,14 @@ void FeatureMenuBar::setupUi() {
     m_toggleBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMedium);
     m_toggleBtn->setCursor(Qt::PointingHandCursor);
     m_toggleBtn->setStyleSheet(K4Styles::menuBarButtonSmall());
+
+    // NR engine toggle — only shown for NrAdjust. Tapping flips LMS <-> SSNR.
+    m_nrEngineBtn = new QPushButton("LMS", this);
+    m_nrEngineBtn->setMinimumWidth(60);
+    m_nrEngineBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMedium);
+    m_nrEngineBtn->setCursor(Qt::PointingHandCursor);
+    m_nrEngineBtn->setStyleSheet(K4Styles::menuBarButtonSmall());
+    m_nrEngineBtn->hide();
 
     // Extra button (only shown for NB LEVEL - "FILTER NONE/NARROW/WIDE")
     m_extraBtn = new QPushButton("FILTER\nNONE", this);
@@ -86,6 +94,7 @@ void FeatureMenuBar::setupUi() {
     // Layout - compact, no stretches (popup is centered by showAboveWidget)
     layout->addWidget(m_titleLabel, 0, Qt::AlignVCenter);
     layout->addWidget(m_toggleBtn, 0, Qt::AlignVCenter);
+    layout->addWidget(m_nrEngineBtn, 0, Qt::AlignVCenter);
     layout->addWidget(m_extraBtn, 0, Qt::AlignVCenter);
     layout->addWidget(m_valueLabel, 0, Qt::AlignVCenter);
     layout->addWidget(m_decrementBtn, 0, Qt::AlignVCenter);
@@ -96,6 +105,7 @@ void FeatureMenuBar::setupUi() {
     connect(m_decrementBtn, &QPushButton::clicked, this, &FeatureMenuBar::decrementRequested);
     connect(m_incrementBtn, &QPushButton::clicked, this, &FeatureMenuBar::incrementRequested);
     connect(m_extraBtn, &QPushButton::clicked, this, &FeatureMenuBar::extraButtonClicked);
+    connect(m_nrEngineBtn, &QPushButton::clicked, this, &FeatureMenuBar::nrEngineToggleRequested);
 }
 
 void FeatureMenuBar::showForFeature(Feature feature) {
@@ -183,28 +193,41 @@ void FeatureMenuBar::updateForFeature() {
     case Attenuator:
         m_titleLabel->setText("ATTENUATOR");
         m_extraBtn->hide();
+        m_nrEngineBtn->hide();
         m_valueUnit = " dB";
         break;
     case NbLevel:
         m_titleLabel->setText("NB LEVEL");
         m_extraBtn->setText("FILTER\nNONE");
         m_extraBtn->show();
+        m_nrEngineBtn->hide();
         m_valueUnit = "";
         break;
     case NrAdjust:
         m_titleLabel->setText("NR ADJUST");
         m_extraBtn->hide();
+        m_nrEngineBtn->setText(m_nrEngine == Ssnr ? "SSNR" : "LMS");
+        m_nrEngineBtn->show();
         m_valueUnit = "";
         break;
     case ManualNotch:
         m_titleLabel->setText("MANUAL NOTCH");
         m_extraBtn->hide();
+        m_nrEngineBtn->hide();
         m_valueUnit = " Hz";
         break;
     }
 
     // Update value display with unit
     setValue(m_value);
+}
+
+void FeatureMenuBar::setNrEngine(NrEngine engine) {
+    if (m_nrEngine == engine)
+        return;
+    m_nrEngine = engine;
+    if (m_currentFeature == NrAdjust)
+        m_nrEngineBtn->setText(m_nrEngine == Ssnr ? "SSNR" : "LMS");
 }
 
 void FeatureMenuBar::setFeatureEnabled(bool enabled) {
@@ -266,11 +289,10 @@ void FeatureMenuBar::paintEvent(QPaintEvent *event) {
     };
 
     // Draw delimiters after each section
-    drawDelimiter(m_titleLabel); // After title
-    drawDelimiter(m_toggleBtn);  // After OFF/ON
-    if (m_extraBtn->isVisible()) {
-        drawDelimiter(m_extraBtn); // After FILTER NONE (if shown)
-    }
-    drawDelimiter(m_valueLabel); // After value
+    drawDelimiter(m_titleLabel);  // After title
+    drawDelimiter(m_toggleBtn);   // After OFF/ON
+    drawDelimiter(m_nrEngineBtn); // After LMS/SSNR (only visible for NrAdjust)
+    drawDelimiter(m_extraBtn);    // After FILTER NONE (only visible for NB)
+    drawDelimiter(m_valueLabel);  // After value
     // No delimiter after +/- buttons (they're at the end now)
 }

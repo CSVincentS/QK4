@@ -247,7 +247,20 @@ void MainWindow::setupRadioStateWiring() {
         m_vfoB->setTxMeterQrp(isQrp);
     });
     connect(m_radioState, &RadioState::supplyVoltageChanged, m_sideControlPanel, &SideControlPanel::setVoltage);
-    connect(m_radioState, &RadioState::supplyCurrentChanged, m_sideControlPanel, &SideControlPanel::setCurrent);
+    // Side panel's "X.XA" mirrors the K4 front-panel meter: supply current (IS) at idle,
+    // PA drain current (PM/768) during TX. Threshold gate (drain > 0.1 A) avoids the brief
+    // 0 A flash on TX-edge — the K4 doesn't emit a TX-time SIRF for ~100–200 ms after the
+    // TX flag flips, so paDrainCurrent is stale-zero until then. We hold the supply value
+    // through that window.
+    auto updateSidePanelAmps = [this]() {
+        const double drain = m_radioState->paDrainCurrent();
+        const bool useDrain = m_radioState->isTransmitting() && drain > 0.1;
+        const double amps = useDrain ? drain : m_radioState->supplyCurrent();
+        m_sideControlPanel->setCurrent(amps);
+    };
+    connect(m_radioState, &RadioState::supplyCurrentChanged, this, updateSidePanelAmps);
+    connect(m_radioState, &RadioState::paDrainCurrentChanged, this, updateSidePanelAmps);
+    connect(m_radioState, &RadioState::transmitStateChanged, this, updateSidePanelAmps);
     connect(m_radioState, &RadioState::swrChanged, m_sideControlPanel, &SideControlPanel::setSwr);
 
     // Synthetic "Display FPS" menu item value tracks the radio's echoed FPS.

@@ -4,14 +4,16 @@
 #include "ui/overlays/monoverlay.h"
 #include "ui/overlays/baloverlay.h"
 #include "settings/radiosettings.h"
-#include <QVBoxLayout>
-#include <QSizePolicy>
-#include <QHBoxLayout>
-#include <QGridLayout>
-#include <QSpacerItem>
+#include <QDateTime>
 #include <QEvent>
+#include <QGridLayout>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QMouseEvent>
+#include <QSizePolicy>
+#include <QSpacerItem>
+#include <QTimer>
+#include <QVBoxLayout>
 
 SideControlPanel::SideControlPanel(QWidget *parent) : QWidget(parent) {
     setupUi();
@@ -238,6 +240,15 @@ void SideControlPanel::setupUi() {
                                    .arg(K4Styles::Colors::TextWhite)
                                    .arg(K4Styles::Dimensions::FontSizeLarge));
     layout->addWidget(m_timeLabel);
+
+    // WHY: setTime() was historically never wired from any controller, leaving the side panel
+    // clock stuck at "00:00:00 Z". Drive it from a self-contained QTimer instead so the
+    // widget owns its own clock display, no external coordination required.
+    auto *clockTimer = new QTimer(this);
+    auto updateClock = [this]() { m_timeLabel->setText(QDateTime::currentDateTimeUtc().toString("HH:mm:ss") + " Z"); };
+    connect(clockTimer, &QTimer::timeout, this, updateClock);
+    clockTimer->start(1000);
+    updateClock(); // populate immediately so the placeholder isn't visible at startup
 
     m_powerSwrLabel = new QLabel("0.0W  1.0:1", this);
     m_powerSwrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")

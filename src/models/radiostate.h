@@ -130,6 +130,8 @@ public:
     void setNoiseBlankerFilterB(int filter);
     void setNoiseReductionLevel(int level);
     void setNoiseReductionLevelB(int level);
+    void setSsnrLevel(int level);
+    void setSsnrLevelB(int level);
 
     // Meters — backed by m_rxTxMeterState.
     double sMeter() const { return m_rxTxMeterState.sMeter; }
@@ -146,6 +148,9 @@ public:
     double supplyVoltage() const { return m_rxTxMeterState.supplyVoltage; }
     double supplyCurrent() const { return m_rxTxMeterState.supplyCurrent; }
 
+    // PA drain current (SIRF LM field, parsed from centi-amps to amps)
+    double paDrainCurrent() const { return m_rxTxMeterState.paDrainCurrent; }
+
     // Control states
     bool isTransmitting() const { return m_rxTxMeterState.isTransmitting; }
     bool subReceiverEnabled() const { return m_rxTxMeterState.subReceiverEnabled; }
@@ -158,6 +163,8 @@ public:
     int noiseBlankerFilterWidth() const { return m_processingState.noiseBlankerFilterWidth; }
     int noiseReductionLevel() const { return m_processingState.noiseReductionLevel; }
     bool noiseReductionEnabled() const { return m_processingState.noiseReductionEnabled; }
+    int ssnrLevel() const { return m_processingState.ssnrLevel; }
+    bool ssnrEnabled() const { return m_processingState.ssnrEnabled; }
 
     bool autoNotchEnabled() const { return m_processingState.autoNotchEnabled; }
     bool manualNotchEnabled() const { return m_processingState.manualNotchEnabled; }
@@ -182,6 +189,8 @@ public:
     int noiseBlankerFilterWidthB() const { return m_processingState.noiseBlankerFilterWidthB; }
     int noiseReductionLevelB() const { return m_processingState.noiseReductionLevelB; }
     bool noiseReductionEnabledB() const { return m_processingState.noiseReductionEnabledB; }
+    int ssnrLevelB() const { return m_processingState.ssnrLevelB; }
+    bool ssnrEnabledB() const { return m_processingState.ssnrEnabledB; }
     int preampB() const { return m_processingState.preampB; }
     bool preampEnabledB() const { return m_processingState.preampEnabledB; }
     int attenuatorLevelB() const { return m_processingState.attenuatorLevelB; }
@@ -531,6 +540,7 @@ signals:
     void rfPowerChanged(double watts, bool isQrp);
     void supplyVoltageChanged(double volts);
     void supplyCurrentChanged(double amps);
+    void paDrainCurrentChanged(double amps);
     void swrChanged(double swr);
     void txMeterChanged(int alc, int compression, double fwdPower, double swr);
     void splitChanged(bool enabled);
@@ -784,16 +794,18 @@ private:
     void handleRX(const QString &cmd); // Receive
 
     // Processing commands (NB, NR, PA, RA, GT, NA, NM)
-    void handleNB(const QString &cmd);    // Noise Blanker Main
-    void handleNBSub(const QString &cmd); // Noise Blanker Sub (NB$)
-    void handleNR(const QString &cmd);    // Noise Reduction Main
-    void handleNRSub(const QString &cmd); // Noise Reduction Sub (NR$)
-    void handlePA(const QString &cmd);    // Preamp Main
-    void handlePASub(const QString &cmd); // Preamp Sub (PA$)
-    void handleRA(const QString &cmd);    // Attenuator Main
-    void handleRASub(const QString &cmd); // Attenuator Sub (RA$)
-    void handleGT(const QString &cmd);    // AGC Speed Main
-    void handleGTSub(const QString &cmd); // AGC Speed Sub (GT$)
+    void handleNB(const QString &cmd);     // Noise Blanker Main
+    void handleNBSub(const QString &cmd);  // Noise Blanker Sub (NB$)
+    void handleNR(const QString &cmd);     // Noise Reduction Main
+    void handleNRSub(const QString &cmd);  // Noise Reduction Sub (NR$)
+    void handleNRS(const QString &cmd);    // Spectral-subtraction NR Main (NRS)
+    void handleNRSSub(const QString &cmd); // Spectral-subtraction NR Sub (NRS$)
+    void handlePA(const QString &cmd);     // Preamp Main
+    void handlePASub(const QString &cmd);  // Preamp Sub (PA$)
+    void handleRA(const QString &cmd);     // Attenuator Main
+    void handleRASub(const QString &cmd);  // Attenuator Sub (RA$)
+    void handleGT(const QString &cmd);     // AGC Speed Main
+    void handleGTSub(const QString &cmd);  // AGC Speed Sub (GT$)
     // NA/NA$, NM/NM$ — NA handled inline via handleBoolPair; NM stays (complex)
     void handleNM(const QString &cmd);    // Manual Notch Main
     void handleNMSub(const QString &cmd); // Manual Notch Sub (NM$)
@@ -870,6 +882,7 @@ private:
     void handleOM(const QString &cmd);   // Option Modules
     void handleRV(const QString &cmd);   // Firmware Version (RV.)
     void handleSIFP(const QString &cmd); // Power Supply Info
+    void handleSIRF(const QString &cmd); // RF Deck Status (PA drain current)
 
     void handleSL(const QString &cmd); // Streaming Latency
     void handleMN(const QString &cmd); // Message Bank

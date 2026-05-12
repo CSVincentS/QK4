@@ -193,8 +193,9 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
     settingsLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
     layout->addWidget(settingsLabel);
 
-    // Callsign (global)
-    auto *callLayout = new QHBoxLayout();
+    // Callsign + Spot age — single row
+    auto *settingsRow = new QHBoxLayout();
+
     auto *callLabel = new QLabel("Callsign:", this);
     callLabel->setStyleSheet(K4Styles::Dialog::formLabel());
     callLabel->setFixedWidth(70);
@@ -205,13 +206,7 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
     m_callsignEdit->setText(RadioSettings::instance()->dxClusterCallsign());
     connect(m_callsignEdit, &QLineEdit::editingFinished, this,
             [this]() { RadioSettings::instance()->setDxClusterCallsign(m_callsignEdit->text()); });
-    callLayout->addWidget(callLabel);
-    callLayout->addWidget(m_callsignEdit);
-    callLayout->addStretch();
-    layout->addLayout(callLayout);
 
-    // Spot age slider
-    auto *ageLayout = new QHBoxLayout();
     auto *ageLabel = new QLabel("Spot age:", this);
     ageLabel->setStyleSheet(K4Styles::Dialog::formLabel());
     ageLabel->setFixedWidth(70);
@@ -228,10 +223,14 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         m_controller->setSpotMaxAge(value * 60);
         m_ageValueLabel->setText(QString("%1 min").arg(value));
     });
-    ageLayout->addWidget(ageLabel);
-    ageLayout->addWidget(m_ageSlider, 1);
-    ageLayout->addWidget(m_ageValueLabel);
-    layout->addLayout(ageLayout);
+
+    settingsRow->addWidget(callLabel);
+    settingsRow->addWidget(m_callsignEdit);
+    settingsRow->addSpacing(K4Styles::Dimensions::PaddingMedium);
+    settingsRow->addWidget(ageLabel);
+    settingsRow->addWidget(m_ageSlider, 1);
+    settingsRow->addWidget(m_ageValueLabel);
+    layout->addLayout(settingsRow);
 
     // === Separator ===
     auto *line3 = new QFrame(this);
@@ -253,9 +252,8 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         QString("QPlainTextEdit { background-color: %1; color: %2; border: 1px solid %3; "
                 "font-family: 'Menlo', 'Consolas', monospace; font-size: %4px; }")
             .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
-            .arg(K4Styles::Dimensions::FontSizeSmall));
+            .arg(K4Styles::Dimensions::FontSizePopup));
     m_consoleOutput->setMinimumHeight(80);
-    m_consoleOutput->setMaximumHeight(200);
     layout->addWidget(m_consoleOutput, 1);
 
     // Command input

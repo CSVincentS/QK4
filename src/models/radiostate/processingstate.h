@@ -26,6 +26,8 @@ struct ProcessingState {
     int noiseBlankerFilterWidth = 0; // 0=NONE, 1=NARROW, 2=WIDE
     int noiseReductionLevel = 0;
     bool noiseReductionEnabled = false;
+    int ssnrLevel = 0; // Spectral-subtraction NR (LMS NR's peer; mutually exclusive on K4)
+    bool ssnrEnabled = false;
     bool autoNotchEnabled = false;
     bool manualNotchEnabled = false;
     int manualNotchPitch = 1000; // 150-5000 Hz
@@ -41,6 +43,8 @@ struct ProcessingState {
     int noiseBlankerFilterWidthB = 0;
     int noiseReductionLevelB = 0;
     bool noiseReductionEnabledB = false;
+    int ssnrLevelB = 0;
+    bool ssnrEnabledB = false;
     bool autoNotchEnabledB = false;
     bool manualNotchEnabledB = false;
     int manualNotchPitchB = 1000;
@@ -60,6 +64,8 @@ void handleNB(ProcessingState &state, RadioState &owner, const QString &cmd);
 void handleNBSub(ProcessingState &state, RadioState &owner, const QString &cmd);
 void handleNR(ProcessingState &state, RadioState &owner, const QString &cmd);
 void handleNRSub(ProcessingState &state, RadioState &owner, const QString &cmd);
+void handleNRS(ProcessingState &state, RadioState &owner, const QString &cmd);
+void handleNRSSub(ProcessingState &state, RadioState &owner, const QString &cmd);
 void handlePA(ProcessingState &state, RadioState &owner, const QString &cmd);
 void handlePASub(ProcessingState &state, RadioState &owner, const QString &cmd);
 void handleRA(ProcessingState &state, RadioState &owner, const QString &cmd);
@@ -76,6 +82,8 @@ void setNoiseBlankerFilter(ProcessingState &state, RadioState &owner, int filter
 void setNoiseBlankerFilterB(ProcessingState &state, RadioState &owner, int filter);
 void setNoiseReductionLevel(ProcessingState &state, RadioState &owner, int level);
 void setNoiseReductionLevelB(ProcessingState &state, RadioState &owner, int level);
+void setSsnrLevel(ProcessingState &state, RadioState &owner, int level);
+void setSsnrLevelB(ProcessingState &state, RadioState &owner, int level);
 void setManualNotchPitch(ProcessingState &state, RadioState &owner, int pitch);
 void setManualNotchPitchB(ProcessingState &state, RadioState &owner, int pitch);
 
