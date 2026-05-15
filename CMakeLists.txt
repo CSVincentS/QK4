@@ -62,13 +62,13 @@ elseif(WIN32)
     # Windows with vcpkg
     find_package(Opus CONFIG REQUIRED)
     find_package(hidapi CONFIG REQUIRED)
-    find_package(libusb CONFIG REQUIRED)
+    # libusb doesn't provide CMake config files; use find_path/find_library
+    find_path(LIBUSB_INCLUDE_DIRS NAMES libusb-1.0/libusb.h REQUIRED)
+    find_library(LIBUSB_LIBRARIES NAMES usb-1.0 libusb-1.0 REQUIRED)
     set(OPUS_INCLUDE_DIRS "")
     set(HIDAPI_INCLUDE_DIRS "")
-    set(LIBUSB_INCLUDE_DIRS "")
     set(OPUS_LIBRARIES Opus::opus)
     set(HIDAPI_LIBRARIES hidapi::hidapi)
-    set(LIBUSB_LIBRARIES usb-1.0)
 else()
     # Linux with pkg-config
     find_package(PkgConfig REQUIRED)
