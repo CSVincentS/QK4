@@ -54,20 +54,28 @@ if(APPLE)
     set(HIDAPI_PREFIX "/opt/homebrew/opt/hidapi")
     set(HIDAPI_INCLUDE_DIRS "${HIDAPI_PREFIX}/include")
     set(HIDAPI_LIBRARIES "${HIDAPI_PREFIX}/lib/libhidapi.dylib")
+
+    set(LIBUSB_PREFIX "/opt/homebrew/opt/libusb")
+    set(LIBUSB_INCLUDE_DIRS "${LIBUSB_PREFIX}/include")
+    set(LIBUSB_LIBRARIES "${LIBUSB_PREFIX}/lib/libusb-1.0.dylib")
 elseif(WIN32)
     # Windows with vcpkg
     find_package(Opus CONFIG REQUIRED)
     find_package(hidapi CONFIG REQUIRED)
+    find_package(libusb CONFIG REQUIRED)
     set(OPUS_INCLUDE_DIRS "")
     set(HIDAPI_INCLUDE_DIRS "")
+    set(LIBUSB_INCLUDE_DIRS "")
     set(OPUS_LIBRARIES Opus::opus)
     set(HIDAPI_LIBRARIES hidapi::hidapi)
+    set(LIBUSB_LIBRARIES usb-1.0)
 else()
     # Linux with pkg-config
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(OPUS REQUIRED opus)
     pkg_check_modules(HIDAPI REQUIRED hidapi-libusb)
     pkg_check_modules(LIBUDEV REQUIRED libudev)
+    pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 endif()
 set(SOURCES
     src/main.cpp
@@ -178,6 +186,7 @@ set(SOURCES
     src/ui/overlays/baloverlay.cpp
     src/ui/widgets/wheelaccumulator.cpp
     src/hardware/kpoddevice.cpp
+    src/hardware/kpodplusdevice.cpp
     src/hardware/halikeydevice.cpp
     src/hardware/halikeyworkerbase.cpp
     src/hardware/halikeyv14worker.cpp
@@ -296,6 +305,7 @@ set(HEADERS
     src/ui/overlays/baloverlay.h
     src/ui/widgets/wheelaccumulator.h
     src/hardware/kpoddevice.h
+    src/hardware/kpodplusdevice.h
     src/hardware/halikeydevice.h
     src/hardware/halikeyworkerbase.h
     src/hardware/halikeyv14worker.h
@@ -344,6 +354,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rtmidi
     ${OPUS_INCLUDE_DIRS}
     ${HIDAPI_INCLUDE_DIRS}
+    ${LIBUSB_INCLUDE_DIRS}
 )
 
 if(UNIX AND NOT APPLE)
@@ -373,6 +384,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::SerialPort
     ${OPUS_LIBRARIES}
     ${HIDAPI_LIBRARIES}
+    ${LIBUSB_LIBRARIES}
 )
 
 # Link GuiPrivate if found via CMake, otherwise private headers are included manually
@@ -502,6 +514,10 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${HIDAPI_LIBRARIES}"
             "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/"
+        # Copy libusb library
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${LIBUSB_LIBRARIES}"
+            "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/"
         # Fix OpenSSL library paths - use real Cellar path for -change
         COMMAND install_name_tool -id "@executable_path/../Frameworks/libssl.3.dylib"
             "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/libssl.3.dylib"
@@ -518,6 +534,9 @@ if(APPLE)
         # Fix HIDAPI library path
         COMMAND install_name_tool -id "@executable_path/../Frameworks/libhidapi.dylib"
             "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/libhidapi.dylib" || true
+        # Fix libusb library path
+        COMMAND install_name_tool -id "@executable_path/../Frameworks/libusb-1.0.dylib"
+            "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/libusb-1.0.dylib" || true
         # Re-sign the app bundle (required after modifying libraries)
         # Uses ad-hoc signing by default; set CODESIGN_IDENTITY for Developer ID
         COMMAND codesign --force --deep --sign "$ENV{CODESIGN_IDENTITY}"

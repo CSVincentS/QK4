@@ -4,6 +4,7 @@
 #include "hardware/halikeydevice.h"
 #include "hardware/iambickeyer.h"
 #include "hardware/kpoddevice.h"
+#include "hardware/kpodplusdevice.h"
 #include "models/radiostate.h"
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
@@ -47,6 +48,143 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(m_kpodDevice, &KpodDevice::deviceInfoReady, this, [this]() {
         if (RadioSettings::instance()->kpodEnabled() && m_kpodDevice->isDetected() && !m_kpodDevice->isPolling()) {
             m_kpodDevice->startPolling();
+        }
+    });
+
+    // =========================================================================
+    // KPOD+ USB keyer device (vendor-specific class, libusb)
+    // =========================================================================
+    m_kpodPlusDevice = new KpodPlusDevice(this);
+
+    // Encoder/button/rocker signals — KPOD+ encoder reads its own rocker position
+    connect(m_kpodPlusDevice, &KpodPlusDevice::encoderRotated, this, [this](int ticks) {
+        if (!m_connectionController->isConnected())
+            return;
+        // Use KPOD+ rocker position (same encoding as KPOD)
+        int rocker = static_cast<int>(m_kpodPlusDevice->rockerPosition());
+        onKpodEncoderRotatedWithRocker(ticks, rocker);
+    });
+    connect(m_kpodPlusDevice, &KpodPlusDevice::pollError, this, &HardwareController::onKpodPollError);
+    connect(m_kpodPlusDevice, &KpodPlusDevice::buttonTapped, this,
+            [this](int buttonNum) { emit macroRequested(QString("K-pod.%1T").arg(buttonNum)); });
+    connect(m_kpodPlusDevice, &KpodPlusDevice::buttonHeld, this,
+            [this](int buttonNum) { emit macroRequested(QString("K-pod.%1H").arg(buttonNum)); });
+
+    // Helper: apply saved KPOD+ keyer config to both the device and the K4
+    auto applyKpodPlusConfig = [this]() {
+        auto *settings = RadioSettings::instance();
+        int wpm = settings->kpodPlusKeyerSpeed();
+
+        // Configure the KPOD+ device
+        m_kpodPlusDevice->setKeyerSpeed(wpm);
+        m_kpodPlusDevice->setCwPitch(settings->kpodPlusCwPitch());
+        m_kpodPlusDevice->setKeyerParams(settings->kpodPlusIambicMode(), settings->kpodPlusPaddleReversed());
+        m_kpodPlusDevice->setEncodeMode(settings->kpodPlusEncodeMode());
+        m_kpodPlusDevice->setStuckTimeout(settings->kpodPlusStuckTimeout());
+
+        // Sync element length with K4 so it knows dit/dah duration for KZ commands
+        if (m_connectionController->isConnected()) {
+            int ditMs = 1200 / wpm;
+            m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
+        }
+    };
+
+    // Auto-start polling on device arrival
+    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceConnected, this, [this, applyKpodPlusConfig]() {
+        if (RadioSettings::instance()->kpodEnabled() && !m_kpodPlusDevice->isPolling()) {
+            m_kpodPlusDevice->startPolling();
+            applyKpodPlusConfig();
+        }
+    });
+
+    // Auto-start on detection at startup
+    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceInfoReady, this, [this, applyKpodPlusConfig]() {
+        if (RadioSettings::instance()->kpodEnabled() && m_kpodPlusDevice->isDetected() &&
+            !m_kpodPlusDevice->isPolling()) {
+            m_kpodPlusDevice->startPolling();
+            applyKpodPlusConfig();
+        }
+    });
+
+    // When radio connects while KPOD+ is already polling, send KZL so K4 knows element length
+    connect(m_connectionController, &ConnectionController::radioReady, this, [this]() {
+        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
+            int wpm = RadioSettings::instance()->kpodPlusKeyerSpeed();
+            int ditMs = 1200 / wpm;
+            m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
+        }
+    });
+
+    // Bidirectional sync: KPOD+ settings ↔ K4 radio state
+    //
+    // When KPOD+ WPM or pitch changes in the UI (via RadioSettings), sync to K4:
+    //   - WPM → KS command + KZL element length
+    //   - Pitch → KP command (CW pitch in tens of Hz)
+    connect(RadioSettings::instance(), &RadioSettings::kpodPlusSettingsChanged, this, [this]() {
+        if (!m_kpodPlusDevice || !m_kpodPlusDevice->isPolling())
+            return;
+        if (!m_connectionController->isConnected())
+            return;
+
+        auto *settings = RadioSettings::instance();
+        int wpm = settings->kpodPlusKeyerSpeed();
+        int pitchHz = settings->kpodPlusCwPitch();
+
+        // Sync WPM → K4 (KS command) + element length (KZL)
+        m_connectionController->sendCAT(QString("KS%1;").arg(wpm, 3, 10, QChar('0')));
+        int ditMs = 1200 / wpm;
+        m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
+
+        // Sync pitch → K4 (CW command, value in tens of Hz: e.g. CW55; = 550 Hz)
+        int pitchTenHz = pitchHz / 10;
+        m_connectionController->sendCAT(QString("CW%1;").arg(pitchTenHz, 2, 10, QChar('0')));
+    });
+
+    // When K4 radio WPM changes (e.g. from front panel), sync to KPOD+ device
+    connect(m_radioState, &RadioState::keyerSpeedChanged, this, [this](int wpm) {
+        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
+            m_kpodPlusDevice->setKeyerSpeed(wpm);
+            // Update persisted setting (without re-triggering K4 sync — the change came FROM K4)
+            RadioSettings::instance()->blockSignals(true);
+            RadioSettings::instance()->setKpodPlusKeyerSpeed(wpm);
+            RadioSettings::instance()->blockSignals(false);
+        }
+    });
+
+    // When K4 radio CW pitch changes, sync to KPOD+ device
+    connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitchHz) {
+        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
+            m_kpodPlusDevice->setCwPitch(pitchHz);
+            RadioSettings::instance()->blockSignals(true);
+            RadioSettings::instance()->setKpodPlusCwPitch(pitchHz);
+            RadioSettings::instance()->blockSignals(false);
+        }
+    });
+
+    // EP02 keyer data → raw passthrough to K4 tunnel
+    // The KPOD+ delivers complete KZ/KX strings in 32-byte transfers, zero-padded after
+    // the last ';'. Forward the trimmed buffer as a single sendCAT() call — one protocol
+    // packet, one TCP write, one flush. The K4 parses on ';' delimiters regardless of
+    // framing. This preserves the device's native batching at high WPM and avoids per-
+    // element string allocation + multiple TCP writes.
+    connect(m_kpodPlusDevice, &KpodPlusDevice::keyerDataReceived, this, [this](const QByteArray &data) {
+        // Strip trailing null bytes from the 32-byte buffer
+        int len = data.size();
+        while (len > 0 && data.at(len - 1) == '\0')
+            --len;
+        if (len > 0) {
+            m_connectionController->sendCAT(QString::fromLatin1(data.constData(), len));
+        }
+    });
+
+    // KPOD enable/disable also controls KPOD+
+    connect(RadioSettings::instance(), &RadioSettings::kpodEnabledChanged, this, [this](bool enabled) {
+        if (enabled) {
+            if (m_kpodPlusDevice->isDetected() && !m_kpodPlusDevice->isPolling()) {
+                m_kpodPlusDevice->startPolling();
+            }
+        } else {
+            m_kpodPlusDevice->stopPolling();
         }
     });
 
@@ -152,14 +290,25 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // =========================================================================
 
     // Keyer element started — send KZ command to I/O thread + sidetone to sidetone thread
-    connect(m_iambicKeyer, &IambicKeyer::elementStarted, this,
-            [this](bool isDit) { m_connectionController->sendCAT(isDit ? "KZ.;" : "KZ-;"); });
+    // Both are suppressed when KPOD+ keyer is active (device handles keying + sidetone)
+    connect(m_iambicKeyer, &IambicKeyer::elementStarted, this, [this](bool isDit) {
+        if (isKpodPlusKeyerActive())
+            return;
+        m_connectionController->sendCAT(isDit ? "KZ.;" : "KZ-;");
+    });
     connect(m_iambicKeyer, &IambicKeyer::elementStarted, m_sidetoneGenerator,
-            [sg = m_sidetoneGenerator](bool isDit) { isDit ? sg->playSingleDit() : sg->playSingleDah(); });
+            [this, sg = m_sidetoneGenerator](bool isDit) {
+                if (isKpodPlusKeyerActive())
+                    return;
+                isDit ? sg->playSingleDit() : sg->playSingleDah();
+            });
 
     // Keyer finished — stop local sidetone (K4 unkeys itself after each KZ element)
-    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, m_sidetoneGenerator,
-            [sg = m_sidetoneGenerator]() { sg->stopElement(); });
+    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, m_sidetoneGenerator, [this, sg = m_sidetoneGenerator]() {
+        if (isKpodPlusKeyerActive())
+            return;
+        sg->stopElement();
+    });
 
     // Character boundary — keyer went idle between elements
     connect(m_iambicKeyer, &IambicKeyer::characterSpace, this, [this]() { m_connectionController->sendCAT("KZ ;"); });
@@ -186,6 +335,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(
         m_halikeyDevice, &HalikeyDevice::ditStateChanged, this,
         [this](bool pressed) {
+            // Suppress HaliKey dit when KPOD+ keyer owns the CW path
+            if (isKpodPlusKeyerActive())
+                return;
             auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
             if (mode == RadioState::CW || mode == RadioState::CW_R) {
                 m_iambicKeyer->setDitPaddle(pressed);
@@ -193,8 +345,14 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
             // In voice/data modes, dit is suppressed — PTT signal handles TX
         },
         Qt::DirectConnection);
-    connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, m_iambicKeyer, &IambicKeyer::setDahPaddle,
-            Qt::DirectConnection);
+    connect(
+        m_halikeyDevice, &HalikeyDevice::dahStateChanged, this,
+        [this](bool pressed) {
+            if (isKpodPlusKeyerActive())
+                return;
+            m_iambicKeyer->setDahPaddle(pressed);
+        },
+        Qt::DirectConnection);
 
     // HaliKey PTT → MainWindow (voice/data modes) or paddle dit (CW mode, V1.4 only).
     // WHY: V1.4 serial firmware can't distinguish foot pedal from paddle dit lever — both
@@ -243,9 +401,13 @@ void HardwareController::shutdownSidetone() {
     }
 }
 
+bool HardwareController::isKpodPlusKeyerActive() const {
+    return m_kpodPlusDevice && m_kpodPlusDevice->isDetected() && m_kpodPlusDevice->isPolling();
+}
+
 HardwareController::~HardwareController() {
     disconnect(this);
-    // Shutdown order: HaliKey → Keyer → Sidetone → KPOD
+    // Shutdown order: HaliKey → Keyer → Sidetone → KPOD/KPOD+
     // HaliKey stops paddle events first, then keyer (producer of KZ commands) stops
     // before sidetone (the audio consumer) is torn down.
 
@@ -267,6 +429,10 @@ HardwareController::~HardwareController() {
     }
     delete m_sidetoneGenerator; // No parent, must delete manually
 
+    if (m_kpodPlusDevice) {
+        m_kpodPlusDevice->stopPolling();
+    }
+
     if (m_kpodDevice) {
         m_kpodDevice->stopPolling();
     }
@@ -280,10 +446,13 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
     if (!m_connectionController->isConnected()) {
         return;
     }
+    onKpodEncoderRotatedWithRocker(ticks, static_cast<int>(m_kpodDevice->rockerPosition()));
+}
 
-    // Action depends on rocker position
-    switch (m_kpodDevice->rockerPosition()) {
-    case KpodDevice::RockerLeft: // VFO A
+void HardwareController::onKpodEncoderRotatedWithRocker(int ticks, int rockerPos) {
+    // Action depends on rocker position (shared by KPOD and KPOD+)
+    switch (rockerPos) {
+    case 2: // RockerLeft — VFO A
     {
         if (m_radioState->lockA())
             break;
@@ -297,7 +466,7 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
         }
     } break;
 
-    case KpodDevice::RockerCenter: // VFO B
+    case 0: // RockerCenter — VFO B
     {
         if (m_radioState->lockB())
             break;
@@ -311,7 +480,7 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
         }
     } break;
 
-    case KpodDevice::RockerRight: // RIT/XIT
+    case 1: // RockerRight — RIT/XIT
         // K4 routes RU;/RD; based on active mode: RIT → RO (VFO A), XIT → RO$ (VFO B)
         // BSET + RIT: use RU$/RD$ to force VFO B's RIT offset
         {

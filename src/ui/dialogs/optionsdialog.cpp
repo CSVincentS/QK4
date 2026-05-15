@@ -125,7 +125,7 @@ void OptionsDialog::ensurePageCreated(int index) {
         page = m_cwKeyerPage;
         break;
     case PageKpod:
-        m_kpodPage = new KpodPage(m_hardwareController->kpodDevice(), this);
+        m_kpodPage = new KpodPage(m_hardwareController->kpodDevice(), m_hardwareController->kpodPlusDevice(), this);
         page = m_kpodPage;
         break;
     case PageKpa1500:

@@ -6,6 +6,7 @@
 #include <atomic>
 
 class KpodDevice;
+class KpodPlusDevice;
 class HalikeyDevice;
 class IambicKeyer;
 class SidetoneGenerator;
@@ -27,9 +28,13 @@ public:
 
     // Accessors for OptionsDialog integration
     KpodDevice *kpodDevice() const { return m_kpodDevice; }
+    KpodPlusDevice *kpodPlusDevice() const { return m_kpodPlusDevice; }
     HalikeyDevice *halikeyDevice() const { return m_halikeyDevice; }
     IambicKeyer *keyer() const { return m_iambicKeyer; }
     SidetoneGenerator *sidetone() const { return m_sidetoneGenerator; }
+
+    // True when KPOD+ keyer is active (suppresses HaliKey → IambicKeyer + Sidetone)
+    bool isKpodPlusKeyerActive() const;
 
     void shutdownSidetone();
 
@@ -46,11 +51,17 @@ private slots:
     void onKpodEnabledChanged(bool enabled);
 
 private:
+    void onKpodEncoderRotatedWithRocker(int ticks, int rockerPosition);
+
+private:
     RadioState *m_radioState;
     ConnectionController *m_connectionController;
 
     // KPOD USB tuning knob
     KpodDevice *m_kpodDevice;
+
+    // KPOD+ USB keyer device (libusb, vendor-specific class)
+    KpodPlusDevice *m_kpodPlusDevice;
 
     // HaliKey CW paddle device
     HalikeyDevice *m_halikeyDevice;
