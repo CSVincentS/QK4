@@ -41,7 +41,7 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "Connection to K4 / status indicator wrong" | ConnectionController + MainWindow::updateConnectionState | `src/controllers/connectioncontroller.cpp` + `src/mainwindow.cpp` |
 | "Top status bar label / KPA1500 badge wrong" | StatusBarController | `src/controllers/statusbarcontroller.cpp` |
 | "Audio (RX/TX, PTT) not working" | AudioController | `src/controllers/audiocontroller.cpp` |
-| "KPOD / HaliKey / sidetone not working" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
+| "KPOD / KPOD+ / HaliKey / sidetone not working" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
 | "Spectrum / panadapter / click-tune not working" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
 | "DX cluster spots not appearing / cluster connect fail" | DxClusterController | `src/controllers/dxclustercontroller.cpp` |
 
@@ -69,7 +69,7 @@ Grouped by concern:
 - **ConnectionController** — TCP connection state machine, network I/O thread, CAT send
 - **AudioController** — audio engine, Opus codecs, PTT, audio thread
 - **SpectrumController** — panadapters, spectrum data routing, click-tune, passband overlays
-- **HardwareController** — KPOD, HaliKey, IambicKeyer, SidetoneGenerator (owns 2 hardware threads)
+- **HardwareController** — KPOD, KPOD+, HaliKey, IambicKeyer, SidetoneGenerator (owns 3 hardware threads)
 - **DxClusterController** — DX cluster client (multi-instance; spot cache)
 
 ### Popup-family

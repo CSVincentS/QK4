@@ -23,7 +23,7 @@ A cross-platform desktop application for remote control of Elecraft K4 radios ov
 - **Dual-Channel Audio** — Opus-encoded stereo with independent MAIN/SUB volume controls
 - **Radio Controls** — Full control panel with mode-dependent controls, TX functions, and feature popups
 - **Band Selection** — Quick band switching via popup menu
-- **KPOD Support** — USB integration with Elecraft KPOD tuning knob
+- **KPOD / KPOD+ Support** — USB integration with Elecraft KPOD tuning knob and KPOD+ CW keyer
 - **KPA1500 Support** — Optional integration with Elecraft KPA1500 amplifier
 - **CAT Server** — Built-in CAT server (port 9299) for integration with third-party logging and contest software
 - **Self-Contained Releases** — macOS DMG, Windows ZIP, and Raspberry Pi tarball include all dependencies
@@ -41,7 +41,7 @@ Pre-built releases are available on the [Releases](https://github.com/mikeg-dal/
 
 - Raspberry Pi 4 or 5 with a desktop environment (X11 or Wayland)
 - Debian Trixie or Ubuntu 24.04+
-- **First run requires `sudo`** — the launcher (`run.sh`) installs a udev rule to grant non-root access to the Elecraft KPOD USB device. Without this rule, the Linux kernel restricts access to `/dev/hidraw*` nodes and the KPOD cannot be opened. After the first run, `sudo` is no longer needed and the KPOD will work as a normal user. If you don't have a KPOD, `sudo` is not required.
+- **First run requires `sudo`** — the launcher (`run.sh`) installs a udev rule to grant non-root access to the Elecraft KPOD and KPOD+ USB devices. Without this rule, the Linux kernel restricts access to `/dev/hidraw*` and USB device nodes. After the first run, `sudo` is no longer needed. If you don't have a KPOD or KPOD+, `sudo` is not required.
 
 ## Building from Source
 
@@ -56,13 +56,14 @@ Pre-built releases are available on the [Releases](https://github.com/mikeg-dal/
 | libopus | `brew install opus` | `vcpkg install opus:x64-windows` | `apt install libopus-dev` |
 | OpenSSL 3 | `brew install openssl@3` | `vcpkg install openssl:x64-windows` | `apt install libssl-dev` |
 | HIDAPI | `brew install hidapi` | `vcpkg install hidapi:x64-windows` | `apt install libhidapi-dev` |
+| libusb 1.0 | `brew install libusb` | `vcpkg install libusb:x64-windows` | `apt install libusb-1.0-0-dev` |
 | Audio | Included with macOS | N/A | `apt install libasound2-dev libpulse-dev` |
 
 ### macOS
 
 ```bash
 # Install dependencies
-brew install qt opus openssl@3 hidapi cmake
+brew install qt opus openssl@3 hidapi libusb cmake
 
 # Clone and build
 git clone https://github.com/mikeg-dal/QK4.git
@@ -81,7 +82,7 @@ cmake --build build --target deploy
 
 ```powershell
 # Install vcpkg dependencies
-vcpkg install opus:x64-windows hidapi:x64-windows openssl:x64-windows
+vcpkg install opus:x64-windows hidapi:x64-windows openssl:x64-windows libusb:x64-windows
 
 # Install Qt 6.7+ via Qt Online Installer or aqtinstall
 # Required modules: Multimedia, ShaderTools, SerialPort, Svg
@@ -103,7 +104,7 @@ cmake --build build --config Release
 sudo apt install cmake g++ pkg-config file patchelf \
   qt6-base-dev qt6-base-private-dev \
   qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev \
-  libopus-dev libhidapi-dev libssl-dev libudev-dev \
+  libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev \
   libasound2-dev libpulse-dev
 
 # Clone and build
@@ -168,7 +169,7 @@ src/
 ├── models/               # Radio state model
 ├── settings/             # QSettings persistence
 ├── ui/                   # UI components (VFO, S-meter, controls)
-└── hardware/             # KPOD USB device support
+└── hardware/             # KPOD, KPOD+, HaliKey USB device support
 ```
 
 ## License
