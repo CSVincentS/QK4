@@ -138,6 +138,15 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         // Sync pitch → K4 (CW command, value in tens of Hz: e.g. CW55; = 550 Hz)
         int pitchTenHz = pitchHz / 10;
         m_connectionController->sendCAT(QString("CW%1;").arg(pitchTenHz, 2, 10, QChar('0')));
+
+        // Sync iambic mode + paddle orientation → K4 (KP command)
+        QChar iambic = settings->kpodPlusIambicMode() == 1 ? QChar('B') : QChar('A');
+        QChar paddle = settings->kpodPlusPaddleReversed() ? QChar('R') : QChar('N');
+        int weight = m_radioState->keyingWeight();
+        if (weight < 90)
+            weight = 100; // Default if not yet received from K4
+        m_connectionController->sendCAT(
+            QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
     });
 
     // When K4 radio WPM changes (e.g. from front panel), sync to KPOD+ device
@@ -277,12 +286,23 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
     });
 
-    // Update keyer mode/reversal when KP settings change
+    // Update keyer mode/reversal when KP settings change (from K4 front panel or TX button row)
     connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int /*weight*/) {
         QMetaObject::invokeMethod(
             m_iambicKeyer, "setMode", Qt::QueuedConnection,
             Q_ARG(IambicKeyer::Mode, iambic == 'B' ? IambicKeyer::IambicB : IambicKeyer::IambicA));
         QMetaObject::invokeMethod(m_iambicKeyer, "setReversed", Qt::QueuedConnection, Q_ARG(bool, paddle == 'R'));
+
+        // Sync to KPOD+ device (if active)
+        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
+            int mode = (iambic == 'B') ? 1 : 0;
+            bool reversed = (paddle == 'R');
+            m_kpodPlusDevice->setKeyerParams(mode, reversed);
+            RadioSettings::instance()->blockSignals(true);
+            RadioSettings::instance()->setKpodPlusIambicMode(mode);
+            RadioSettings::instance()->setKpodPlusPaddleReversed(reversed);
+            RadioSettings::instance()->blockSignals(false);
+        }
     });
 
     // =========================================================================
