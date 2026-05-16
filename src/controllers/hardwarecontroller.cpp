@@ -145,8 +145,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         int weight = m_radioState->keyingWeight();
         if (weight < 90)
             weight = 100; // Default if not yet received from K4
-        m_connectionController->sendCAT(
-            QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+        m_connectionController->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
     });
 
     // When K4 radio WPM changes (e.g. from front panel), sync to KPOD+ device
