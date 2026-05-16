@@ -5,7 +5,6 @@
 #include <QString>
 #include <QTimer>
 #include <QThread>
-#include <QMutex>
 #include <atomic>
 
 // Forward declarations for libusb

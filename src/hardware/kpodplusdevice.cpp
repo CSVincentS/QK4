@@ -252,12 +252,23 @@ bool KpodPlusDevice::sendCommand(const unsigned char *data, int length) {
     }
 
     int transferred = 0;
-    // EP01 OUT = 0x01
+    // EP01 OUT write
     int rc = libusb_interrupt_transfer(m_usbHandle, 0x01, const_cast<unsigned char *>(data), length, &transferred, 100);
     if (rc != LIBUSB_SUCCESS) {
         qCWarning(hwKpodPlus) << "KPOD+: EP01 write failed:" << libusb_error_name(rc);
         return false;
     }
+
+    // EP01 IN read-back (completes the transaction pair per Elecraft protocol)
+    unsigned char response[8] = {};
+    int respTransferred = 0;
+    rc = libusb_interrupt_transfer(m_usbHandle, 0x81, response, sizeof(response), &respTransferred, 100);
+    if (rc == LIBUSB_SUCCESS && respTransferred > 0) {
+        qCDebug(hwKpodPlus) << "KPOD+: EP01 response"
+                            << QByteArray(reinterpret_cast<char *>(response), respTransferred).toHex(' ');
+    }
+    // Timeout is acceptable — read was still issued to drain device buffer
+
     return true;
 }
 
@@ -399,6 +410,7 @@ KpodPlusDeviceInfo KpodPlusDevice::detectDevice() {
 
     kpodPlusLog("detectDevice() starting");
 
+    // Static method — uses its own short-lived context (callable without an instance)
     libusb_context *ctx = nullptr;
     int rc = libusb_init(&ctx);
     if (rc != LIBUSB_SUCCESS) {
