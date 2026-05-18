@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
+#include <cstring>
 
 class TestKpodPlusUsbWorker : public QObject {
     Q_OBJECT
@@ -133,10 +134,11 @@ void TestKpodPlusUsbWorker::buildStuckTimeout_lowHighBytes() {
 // =============================================================================
 
 void TestKpodPlusUsbWorker::trimEp02_dropsTrailingNuls() {
-    QByteArray raw("KZ.;KZ-;", 32);
-    // Pad with NULs after the meaningful prefix.
-    for (int i = 8; i < 32; ++i)
-        raw[i] = '\0';
+    // Build a 32-byte buffer that mirrors what the device delivers on EP02:
+    // an 8-byte payload followed by 24 NUL bytes of zero-padding.
+    QByteArray raw(32, '\0');
+    const char prefix[] = "KZ.;KZ-;";
+    memcpy(raw.data(), prefix, 8);
     const QByteArray trimmed = KpodPlusUsbWorker::trimEp02Buffer(raw);
     QCOMPARE(trimmed, QByteArray("KZ.;KZ-;"));
 }
