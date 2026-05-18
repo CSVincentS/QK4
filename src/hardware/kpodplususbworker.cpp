@@ -530,53 +530,77 @@ void KpodPlusUsbWorker::onPresenceTimer() {
 // Setters — sync EP01 transactions on the worker thread
 // =============================================================================
 
-static bool sendConfigCommand(libusb_device_handle *handle, const unsigned char cmd[8]) {
-    if (!handle)
+// Member function so it can call handleLostDevice() on hard error. Was static — promoted
+// to give it access to the device-lost cascade.
+bool KpodPlusUsbWorker::sendConfigCommand(const unsigned char cmd[8]) {
+    if (!m_handle)
         return false;
+
     int transferred = 0;
-    int rc = libusb_interrupt_transfer(handle, 0x01, const_cast<unsigned char *>(cmd), 8, &transferred, 100);
+    int rc = libusb_interrupt_transfer(m_handle, 0x01, const_cast<unsigned char *>(cmd), 8, &transferred, 100);
     if (rc != LIBUSB_SUCCESS) {
         qCWarning(hwKpodPlus) << "config EP01 OUT failed:" << libusb_error_name(rc);
+        if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO)
+            handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
         return false;
     }
-    // WHY drain the readback: the device responds to every EP01 OUT with an
-    // 8-byte status frame. If we don't read it, it sits in the host's EP01 IN
-    // FIFO and gets returned as the response to the next poll's 'u' command,
-    // shifting all subsequent reads by one frame.
-    unsigned char response[8] = {};
-    int respTransferred = 0;
-    libusb_interrupt_transfer(handle, 0x81, response, sizeof(response), &respTransferred, 100);
-    return true;
+
+    // WHY drain the readback: the device responds to every EP01 OUT with an 8-byte status
+    // frame. If we DON'T read it, the byte sits in the host's EP01 IN FIFO and gets returned
+    // as the response to the next poll's 'u' command, shifting all subsequent reads by one
+    // frame — visible to the user as a stale encoder/button event for one cycle after every
+    // config change.
+    //
+    // Retry on timeout: USB stack contention or a busy device occasionally causes the first
+    // read to time out even though the byte is queued. 3 attempts × 100 ms = 300 ms hard
+    // cap. On NO_DEVICE / IO, escalate to handleLostDevice — the device went away mid-config.
+    unsigned char response[8];
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        int respTransferred = 0;
+        rc = libusb_interrupt_transfer(m_handle, 0x81, response, sizeof(response), &respTransferred, 100);
+        if (rc == LIBUSB_SUCCESS)
+            return true;
+        if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO) {
+            qCWarning(hwKpodPlus) << "config EP01 IN failed (hard):" << libusb_error_name(rc);
+            handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
+            return false;
+        }
+        // Timeout — retry. Anything else (BUSY, INTERRUPTED, …) also retries; the bounded
+        // attempt count caps the worst-case time.
+    }
+    qCWarning(hwKpodPlus) << "config EP01 IN drain failed after 3 attempts; next poll may "
+                             "return a stale frame until the FIFO catches up";
+    return false;
 }
 
 void KpodPlusUsbWorker::setKeyerSpeed(int wpm) {
     unsigned char cmd[8];
     buildKeyerSpeedCmd(wpm, cmd);
-    sendConfigCommand(m_handle, cmd);
+    sendConfigCommand(cmd);
 }
 
 void KpodPlusUsbWorker::setCwPitch(int freqHz) {
     unsigned char cmd[8];
     buildCwPitchCmd(freqHz, cmd);
-    sendConfigCommand(m_handle, cmd);
+    sendConfigCommand(cmd);
 }
 
 void KpodPlusUsbWorker::setKeyerParams(int iambicMode, bool paddleReversed) {
     unsigned char cmd[8];
     buildKeyerParamsCmd(iambicMode, paddleReversed, cmd);
-    sendConfigCommand(m_handle, cmd);
+    sendConfigCommand(cmd);
 }
 
 void KpodPlusUsbWorker::setEncodeMode(int mode) {
     unsigned char cmd[8];
     buildEncodeModeCmd(mode, cmd);
-    sendConfigCommand(m_handle, cmd);
+    sendConfigCommand(cmd);
 }
 
 void KpodPlusUsbWorker::setStuckTimeout(int seconds) {
     unsigned char cmd[8];
     buildStuckTimeoutCmd(seconds, cmd);
-    sendConfigCommand(m_handle, cmd);
+    sendConfigCommand(cmd);
 }
 
 // =============================================================================

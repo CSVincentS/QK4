@@ -101,6 +101,7 @@ private slots:
 private:
     bool sendEp01Out(const unsigned char data[8]);
     bool readEp01In(unsigned char buffer[8], int timeoutMs);
+    bool sendConfigCommand(const unsigned char cmd[8]);
     bool detectDeviceLocation(KpodPlusDeviceInfo *info);
     bool queryOpenDeviceInfo(KpodPlusDeviceInfo *info);
     bool openHandle();
