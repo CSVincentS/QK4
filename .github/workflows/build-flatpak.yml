@@ -1,0 +1,30 @@
+name: Flatpak Build
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  flatpak:
+    name: Flatpak
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/manifest.json
+          bundle: io.github.mikeg_dal.QK4.flatpak
+          upload-artifact: false
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QK4-flatpak
+          path: io.github.mikeg_dal.QK4.flatpak
+          retention-days: 7
