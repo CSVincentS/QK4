@@ -594,14 +594,15 @@ void KpodPlusEp02Worker::run() {
             QByteArray data(reinterpret_cast<const char *>(buffer), transferred);
             // Diagnostic: timestamp each KZ batch so on-air vs wire-out timing can be compared
             // when investigating "rhythm wrong at the K4" reports. Enable with
-            // QT_LOGGING_RULES="hw.kpodplus.debug=true". Trimmed to drop trailing NULs (32-byte
-            // fixed transfer per docs/KPodKeyerInterface.pdf §"Endpoint 2 IN"). Tag any transfer
-            // that filled the 32-byte buffer with [FULL!] — that's the signature of the device
-            // FIFO backing up under high-speed stress, the only realistic place we could lose data.
-            const char *fillTag = (transferred == static_cast<int>(sizeof(buffer))) ? " [FULL!]" : "";
-            qCDebug(hwKpodPlus).noquote()
-                << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "["
-                << KpodPlusUsbWorker::trimEp02Buffer(data) << "] (n=" << transferred << ")" << fillTag;
+            // QT_LOGGING_RULES="hw.kpodplus.debug=true". The device always sends fixed 32-byte
+            // transfers zero-padded after the KZ string (docs/KPodKeyerInterface.pdf
+            // §"Endpoint 2 IN"), so transferred==32 is expected every read and is NOT a signal
+            // of buffer pressure. The real "FIFO backing up" signature would be the trimmed
+            // PAYLOAD length approaching 32 bytes; flag at >=24 to catch trouble early.
+            const QByteArray trimmed = KpodPlusUsbWorker::trimEp02Buffer(data);
+            const char *fillTag = (trimmed.size() >= 24) ? " [PAYLOAD-NEAR-FULL!]" : "";
+            qCDebug(hwKpodPlus).noquote() << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << trimmed
+                                          << "] (payload=" << trimmed.size() << "B)" << fillTag;
             emit keyerDataReceived(data);
         } else if (rc == LIBUSB_ERROR_TIMEOUT) {
             continue;
