@@ -186,6 +186,7 @@ set(SOURCES
     src/ui/overlays/baloverlay.cpp
     src/ui/widgets/wheelaccumulator.cpp
     src/hardware/kpoddevice.cpp
+    src/hardware/kpodhidworker.cpp
     src/hardware/kpodplusdevice.cpp
     src/hardware/kpodplususbworker.cpp
     src/hardware/halikeydevice.cpp
@@ -306,6 +307,7 @@ set(HEADERS
     src/ui/overlays/baloverlay.h
     src/ui/widgets/wheelaccumulator.h
     src/hardware/kpoddevice.h
+    src/hardware/kpodhidworker.h
     src/hardware/kpodplusdevice.h
     src/hardware/kpodplususbworker.h
     src/hardware/halikeydevice.h
