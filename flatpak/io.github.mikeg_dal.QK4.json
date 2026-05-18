@@ -32,9 +32,9 @@
       "buildsystem": "simple",
       "sources": [
         {
-          "url": "https://github.com/mikeg-dal/QK4/archive/refs/tags/v0.6.0-beta.1.tar.gz",
-          "sha256": "56068e754512352538b26c6f7790f23b3b64d3aaeb9cb1bc3a2064db7c0d555f",
-          "type": "archive"
+          "url": "https://github.com/mikeg-dal/QK4.git",
+          "type": "git",
+          "branch": "main"
         },
         {
           "type": "file",
