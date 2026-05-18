@@ -36,6 +36,15 @@ struct RxTxMeterState {
     // and reads ~5–7 A low.
     double paDrainCurrent = 0.0;
 
+    // PA efficiency calibration anchor. Computed on every valid SIRF frame as
+    //     η = fwdPower / (paDrainCurrent × supplyVoltage)
+    // and then used in handleTM to derive a live Id reading from forward power at TM
+    // frame rate (~10 Hz). This combines SIRF's accuracy (anchored to the K4 panel)
+    // with TM's smoothness — without the 0.34 hardcoded-η error that historically
+    // under-read by 5–7 A at low power. Reset to 0 (= "no calibration yet, fall back
+    // to fixed η") on reset().
+    double calibratedPaEfficiency = 0.0;
+
     // TX/RX transition.
     bool isTransmitting = false;
 

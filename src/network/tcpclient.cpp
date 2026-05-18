@@ -6,6 +6,7 @@
 #include <QSslConfiguration>
 #include <QSslPreSharedKeyAuthenticator>
 #include <QSslSocket>
+#include <QTime>
 
 Q_LOGGING_CATEGORY(catTx, "CAT.TX")
 Q_LOGGING_CATEGORY(netTcp, "net.tcp")
@@ -251,8 +252,15 @@ void TcpClient::sendCATBytes(const QByteArray &raw) {
     int len = raw.size();
     while (len > 0 && raw.at(len - 1) == '\0')
         --len;
-    if (len > 0)
-        sendCAT(QString::fromLatin1(raw.constData(), len));
+    if (len > 0) {
+        const QString cmd = QString::fromLatin1(raw.constData(), len);
+        // Diagnostic: pair with the hw.kpodplus EP02 emit log to measure end-to-end
+        // device-emit → wire-write latency. Same HH:mm:ss.zzz format so a simple diff
+        // between matching "KZ@" and "TX@" lines tells you how long each batch took to
+        // forward across the Qt event-queue + I/O thread + TLS encrypt + kernel send.
+        qCDebug(catTx).noquote() << "TX@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << cmd << "]";
+        sendCAT(cmd);
+    }
 }
 
 void TcpClient::sendRaw(const QByteArray &data) {

@@ -19,9 +19,13 @@ TxStateController::TxStateController(RadioState *radioState, StatusBarController
       m_txTriangle(txTriangle), m_txTriangleB(txTriangleB) {
     connect(m_radioState, &RadioState::transmitStateChanged, this, &TxStateController::onTransmitStateChanged);
     connect(m_radioState, &RadioState::txMeterChanged, this, &TxStateController::onTxMeterChanged);
-    // SIRF arrives less frequently than TM; route drain-current edges straight to the meter
-    // so the Id reading refreshes the moment a new SIRF lands instead of waiting for the
-    // next TM frame to pull the cached value.
+    // paDrainCurrentChanged now fires from BOTH paths in RxTxMeterState:
+    //   - handleSIRF (every ~0.3 Hz) — ground truth from K4's PM field. Used to (re)calibrate
+    //     the radio's actual efficiency at the current power/band.
+    //   - handleTM   (every ~10 Hz)  — live derivation: fwdPower / (V × calibrated_efficiency).
+    //     Gives a smooth Id reading at TM frame rate while staying accurate to the K4 panel.
+    // The route below picks up both, so the meter updates at TM rate but always with
+    // SIRF-anchored values.
     connect(m_radioState, &RadioState::paDrainCurrentChanged, this, [this](double amps) {
         if (m_radioState->splitEnabled()) {
             m_vfoB->setTxMeterCurrent(amps);
