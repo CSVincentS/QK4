@@ -325,8 +325,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // so Qt's event queue keeps them FIFO. The on-air ordering is:
     //   restartAfterPause → elementStarted (per enterElement)
     //   characterSpace → keyingFinished     (per goIdle)
-    // matching the K4 KZ protocol (KZP timing → KZ./KZ- elements → KZ_; letter marker per
-    // docs/KPodKeyerInterface.pdf §"KZ Protocol", page 2).
+    // matching the K4 KZ protocol (KZP timing → KZ./KZ- elements → KZ ; letter marker —
+    // literal 0x20 SPACE, confirmed by hexdump of live KPOD+ EP02 traffic; the PDF spec's
+    // monospace rendering of "KZ_;" is a typographic artifact, not an underscore byte).
     auto *tc = m_connectionController->tcpClient();
     auto *cc = m_connectionController;
     connect(
@@ -342,11 +343,13 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         [tc, cc]() {
             if (cc->isKpodPlusKeyerActive())
                 return;
-            // WHY underscore not space: Elecraft KPodKeyerInterface.pdf v1.00, KZ Protocol
-            // section, defines the letter-space marker as "KZ_;" (underscore). The K4 firmware
-            // accepts that exact form. Earlier code emitted "KZ ;" (space) — silently dropped
-            // by the K4 parser, so HaliKey-keyed CW lost inter-letter pauses on the air.
-            tc->sendCAT(QStringLiteral("KZ_;"));
+            // WHY space, not underscore: the Elecraft KPodKeyerInterface.pdf renders the
+            // letter-space marker as "KZ_;" but a hexdump of EP02 traffic from a live KPOD+
+            // device shows the actual byte is 0x20 (literal SPACE). The K4 firmware accepts
+            // that form; emitting "KZ_;" with a real underscore is what the parser rejects.
+            // PDF rendering artifact — the underline beneath the space in the spec's
+            // monospace font reads as an underscore.
+            tc->sendCAT(QStringLiteral("KZ ;"));
         },
         Qt::QueuedConnection);
     connect(
