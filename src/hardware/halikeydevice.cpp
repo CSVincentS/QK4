@@ -8,40 +8,28 @@
 
 Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey")
 
+namespace {
+// Inline debounce decision shared by all three lines. Returns true if the event should be
+// emitted; false if it's redundant (same state) or a bounce (within DEBOUNCE_NS).
+// On accept, updates the confirmed-state atomic and the last-edge timestamp.
+bool acceptEdge(bool raw, std::atomic<bool> &confirmed, std::atomic<qint64> &lastEdgeNs, qint64 nowNs) {
+    if (raw == confirmed.load(std::memory_order_acquire))
+        return false; // Redundant — same direction as last confirmed edge
+    const qint64 last = lastEdgeNs.load(std::memory_order_relaxed);
+    if (nowNs - last < HalikeyDevice::DEBOUNCE_NS)
+        return false; // Bounce — within the dead window
+    lastEdgeNs.store(nowNs, std::memory_order_relaxed);
+    confirmed.store(raw, std::memory_order_release);
+    return true;
+}
+} // namespace
+
 HalikeyDevice::HalikeyDevice(QObject *parent) : QObject(parent) {
-    // Debounce timers — single-shot, fire once after DEBOUNCE_MS of stable state
-    m_ditDebounceTimer = new QTimer(this);
-    m_ditDebounceTimer->setSingleShot(true);
-    m_ditDebounceTimer->setInterval(DEBOUNCE_MS);
-    connect(m_ditDebounceTimer, &QTimer::timeout, this, [this]() {
-        bool raw = m_rawDitState.load(std::memory_order_relaxed);
-        if (raw != m_confirmedDitState.load(std::memory_order_relaxed)) {
-            m_confirmedDitState.store(raw, std::memory_order_relaxed);
-            emit ditStateChanged(raw);
-        }
-    });
-
-    m_dahDebounceTimer = new QTimer(this);
-    m_dahDebounceTimer->setSingleShot(true);
-    m_dahDebounceTimer->setInterval(DEBOUNCE_MS);
-    connect(m_dahDebounceTimer, &QTimer::timeout, this, [this]() {
-        bool raw = m_rawDahState.load(std::memory_order_relaxed);
-        if (raw != m_confirmedDahState.load(std::memory_order_relaxed)) {
-            m_confirmedDahState.store(raw, std::memory_order_relaxed);
-            emit dahStateChanged(raw);
-        }
-    });
-
-    m_pttDebounceTimer = new QTimer(this);
-    m_pttDebounceTimer->setSingleShot(true);
-    m_pttDebounceTimer->setInterval(DEBOUNCE_MS);
-    connect(m_pttDebounceTimer, &QTimer::timeout, this, [this]() {
-        bool raw = m_rawPttState.load(std::memory_order_relaxed);
-        if (raw != m_confirmedPttState.load(std::memory_order_relaxed)) {
-            m_confirmedPttState.store(raw, std::memory_order_relaxed);
-            emit pttStateChanged(raw);
-        }
-    });
+    // Monotonic clock for debounce timestamping. Starting here means nowNs() == 0 represents
+    // "construction time" — any real paddle event will have a positive timestamp, so the
+    // first edge ever delivered will pass the bounce gate (0 - 0 < DEBOUNCE_NS) only on
+    // construction, which is fine because there's no prior confirmed state to compare against.
+    m_clock.start();
 }
 
 HalikeyDevice::~HalikeyDevice() {
@@ -49,38 +37,18 @@ HalikeyDevice::~HalikeyDevice() {
 }
 
 void HalikeyDevice::onRawDit(bool pressed) {
-    m_rawDitState.store(pressed, std::memory_order_relaxed);
-    if (pressed && !m_confirmedDitState.load(std::memory_order_relaxed)) {
-        // Key down — emit immediately for zero latency (runs on RtMidi thread)
-        m_confirmedDitState.store(true, std::memory_order_relaxed);
-        QMetaObject::invokeMethod(m_ditDebounceTimer, "stop", Qt::QueuedConnection);
-        emit ditStateChanged(true);
-    } else {
-        // Key up or redundant key down — post debounce start to main thread (QTimer not thread-safe)
-        QMetaObject::invokeMethod(m_ditDebounceTimer, "start", Qt::QueuedConnection);
-    }
+    if (acceptEdge(pressed, m_confirmedDitState, m_lastDitEdgeNs, m_clock.nsecsElapsed()))
+        emit ditStateChanged(pressed);
 }
 
 void HalikeyDevice::onRawDah(bool pressed) {
-    m_rawDahState.store(pressed, std::memory_order_relaxed);
-    if (pressed && !m_confirmedDahState.load(std::memory_order_relaxed)) {
-        m_confirmedDahState.store(true, std::memory_order_relaxed);
-        QMetaObject::invokeMethod(m_dahDebounceTimer, "stop", Qt::QueuedConnection);
-        emit dahStateChanged(true);
-    } else {
-        QMetaObject::invokeMethod(m_dahDebounceTimer, "start", Qt::QueuedConnection);
-    }
+    if (acceptEdge(pressed, m_confirmedDahState, m_lastDahEdgeNs, m_clock.nsecsElapsed()))
+        emit dahStateChanged(pressed);
 }
 
 void HalikeyDevice::onRawPtt(bool pressed) {
-    m_rawPttState.store(pressed, std::memory_order_relaxed);
-    if (pressed && !m_confirmedPttState.load(std::memory_order_relaxed)) {
-        m_confirmedPttState.store(true, std::memory_order_relaxed);
-        QMetaObject::invokeMethod(m_pttDebounceTimer, "stop", Qt::QueuedConnection);
-        emit pttStateChanged(true);
-    } else {
-        QMetaObject::invokeMethod(m_pttDebounceTimer, "start", Qt::QueuedConnection);
-    }
+    if (acceptEdge(pressed, m_confirmedPttState, m_lastPttEdgeNs, m_clock.nsecsElapsed()))
+        emit pttStateChanged(pressed);
 }
 
 bool HalikeyDevice::openPort(const QString &portName) {
@@ -89,12 +57,12 @@ bool HalikeyDevice::openPort(const QString &portName) {
     }
 
     m_portName = portName;
-    m_rawDitState.store(false, std::memory_order_relaxed);
-    m_rawDahState.store(false, std::memory_order_relaxed);
-    m_rawPttState.store(false, std::memory_order_relaxed);
     m_confirmedDitState.store(false, std::memory_order_relaxed);
     m_confirmedDahState.store(false, std::memory_order_relaxed);
     m_confirmedPttState.store(false, std::memory_order_relaxed);
+    m_lastDitEdgeNs.store(0, std::memory_order_relaxed);
+    m_lastDahEdgeNs.store(0, std::memory_order_relaxed);
+    m_lastPttEdgeNs.store(0, std::memory_order_relaxed);
 
     // Create worker based on configured device type
     int deviceType = RadioSettings::instance()->halikeyDeviceType();
@@ -107,9 +75,10 @@ bool HalikeyDevice::openPort(const QString &portName) {
     m_workerThread = new QThread(this);
     m_worker->moveToThread(m_workerThread);
 
-    // Wire worker signals through debounce handlers
-    // DirectConnection: onRaw* runs on RtMidi callback thread for zero key-down latency.
-    // Thread safety: key-down emits immediately; key-up posts timer start to main thread via QueuedConnection.
+    // DirectConnection: onRaw* runs on whatever worker thread delivered the event (RtMidi
+    // callback for MIDI, monitor thread for V1.4). Both update the same atomics + emit
+    // ditStateChanged from that thread. Downstream connections are independently safe
+    // (HardwareController's dit/dah handlers only touch atomics and queue to the keyer thread).
     connect(m_worker, &HaliKeyWorkerBase::ditStateChanged, this, &HalikeyDevice::onRawDit, Qt::DirectConnection);
     connect(m_worker, &HaliKeyWorkerBase::dahStateChanged, this, &HalikeyDevice::onRawDah, Qt::DirectConnection);
     connect(m_worker, &HaliKeyWorkerBase::pttStateChanged, this, &HalikeyDevice::onRawPtt, Qt::DirectConnection);
@@ -151,19 +120,14 @@ void HalikeyDevice::closePort() {
 
     m_worker = nullptr; // Deleted by QThread::finished -> deleteLater
 
-    // Stop any pending debounce timers
-    m_ditDebounceTimer->stop();
-    m_dahDebounceTimer->stop();
-    m_pttDebounceTimer->stop();
-
     bool wasConnected = m_connected;
     m_connected = false;
-    m_rawDitState.store(false, std::memory_order_relaxed);
-    m_rawDahState.store(false, std::memory_order_relaxed);
-    m_rawPttState.store(false, std::memory_order_relaxed);
     m_confirmedDitState.store(false, std::memory_order_relaxed);
     m_confirmedDahState.store(false, std::memory_order_relaxed);
     m_confirmedPttState.store(false, std::memory_order_relaxed);
+    m_lastDitEdgeNs.store(0, std::memory_order_relaxed);
+    m_lastDahEdgeNs.store(0, std::memory_order_relaxed);
+    m_lastPttEdgeNs.store(0, std::memory_order_relaxed);
 
     if (wasConnected) {
         emit disconnected();
