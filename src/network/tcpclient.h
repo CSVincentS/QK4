@@ -47,6 +47,13 @@ public:
     Q_INVOKABLE void sendCAT(const QString &command);
     Q_INVOKABLE void sendRaw(const QByteArray &data);
 
+    // WHY: lets the KPOD+ EP02 reader (HighPriority worker thread) deliver
+    // KZ batches straight to the I/O thread via a queued connection,
+    // bypassing the main thread. Trims trailing NUL padding from the
+    // device's 32-byte fixed-size frames and dispatches through sendCAT()
+    // so existing K4-packet framing and the cross-thread marshal apply.
+    Q_INVOKABLE void sendCATBytes(const QByteArray &raw);
+
     // Pre-RDY command string sent before the state dump on connect.
     // Must be called before connectToHost() — both are queued to the IO thread,
     // so ordering is guaranteed as long as the caller doesn't interleave.

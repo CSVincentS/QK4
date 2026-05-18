@@ -75,7 +75,7 @@ else()
     pkg_check_modules(OPUS REQUIRED opus)
     pkg_check_modules(HIDAPI REQUIRED hidapi-libusb)
     pkg_check_modules(LIBUDEV REQUIRED libudev)
-    pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+    pkg_check_modules(LIBUSB REQUIRED libusb-1.0>=1.0.21)
 endif()
 set(SOURCES
     src/main.cpp
@@ -187,6 +187,7 @@ set(SOURCES
     src/ui/widgets/wheelaccumulator.cpp
     src/hardware/kpoddevice.cpp
     src/hardware/kpodplusdevice.cpp
+    src/hardware/kpodplususbworker.cpp
     src/hardware/halikeydevice.cpp
     src/hardware/halikeyworkerbase.cpp
     src/hardware/halikeyv14worker.cpp
@@ -306,6 +307,7 @@ set(HEADERS
     src/ui/widgets/wheelaccumulator.h
     src/hardware/kpoddevice.h
     src/hardware/kpodplusdevice.h
+    src/hardware/kpodplususbworker.h
     src/hardware/halikeydevice.h
     src/hardware/halikeyworkerbase.h
     src/hardware/halikeyv14worker.h

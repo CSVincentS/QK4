@@ -1,19 +1,13 @@
 #ifndef KPODPLUSDEVICE_H
 #define KPODPLUSDEVICE_H
 
+#include <QByteArray>
 #include <QObject>
 #include <QString>
-#include <QTimer>
-#include <QThread>
-#include <atomic>
 
-// Forward declarations for libusb
-struct libusb_context;
-struct libusb_device_handle;
-
-#ifdef Q_OS_LINUX
-class KpodUdevWorker;
-#endif
+class QThread;
+class KpodPlusUsbWorker;
+class KpodPlusEp02Worker;
 
 struct KpodPlusDeviceInfo {
     bool detected = false;
@@ -27,60 +21,30 @@ struct KpodPlusDeviceInfo {
     quint8 deviceAddress = 0;
 };
 
-// Worker that blocks on EP02 interrupt transfers to read keyer output (KZ/KX strings).
-// Runs on a dedicated thread; emits keyerDataReceived() with raw data.
-class KpodPlusEp02Worker : public QObject {
-    Q_OBJECT
-
-public:
-    explicit KpodPlusEp02Worker(QObject *parent = nullptr);
-
-    void setDeviceHandle(libusb_device_handle *handle);
-
-    // Thread-safe stop flag
-    void requestStop();
-
-public slots:
-    void run();
-
-signals:
-    void keyerDataReceived(const QByteArray &data);
-
-private:
-    libusb_device_handle *m_handle = nullptr;
-    std::atomic<bool> m_running{false};
-};
-
+// Thin Qt façade over the libusb worker. All libusb work happens on
+// KpodPlusUsbWorker (its own thread) and EP02 reads happen on
+// KpodPlusEp02Worker (HighPriority thread). The façade lives on the main
+// thread; every setter is dispatched via QueuedConnection so the main thread
+// never touches libusb.
 class KpodPlusDevice : public QObject {
     Q_OBJECT
 
 public:
-    static const quint16 VENDOR_ID = 0x04D8;
-    static const quint16 PRODUCT_ID_KPOD = 0xF12D;
-    static const quint16 PRODUCT_ID_ELECRAFT = 0xEFA5;
-    static const quint8 VENDOR_INTERFACE_CLASS = 255;
-
-    // Rocker switch positions (same encoding as KPOD)
     enum RockerPosition { RockerCenter = 0, RockerRight = 1, RockerLeft = 2 };
     Q_ENUM(RockerPosition)
 
     explicit KpodPlusDevice(QObject *parent = nullptr);
-    ~KpodPlusDevice();
+    ~KpodPlusDevice() override;
 
-    // Detection
+    // Cached views of worker state — safe to call from the main thread.
     bool isDetected() const;
     KpodPlusDeviceInfo deviceInfo() const;
-    static KpodPlusDeviceInfo detectDevice();
-
-    // Polling control (EP01 encoder/buttons + EP02 keyer reader)
-    bool startPolling();
-    void stopPolling();
     bool isPolling() const;
-
-    // Current state
     RockerPosition rockerPosition() const;
 
-    // Keyer configuration commands (sent via EP01)
+    // Forwarded as queued invocations to the worker thread.
+    bool startPolling();
+    void stopPolling();
     void setKeyerSpeed(int wpm);
     void setCwPitch(int freqHz);
     void setKeyerParams(int iambicMode, bool paddleReversed);
@@ -98,48 +62,16 @@ signals:
     void keyerDataReceived(const QByteArray &data);
     void pollError(const QString &error);
 
-private slots:
-    void initialize();
-    void poll();
-    void onDeviceArrived();
-    void onDeviceRemoved();
-
 private:
-    bool openDevice();
-    void closeDevice();
-    void processResponse(const unsigned char *buffer);
-    bool sendCommand(const unsigned char *data, int length);
-    void startEp02Reader();
-    void stopEp02Reader();
+    KpodPlusDeviceInfo m_info;
+    RockerPosition m_lastRocker = RockerCenter;
+    bool m_polling = false;
 
-    // Hotplug monitoring
-    void setupHotplugMonitoring();
-    void teardownHotplugMonitoring();
+    KpodPlusUsbWorker *m_usbWorker = nullptr;
+    QThread *m_usbThread = nullptr;
 
-    KpodPlusDeviceInfo m_deviceInfo;
-    libusb_context *m_usbContext = nullptr;
-    libusb_device_handle *m_usbHandle = nullptr;
-    bool m_interfaceClaimed = false;
-
-    QTimer *m_pollTimer = nullptr;
-    static const int POLL_INTERVAL_MS = 20;
-    RockerPosition m_lastRockerPosition = RockerCenter;
-    quint8 m_lastButtonState = 0;
-    bool m_holdEmitted = false;
-
-    // EP02 reader thread
     KpodPlusEp02Worker *m_ep02Worker = nullptr;
     QThread *m_ep02Thread = nullptr;
-
-    // Hotplug monitoring
-#ifdef Q_OS_LINUX
-    KpodUdevWorker *m_udevWorker = nullptr;
-    QThread *m_udevThread = nullptr;
-#else
-    QTimer *m_presenceTimer = nullptr;
-    static const int PRESENCE_CHECK_INTERVAL_MS = 2000;
-    void checkDevicePresence();
-#endif
 };
 
 #endif // KPODPLUSDEVICE_H

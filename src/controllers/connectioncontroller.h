@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QThread>
+#include <atomic>
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 
@@ -47,6 +48,14 @@ public:
     TcpClient *tcpClient() const { return m_tcpClient; }
     NetworkMetrics *networkMetrics() const { return m_networkMetrics; }
 
+    // KPOD+ keyer ownership gate. Written from the main thread when the
+    // KPOD+ device polling toggles; read on the I/O thread by queued
+    // lambdas that forward local-iambic KZ commands. When true, the local
+    // iambic path drops its KZ emissions because the KPOD+ device is the
+    // authoritative keyer.
+    void setKpodPlusKeyerActive(bool active) { m_kpodPlusKeyerActive.store(active, std::memory_order_relaxed); }
+    bool isKpodPlusKeyerActive() const { return m_kpodPlusKeyerActive.load(std::memory_order_relaxed); }
+
 signals:
     void radioReady();                                             // Auth succeeded, K4 is live
     void connectionError(const QString &error);                    // Connection error
@@ -69,6 +78,7 @@ private:
     NetworkMetrics *m_networkMetrics;
     RadioState *m_radioState; // not owned
     RadioEntry m_currentRadio;
+    std::atomic<bool> m_kpodPlusKeyerActive{false};
 };
 
 #endif // CONNECTIONCONTROLLER_H

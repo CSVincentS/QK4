@@ -104,6 +104,10 @@ void KPA1500Client::setState(ConnectionState state) {
 }
 
 void KPA1500Client::onSocketConnected() {
+    // WHY: control commands are small writes; without TCP_NODELAY they can be coalesced into
+    // 40 ms Nagle/delayed-ACK windows. KeepAlive handles NAT timeout on long-running sessions.
+    m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
     qCDebug(netKpa) << "KPA1500Client: Connected to" << m_host << ":" << m_port;
     setState(Connected);
     emit connected();

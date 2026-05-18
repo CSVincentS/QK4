@@ -247,6 +247,14 @@ void TcpClient::sendCAT(const QString &command) {
     }
 }
 
+void TcpClient::sendCATBytes(const QByteArray &raw) {
+    int len = raw.size();
+    while (len > 0 && raw.at(len - 1) == '\0')
+        --len;
+    if (len > 0)
+        sendCAT(QString::fromLatin1(raw.constData(), len));
+}
+
 void TcpClient::sendRaw(const QByteArray &data) {
     if (QThread::currentThread() != thread()) {
         QMetaObject::invokeMethod(this, "sendRaw", Qt::QueuedConnection, Q_ARG(QByteArray, data));
@@ -274,6 +282,13 @@ void TcpClient::setState(ConnectionState state) {
 }
 
 void TcpClient::onSocketConnected() {
+    // WHY: small-write CAT traffic (KZ keying bursts in particular) plus K4-side delayed-ACK
+    // produces ~40 ms RTT stalls when Nagle is on. Setting LowDelayOption after the TCP socket
+    // is connected applies TCP_NODELAY to the actual FD and benefits the TLS handshake itself.
+    // KeepAliveOption catches half-open sockets across NAT keepalive expirations on WAN links.
+    m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
+
     if (m_useTls) {
         // TLS connection: TCP connected, now waiting for TLS handshake to complete
         // The encrypted() signal will fire when TLS is fully established

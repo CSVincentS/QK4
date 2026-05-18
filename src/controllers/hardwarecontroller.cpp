@@ -95,7 +95,12 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
             m_kpodPlusDevice->startPolling();
             applyKpodPlusConfig();
         }
+        // KPOD+ now owns the keyer; the local iambic path drops its KZ output.
+        m_connectionController->setKpodPlusKeyerActive(true);
     });
+
+    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceDisconnected, this,
+            [this]() { m_connectionController->setKpodPlusKeyerActive(false); });
 
     // Auto-start on detection at startup
     connect(m_kpodPlusDevice, &KpodPlusDevice::deviceInfoReady, this, [this, applyKpodPlusConfig]() {
@@ -169,21 +174,16 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         }
     });
 
-    // EP02 keyer data → raw passthrough to K4 tunnel
-    // The KPOD+ delivers complete KZ/KX strings in 32-byte transfers, zero-padded after
-    // the last ';'. Forward the trimmed buffer as a single sendCAT() call — one protocol
-    // packet, one TCP write, one flush. The K4 parses on ';' delimiters regardless of
-    // framing. This preserves the device's native batching at high WPM and avoids per-
-    // element string allocation + multiple TCP writes.
-    connect(m_kpodPlusDevice, &KpodPlusDevice::keyerDataReceived, this, [this](const QByteArray &data) {
-        // Strip trailing null bytes from the 32-byte buffer
-        int len = data.size();
-        while (len > 0 && data.at(len - 1) == '\0')
-            --len;
-        if (len > 0) {
-            m_connectionController->sendCAT(QString::fromLatin1(data.constData(), len));
-        }
-    });
+    // EP02 keyer data → straight to the I/O thread.
+    //
+    // The KPOD+ delivers complete KZ/KX strings in 32-byte transfers, zero-padded after the
+    // last ';'. By targeting TcpClient as the receiver (lives on the I/O thread) with a
+    // queued connection we skip the main thread entirely on this hot path. Earlier the
+    // KpodPlusEP02 thread emitted into a lambda on the main thread, which then marshalled
+    // again into TcpClient on the I/O thread — two hops, sensitive to GUI load. sendCATBytes
+    // trims NUL padding on the I/O thread and hands off to sendCAT().
+    connect(m_kpodPlusDevice, &KpodPlusDevice::keyerDataReceived, m_connectionController->tcpClient(),
+            &TcpClient::sendCATBytes, Qt::QueuedConnection);
 
     // KPOD enable/disable also controls KPOD+
     connect(RadioSettings::instance(), &RadioSettings::kpodEnabledChanged, this, [this](bool enabled) {
@@ -307,34 +307,58 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // =========================================================================
     // Keyer → CAT commands + sidetone audio
     // =========================================================================
+    //
+    // Wire keyer signals (emitted on the HighPriority keyer thread) directly to TcpClient on
+    // the I/O thread via queued connections. The main thread is not on this hot path.
+    // The atomic gate on ConnectionController drops emissions when the KPOD+ device owns
+    // the keyer; the local-iambic state machine still runs but its KZ output is suppressed.
+    //
+    // Order preservation: all three signals (restartAfterPause, elementStarted, characterSpace)
+    // originate on the same source thread (keyer) and target the same destination thread (I/O),
+    // so Qt's event queue keeps them FIFO. The on-air ordering is:
+    //   restartAfterPause → elementStarted (per enterElement)
+    //   characterSpace → keyingFinished     (per goIdle)
+    // matching the K4 KZ protocol (KZP timing → KZ./KZ- elements → KZ ; letter marker).
+    auto *tc = m_connectionController->tcpClient();
+    auto *cc = m_connectionController;
+    connect(
+        m_iambicKeyer, &IambicKeyer::elementStarted, tc,
+        [tc, cc](bool isDit) {
+            if (cc->isKpodPlusKeyerActive())
+                return;
+            tc->sendCAT(isDit ? QStringLiteral("KZ.;") : QStringLiteral("KZ-;"));
+        },
+        Qt::QueuedConnection);
+    connect(
+        m_iambicKeyer, &IambicKeyer::characterSpace, tc,
+        [tc, cc]() {
+            if (cc->isKpodPlusKeyerActive())
+                return;
+            tc->sendCAT(QStringLiteral("KZ ;"));
+        },
+        Qt::QueuedConnection);
+    connect(
+        m_iambicKeyer, &IambicKeyer::restartAfterPause, tc,
+        [tc, cc](int ms) {
+            if (cc->isKpodPlusKeyerActive())
+                return;
+            tc->sendCAT(QStringLiteral("KZP%1;").arg(ms, 4, 10, QChar('0')));
+        },
+        Qt::QueuedConnection);
 
-    // Keyer element started — send KZ command to I/O thread + sidetone to sidetone thread
-    // Both are suppressed when KPOD+ keyer is active (device handles keying + sidetone)
-    connect(m_iambicKeyer, &IambicKeyer::elementStarted, this, [this](bool isDit) {
-        if (isKpodPlusKeyerActive())
-            return;
-        m_connectionController->sendCAT(isDit ? "KZ.;" : "KZ-;");
-    });
+    // Sidetone stays on its own thread. Sidetone gate uses the local helper so a hot KPOD+
+    // takeover silences feedback immediately even before the next emit lands on I/O.
     connect(m_iambicKeyer, &IambicKeyer::elementStarted, m_sidetoneGenerator,
             [this, sg = m_sidetoneGenerator](bool isDit) {
                 if (isKpodPlusKeyerActive())
                     return;
                 isDit ? sg->playSingleDit() : sg->playSingleDah();
             });
-
-    // Keyer finished — stop local sidetone (K4 unkeys itself after each KZ element)
     connect(m_iambicKeyer, &IambicKeyer::keyingFinished, m_sidetoneGenerator, [this, sg = m_sidetoneGenerator]() {
         if (isKpodPlusKeyerActive())
             return;
         sg->stopElement();
     });
-
-    // Character boundary — keyer went idle between elements
-    connect(m_iambicKeyer, &IambicKeyer::characterSpace, this, [this]() { m_connectionController->sendCAT("KZ ;"); });
-
-    // Restart after pause — send KZP with elapsed ms before next element
-    connect(m_iambicKeyer, &IambicKeyer::restartAfterPause, this,
-            [this](int ms) { m_connectionController->sendCAT(QString("KZP%1;").arg(ms, 4, 10, QChar('0'))); });
 
     // =========================================================================
     // HaliKey paddle → keyer (ZERO-LATENCY DirectConnection)
