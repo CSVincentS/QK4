@@ -108,6 +108,13 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
             !m_kpodPlusDevice->isPolling()) {
             m_kpodPlusDevice->startPolling();
             applyKpodPlusConfig();
+            // Pre-emptively claim the keyer path the moment KPOD+ is detected
+            // (~10-100 ms before deviceConnected fires). Otherwise any paddle
+            // events during the openDevice window slip through to the local
+            // iambic + sidetone, which the device itself handles. Released by
+            // the deviceDisconnected handler or when the user disables KPOD+
+            // in settings.
+            m_connectionController->setKpodPlusKeyerActive(true);
         }
     });
 
@@ -445,7 +452,16 @@ void HardwareController::shutdownSidetone() {
 }
 
 bool HardwareController::isKpodPlusKeyerActive() const {
-    return m_kpodPlusDevice && m_kpodPlusDevice->isDetected() && m_kpodPlusDevice->isPolling();
+    // WHY read the atomic gate rather than m_kpodPlusDevice->isPolling():
+    // (1) consistency — the I/O-thread iambic CAT lambdas read the same
+    // atomic, so a single source of truth across both paths;
+    // (2) thread safety — this method is called from the HaliKey worker
+    // thread (DirectConnection in the paddle handlers) and reading
+    // KpodPlusDevice::isPolling() races with the main-thread setter;
+    // (3) timing — the atomic is set on deviceInfoReady (KPOD+ detected),
+    // not deviceConnected (KPOD+ open succeeded), so the ~10-100 ms open
+    // window doesn't leak paddle events to the local sidetone path.
+    return m_connectionController->isKpodPlusKeyerActive();
 }
 
 HardwareController::~HardwareController() {
