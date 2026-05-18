@@ -6,8 +6,7 @@ on:
 
 jobs:
   build:
-    name: Flatpak
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
       options: --privileged
