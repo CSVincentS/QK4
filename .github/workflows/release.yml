@@ -450,7 +450,7 @@ jobs:
           name: QK4-raspberry-pi
           path: QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
 
-    build-flatpak:
+  build-flatpak:
     name: Flatpak
     runs-on: ubuntu-latest
     container:
