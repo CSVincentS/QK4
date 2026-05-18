@@ -325,7 +325,8 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // so Qt's event queue keeps them FIFO. The on-air ordering is:
     //   restartAfterPause → elementStarted (per enterElement)
     //   characterSpace → keyingFinished     (per goIdle)
-    // matching the K4 KZ protocol (KZP timing → KZ./KZ- elements → KZ ; letter marker).
+    // matching the K4 KZ protocol (KZP timing → KZ./KZ- elements → KZ_; letter marker per
+    // docs/KPodKeyerInterface.pdf §"KZ Protocol", page 2).
     auto *tc = m_connectionController->tcpClient();
     auto *cc = m_connectionController;
     connect(
@@ -341,7 +342,11 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         [tc, cc]() {
             if (cc->isKpodPlusKeyerActive())
                 return;
-            tc->sendCAT(QStringLiteral("KZ ;"));
+            // WHY underscore not space: Elecraft KPodKeyerInterface.pdf v1.00, KZ Protocol
+            // section, defines the letter-space marker as "KZ_;" (underscore). The K4 firmware
+            // accepts that exact form. Earlier code emitted "KZ ;" (space) — silently dropped
+            // by the K4 parser, so HaliKey-keyed CW lost inter-letter pauses on the air.
+            tc->sendCAT(QStringLiteral("KZ_;"));
         },
         Qt::QueuedConnection);
     connect(
@@ -416,6 +421,13 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
             const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
             const bool isV14 = (RadioSettings::instance()->halikeyDeviceType() != 1);
             if (inCw && isV14) {
+                // Same KPOD+-active gate as the dit/dah handlers above. Without this, a
+                // HaliKey V1.4 CTS edge in CW mode would still spin the local IambicKeyer
+                // state machine while KPOD+ owns the keyer path. The downstream CAT and
+                // sidetone connections are also gated, so nothing reaches the wire or
+                // the speaker — but blocking at the source avoids wasted state churn.
+                if (isKpodPlusKeyerActive())
+                    return;
                 m_iambicKeyer->setDitPaddle(active);
             } else if (!inCw) {
                 emit pttRequested(active);

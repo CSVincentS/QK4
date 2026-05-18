@@ -2,6 +2,7 @@
 #include <QLoggingCategory>
 #include <QString>
 #include <QThread>
+#include <QTime>
 #include <QTimer>
 #include <cstring>
 #include <libusb-1.0/libusb.h>
@@ -590,7 +591,14 @@ void KpodPlusEp02Worker::run() {
         int transferred = 0;
         const int rc = libusb_interrupt_transfer(h, 0x82, buffer, sizeof(buffer), &transferred, kEp02TimeoutMs);
         if (rc == LIBUSB_SUCCESS && transferred > 0) {
-            emit keyerDataReceived(QByteArray(reinterpret_cast<const char *>(buffer), transferred));
+            QByteArray data(reinterpret_cast<const char *>(buffer), transferred);
+            // Diagnostic: timestamp each KZ batch so on-air vs wire-out timing can be compared
+            // when investigating "rhythm wrong at the K4" reports. Enable with
+            // QT_LOGGING_RULES="hw.kpodplus.debug=true". Trimmed to drop trailing NULs (32-byte
+            // fixed transfer per docs/KPodKeyerInterface.pdf §"Endpoint 2 IN").
+            qCDebug(hwKpodPlus).noquote() << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "["
+                                          << KpodPlusUsbWorker::trimEp02Buffer(data) << "]";
+            emit keyerDataReceived(data);
         } else if (rc == LIBUSB_ERROR_TIMEOUT) {
             continue;
         } else if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO) {
