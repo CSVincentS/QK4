@@ -1,0 +1,68 @@
+{
+  "id": "io.github.mikeg_dal.QK4",
+  "runtime": "org.kde.Platform",
+  "runtime-version": "6.10",
+  "sdk": "org.kde.Sdk",
+  "command": "qk4",
+  "modules": [
+    {
+      "name": "opus",
+      "buildsystem": "meson",
+      "sources": [
+        {
+          "url": "https://downloads.xiph.org/releases/opus/opus-1.6.1.tar.gz",
+          "sha256": "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1",
+          "type": "archive"
+        }
+      ]
+    },
+    {
+      "name": "hidapi",
+      "buildsystem": "cmake-ninja",
+      "sources": [
+        {
+          "url": "https://github.com/libusb/hidapi/archive/refs/tags/hidapi-0.15.0.tar.gz",
+          "sha256": "5d84dec684c27b97b921d2f3b73218cb773cf4ea915caee317ac8fc73cef8136",
+          "type": "archive"
+        }
+      ]
+    },
+    {
+      "name": "qk4",
+      "buildsystem": "simple",
+      "sources": [
+        {
+          "url": "https://github.com/mikeg-dal/QK4/archive/refs/tags/v0.6.0-beta.1.tar.gz",
+          "sha256": "56068e754512352538b26c6f7790f23b3b64d3aaeb9cb1bc3a2064db7c0d555f",
+          "type": "archive"
+        },
+        {
+          "type": "file",
+          "path": "io.github.mikeg_dal.QK4.desktop"
+        },
+        {
+          "type": "file",
+          "path": "qk4_icon.png"
+        }
+      ],
+      "build-commands": [
+        "cmake -B build -DCMAKE_BUILD_TYPE=Release",
+        "cmake --build build -j$(nproc)",
+        "install -Dm755 build/QK4 /app/bin/qk4",
+        "install -Dm644 io.github.mikeg_dal.QK4.desktop /app/share/applications/io.github.mikeg_dal.QK4.desktop",
+        "install -Dm644 qk4_icon.png /app/share/icons/hicolor/128x128/apps/io.github.mikeg_dal.QK4.png"
+      ]
+    }
+  ],
+  "finish-args": [
+    "--share=network",
+    "--share=ipc",
+    "--socket=wayland",
+    "--socket=x11",
+    "--socket=pulseaudio",
+    "--device=dri",
+    "--device=all",
+    "--filesystem=host",
+    "--env=PIPEWIRE_QUANTUM=64/48000"
+  ]
+}
