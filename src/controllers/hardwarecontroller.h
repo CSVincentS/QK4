@@ -80,6 +80,20 @@ private:
     // races with parseCATCommand writing it on the main thread. Mirror mode into this
     // atomic from a queued modeChanged connection; the DirectConnection lambda reads it.
     std::atomic<int> m_cachedMode{0}; // initialized to RadioState::Unknown in the .cpp
+
+    // V1.4 PTT-line demux destination: the V1.4 firmware multiplexes paddle dit and foot
+    // pedal on CTS. The pttStateChanged handler decides where the rising edge goes based
+    // on current mode (CW → IambicKeyer dit-paddle; non-CW → MainWindow PTT). The
+    // destination is captured at rising edge so that:
+    //   - A falling edge dispatches to the same destination that received the rising edge,
+    //     not whichever mode happens to be current at release time.
+    //   - A mode change while the line is held fires the matching up event to the previous
+    //     destination, so neither IambicKeyer nor MainWindow's PTT handler gets stuck in
+    //     a "still pressed" state across the transition.
+    // compare_exchange_strong on the cleanup path ensures only one thread (mode-change
+    // handler OR falling-edge handler) wins, with no double-release.
+    enum V14PttDest { V14PttNone = 0, V14PttDitPaddle = 1, V14PttPtt = 2 };
+    std::atomic<int> m_v14PttDestination{V14PttNone};
 };
 
 #endif // HARDWARECONTROLLER_H

@@ -387,8 +387,23 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // non-atomic subsystem field concurrently with parseCATCommand()'s writes on the main
     // thread — data race. The atomic cache below is updated from a queued modeChanged.
     m_cachedMode.store(static_cast<int>(m_radioState->mode()), std::memory_order_relaxed);
-    connect(m_radioState, &RadioState::modeChanged, this,
-            [this](RadioState::Mode mode) { m_cachedMode.store(static_cast<int>(mode), std::memory_order_relaxed); });
+    connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
+        m_cachedMode.store(static_cast<int>(mode), std::memory_order_relaxed);
+        // V1.4 mode-transition cleanup: if a paddle/PTT was rising-edge-captured before the
+        // transition, fire the matching up event to the OLD destination so neither the
+        // IambicKeyer nor MainWindow gets stuck in a half-pressed state. CAS ensures the
+        // falling-edge handler doesn't also clean up (whichever fires first wins).
+        int dest = m_v14PttDestination.load(std::memory_order_acquire);
+        if (dest != V14PttNone) {
+            if (m_v14PttDestination.compare_exchange_strong(dest, V14PttNone, std::memory_order_acq_rel)) {
+                if (dest == V14PttDitPaddle) {
+                    m_iambicKeyer->setDitPaddle(false);
+                } else if (dest == V14PttPtt) {
+                    emit pttRequested(false);
+                }
+            }
+        }
+    });
 
     connect(
         m_halikeyDevice, &HalikeyDevice::ditStateChanged, this,
@@ -420,20 +435,41 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(
         m_halikeyDevice, &HalikeyDevice::pttStateChanged, this,
         [this](bool active) {
-            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
-            const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
             const bool isV14 = (RadioSettings::instance()->halikeyDeviceType() != 1);
-            if (inCw && isV14) {
-                // Same KPOD+-active gate as the dit/dah handlers above. Without this, a
-                // HaliKey V1.4 CTS edge in CW mode would still spin the local IambicKeyer
-                // state machine while KPOD+ owns the keyer path. The downstream CAT and
-                // sidetone connections are also gated, so nothing reaches the wire or
-                // the speaker — but blocking at the source avoids wasted state churn.
-                if (isKpodPlusKeyerActive())
+            if (active) {
+                // RISING EDGE: pick a destination based on current mode and remember it,
+                // so the falling edge (or a mid-press mode change) can fire the matching
+                // up event to the SAME destination — even if the mode flipped meanwhile.
+                auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
+                const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
+                if (inCw && isV14) {
+                    // KPOD+ owns the keyer? Drop and don't capture a destination — the
+                    // matching falling edge will see V14PttNone and also drop.
+                    if (isKpodPlusKeyerActive())
+                        return;
+                    m_v14PttDestination.store(V14PttDitPaddle, std::memory_order_release);
+                    m_iambicKeyer->setDitPaddle(true);
+                } else if (!inCw) {
+                    m_v14PttDestination.store(V14PttPtt, std::memory_order_release);
+                    emit pttRequested(true);
+                }
+                // (MIDI variant in CW falls through silently — its dit comes via note 20,
+                // not via the PTT line, so a PTT rising edge here is the foot pedal which
+                // shouldn't key in CW.)
+            } else {
+                // FALLING EDGE: dispatch to whatever destination captured the rising edge.
+                // CAS ensures the mode-change cleanup handler doesn't also fire — only one
+                // of (mode-change, falling-edge) wins, and the other sees V14PttNone.
+                int dest = m_v14PttDestination.load(std::memory_order_acquire);
+                if (dest == V14PttNone)
                     return;
-                m_iambicKeyer->setDitPaddle(active);
-            } else if (!inCw) {
-                emit pttRequested(active);
+                if (m_v14PttDestination.compare_exchange_strong(dest, V14PttNone, std::memory_order_acq_rel)) {
+                    if (dest == V14PttDitPaddle) {
+                        m_iambicKeyer->setDitPaddle(false);
+                    } else if (dest == V14PttPtt) {
+                        emit pttRequested(false);
+                    }
+                }
             }
         },
         Qt::DirectConnection);
