@@ -54,8 +54,17 @@ KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     // no keyer data would ever flow.
     connect(m_usbWorker, &KpodPlusUsbWorker::handleOpened, m_ep02Worker, &KpodPlusEp02Worker::setDeviceHandle,
             Qt::DirectConnection);
-    connect(m_usbWorker, &KpodPlusUsbWorker::handleClosing, m_ep02Worker,
-            [this]() { m_ep02Worker->setDeviceHandle(0); }, Qt::DirectConnection);
+    connect(
+        m_usbWorker, &KpodPlusUsbWorker::handleClosing, m_ep02Worker, [this]() { m_ep02Worker->setDeviceHandle(0); },
+        Qt::DirectConnection);
+
+    // EP02 read errors (NO_DEVICE / IO) on the EP02 thread propagate to the
+    // USB worker so the device is closed and re-detected. Without this, an
+    // EP02-only transient (e.g. one-endpoint glitch) would silently kill KZ
+    // data forever while EP01 polling kept ticking — the user-visible
+    // "paddles stopped registering after a while" symptom.
+    connect(m_ep02Worker, &KpodPlusEp02Worker::transferError, m_usbWorker, &KpodPlusUsbWorker::handleLostDevice,
+            Qt::QueuedConnection);
 
     m_usbThread->start();
 }

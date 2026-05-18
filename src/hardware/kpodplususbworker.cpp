@@ -414,6 +414,8 @@ bool KpodPlusUsbWorker::sendEp01Out(const unsigned char data[8]) {
     const int rc = libusb_interrupt_transfer(m_handle, 0x01, const_cast<unsigned char *>(data), 8, &transferred, 50);
     if (rc != LIBUSB_SUCCESS && rc != LIBUSB_ERROR_TIMEOUT) {
         qCWarning(hwKpodPlus) << "EP01 OUT failed:" << libusb_error_name(rc);
+        if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO)
+            handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
         return false;
     }
     return true;
@@ -430,11 +432,22 @@ bool KpodPlusUsbWorker::readEp01In(unsigned char buffer[8], int timeoutMs) {
         return false;
     if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO) {
         qCWarning(hwKpodPlus) << "EP01 IN failed:" << libusb_error_name(rc);
-        // Treat as device gone
-        QTimer::singleShot(0, this, &KpodPlusUsbWorker::closeDevice);
-        emit deviceRemoved();
+        handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
     }
     return false;
+}
+
+void KpodPlusUsbWorker::handleLostDevice(QString reason) {
+    // Idempotent: handleLostDevice can be invoked from three paths during a
+    // single USB transient — sendEp01Out failure, readEp01In failure, and the
+    // queued connection from EP02 worker's transferError. Bail if we've
+    // already torn down so we don't double-emit signals or re-schedule
+    // closeDevice.
+    if (!m_devicePresent && !m_handle)
+        return;
+    qCWarning(hwKpodPlus) << "Device lost:" << reason;
+    m_devicePresent = false;
+    QTimer::singleShot(0, this, &KpodPlusUsbWorker::closeDevice);
 }
 
 void KpodPlusUsbWorker::onPollTimer() {

@@ -69,6 +69,15 @@ public slots:
     void setEncodeMode(int mode);
     void setStuckTimeout(int seconds);
 
+    // Called when any libusb path detects the device handle has gone bad
+    // (LIBUSB_ERROR_NO_DEVICE / LIBUSB_ERROR_IO) — from sendEp01Out,
+    // readEp01In, or EP02 worker's transferError signal (queued).
+    // Schedules closeDevice and resets m_devicePresent so the presence
+    // timer re-opens the device on its next tick. Without this, a brief
+    // USB transient closes the handle but leaves m_devicePresent stuck
+    // true, so re-detection is never triggered and the keyer stays dead.
+    void handleLostDevice(QString reason);
+
 signals:
     void deviceInfoReady(KpodPlusDeviceInfo info);
     void deviceArrived();
