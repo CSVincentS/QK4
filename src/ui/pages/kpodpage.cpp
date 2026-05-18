@@ -111,8 +111,37 @@ KpodPage::KpodPage(KpodDevice *kpodDevice, KpodPlusDevice *kpodPlusDevice, QWidg
         connect(m_kpodPlusDevice, &KpodPlusDevice::deviceDisconnected, this, &KpodPage::updateKpodStatus);
     }
 
+    // Reactive refresh: when HardwareController mirrors a K4 echo into RadioSettings
+    // (K4 → settings as source of truth), the page widgets need to repaint without
+    // re-firing their valueChanged signals back to the K4. This path is separate from
+    // kpodPlusSettingsChanged (which is the user-action path).
+    connect(RadioSettings::instance(), &RadioSettings::kpodPlusSettingsExternallyUpdated, this,
+            &KpodPage::refreshKeyerConfigFromSettings);
+
     // Initialize with current status
     updateKpodStatus();
+}
+
+void KpodPage::refreshKeyerConfigFromSettings() {
+    auto *s = RadioSettings::instance();
+    // QSignalBlocker on each widget so the programmatic setValue doesn't fire
+    // valueChanged → kpodPlusSettingsChanged → re-send to K4.
+    if (m_wpmSpinner) {
+        QSignalBlocker block(m_wpmSpinner);
+        m_wpmSpinner->setValue(s->kpodPlusKeyerSpeed());
+    }
+    if (m_pitchSpinner) {
+        QSignalBlocker block(m_pitchSpinner);
+        m_pitchSpinner->setValue(s->kpodPlusCwPitch());
+    }
+    if (m_iambicModeCombo) {
+        QSignalBlocker block(m_iambicModeCombo);
+        m_iambicModeCombo->setCurrentIndex(s->kpodPlusIambicMode());
+    }
+    if (m_paddleOrientCombo) {
+        QSignalBlocker block(m_paddleOrientCombo);
+        m_paddleOrientCombo->setCurrentIndex(s->kpodPlusPaddleReversed() ? 1 : 0);
+    }
 }
 
 void KpodPage::setupKeyerConfigSection(QVBoxLayout *parentLayout) {

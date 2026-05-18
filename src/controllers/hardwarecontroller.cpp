@@ -70,19 +70,50 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(m_kpodPlusDevice, &KpodPlusDevice::buttonHeld, this,
             [this](int buttonNum) { emit macroRequested(QString("K-pod.%1H").arg(buttonNum)); });
 
-    // Helper: apply saved KPOD+ keyer config to both the device and the K4
+    // Helper: at KPOD+ plug-in, resolve each keyer setting from the K4's live state
+    // (RadioState) when available — the K4 is the source of truth. Fall back to the
+    // saved RadioSettings value only when the radio hasn't reported yet (cold start,
+    // sentinel value, disconnected). Then mirror the resolved values into
+    // RadioSettings so the KpodPage UI reflects what's actually being used, and push
+    // the resolved values down to the device.
     auto applyKpodPlusConfig = [this]() {
         auto *settings = RadioSettings::instance();
-        int wpm = settings->kpodPlusKeyerSpeed();
 
-        // Configure the KPOD+ device
+        const int rsWpm = m_radioState->keyerSpeed();
+        const int wpm = (rsWpm > 0) ? rsWpm : settings->kpodPlusKeyerSpeed();
+
+        const int rsPitch = m_radioState->cwPitch();
+        const int pitchHz = (rsPitch > 0) ? rsPitch : settings->kpodPlusCwPitch();
+
+        const QChar rsIambic = m_radioState->iambicMode();
+        const int iambic =
+            (rsIambic == 'A' || rsIambic == 'B') ? (rsIambic == 'B' ? 1 : 0) : settings->kpodPlusIambicMode();
+        const QChar rsPaddle = m_radioState->paddleOrientation();
+        const bool reversed =
+            (rsPaddle == 'R' || rsPaddle == 'N') ? (rsPaddle == 'R') : settings->kpodPlusPaddleReversed();
+
+        // Mirror resolved values into RadioSettings so the page UI is consistent with
+        // reality. QSignalBlocker suppresses kpodPlusSettingsChanged (which would
+        // round-trip back to the K4 via the user-action handler). We emit
+        // kpodPlusSettingsExternallyUpdated explicitly so the page can refresh its
+        // widgets without the K4 round-trip.
+        {
+            QSignalBlocker block(settings);
+            settings->setKpodPlusKeyerSpeed(wpm);
+            settings->setKpodPlusCwPitch(pitchHz);
+            settings->setKpodPlusIambicMode(iambic);
+            settings->setKpodPlusPaddleReversed(reversed);
+        }
+        emit settings->kpodPlusSettingsExternallyUpdated();
+
+        // Push everything to the device.
         m_kpodPlusDevice->setKeyerSpeed(wpm);
-        m_kpodPlusDevice->setCwPitch(settings->kpodPlusCwPitch());
-        m_kpodPlusDevice->setKeyerParams(settings->kpodPlusIambicMode(), settings->kpodPlusPaddleReversed());
+        m_kpodPlusDevice->setCwPitch(pitchHz);
+        m_kpodPlusDevice->setKeyerParams(iambic, reversed);
         m_kpodPlusDevice->setEncodeMode(settings->kpodPlusEncodeMode());
         m_kpodPlusDevice->setStuckTimeout(settings->kpodPlusStuckTimeout());
 
-        // Sync element length with K4 so it knows dit/dah duration for KZ commands
+        // KZL only meaningful while the K4 is connected.
         if (m_connectionController->isConnected()) {
             int ditMs = 1200 / wpm;
             m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
@@ -160,25 +191,31 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         m_connectionController->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
     });
 
-    // When K4 radio WPM changes (e.g. from front panel), sync to KPOD+ device
+    // K4 → settings + KPOD+ device sync. Always update the saved setting so the page UI
+    // and a later KPOD+ plug-in see the K4's current value; only push to the device when
+    // it's actually polling. QSignalBlocker suppresses kpodPlusSettingsChanged (user-action
+    // signal) so the K4 echo doesn't round-trip back to the K4. The explicit
+    // kpodPlusSettingsExternallyUpdated emit lets the page refresh its widgets.
     connect(m_radioState, &RadioState::keyerSpeedChanged, this, [this](int wpm) {
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->setKeyerSpeed(wpm);
-            // Update persisted setting (without re-triggering K4 sync — the change came FROM K4)
-            RadioSettings::instance()->blockSignals(true);
-            RadioSettings::instance()->setKpodPlusKeyerSpeed(wpm);
-            RadioSettings::instance()->blockSignals(false);
+        auto *settings = RadioSettings::instance();
+        {
+            QSignalBlocker block(settings);
+            settings->setKpodPlusKeyerSpeed(wpm);
         }
+        emit settings->kpodPlusSettingsExternallyUpdated();
+        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling())
+            m_kpodPlusDevice->setKeyerSpeed(wpm);
     });
 
-    // When K4 radio CW pitch changes, sync to KPOD+ device
     connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitchHz) {
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->setCwPitch(pitchHz);
-            RadioSettings::instance()->blockSignals(true);
-            RadioSettings::instance()->setKpodPlusCwPitch(pitchHz);
-            RadioSettings::instance()->blockSignals(false);
+        auto *settings = RadioSettings::instance();
+        {
+            QSignalBlocker block(settings);
+            settings->setKpodPlusCwPitch(pitchHz);
         }
+        emit settings->kpodPlusSettingsExternallyUpdated();
+        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling())
+            m_kpodPlusDevice->setCwPitch(pitchHz);
     });
 
     // EP02 keyer data → straight to the I/O thread.
@@ -299,16 +336,20 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
             Q_ARG(IambicKeyer::Mode, iambic == 'B' ? IambicKeyer::IambicB : IambicKeyer::IambicA));
         QMetaObject::invokeMethod(m_iambicKeyer, "setReversed", Qt::QueuedConnection, Q_ARG(bool, paddle == 'R'));
 
-        // Sync to KPOD+ device (if active)
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            int mode = (iambic == 'B') ? 1 : 0;
-            bool reversed = (paddle == 'R');
-            m_kpodPlusDevice->setKeyerParams(mode, reversed);
-            RadioSettings::instance()->blockSignals(true);
-            RadioSettings::instance()->setKpodPlusIambicMode(mode);
-            RadioSettings::instance()->setKpodPlusPaddleReversed(reversed);
-            RadioSettings::instance()->blockSignals(false);
+        // Same K4-as-source-of-truth pattern as the WPM/pitch handlers above: always
+        // mirror into the saved settings so the page UI and a later KPOD+ plug-in pick
+        // up the K4's current values, push to the device only when polling.
+        const int mode = (iambic == 'B') ? 1 : 0;
+        const bool reversed = (paddle == 'R');
+        auto *settings = RadioSettings::instance();
+        {
+            QSignalBlocker block(settings);
+            settings->setKpodPlusIambicMode(mode);
+            settings->setKpodPlusPaddleReversed(reversed);
         }
+        emit settings->kpodPlusSettingsExternallyUpdated();
+        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling())
+            m_kpodPlusDevice->setKeyerParams(mode, reversed);
     });
 
     // =========================================================================

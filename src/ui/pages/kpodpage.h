@@ -28,6 +28,12 @@ private:
     void updateKpodStatus();
     void setupKeyerConfigSection(QVBoxLayout *layout);
 
+    // Refresh the keyer-config widgets from the persisted RadioSettings, without firing
+    // valueChanged on the widgets (QSignalBlocker on each). Wired to
+    // RadioSettings::kpodPlusSettingsExternallyUpdated so the K4 → settings sync path
+    // refreshes the visible spinners without the user-action path back-firing to the K4.
+    void refreshKeyerConfigFromSettings();
+
     KpodDevice *m_kpodDevice;
     KpodPlusDevice *m_kpodPlusDevice;
 
