@@ -595,9 +595,13 @@ void KpodPlusEp02Worker::run() {
             // Diagnostic: timestamp each KZ batch so on-air vs wire-out timing can be compared
             // when investigating "rhythm wrong at the K4" reports. Enable with
             // QT_LOGGING_RULES="hw.kpodplus.debug=true". Trimmed to drop trailing NULs (32-byte
-            // fixed transfer per docs/KPodKeyerInterface.pdf §"Endpoint 2 IN").
-            qCDebug(hwKpodPlus).noquote() << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "["
-                                          << KpodPlusUsbWorker::trimEp02Buffer(data) << "]";
+            // fixed transfer per docs/KPodKeyerInterface.pdf §"Endpoint 2 IN"). Tag any transfer
+            // that filled the 32-byte buffer with [FULL!] — that's the signature of the device
+            // FIFO backing up under high-speed stress, the only realistic place we could lose data.
+            const char *fillTag = (transferred == static_cast<int>(sizeof(buffer))) ? " [FULL!]" : "";
+            qCDebug(hwKpodPlus).noquote()
+                << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "["
+                << KpodPlusUsbWorker::trimEp02Buffer(data) << "] (n=" << transferred << ")" << fillTag;
             emit keyerDataReceived(data);
         } else if (rc == LIBUSB_ERROR_TIMEOUT) {
             continue;
@@ -606,6 +610,13 @@ void KpodPlusEp02Worker::run() {
             // Clear handle so we don't keep poking a dead device; the façade
             // will set a fresh handle on the next deviceArrived.
             m_handle.store(nullptr, std::memory_order_release);
+        } else {
+            // Any other return code (OVERFLOW, BUSY, INTERRUPTED, …) was previously
+            // silently dropped. Surface them so a high-speed stress test can catch
+            // a real USB stack issue if one ever happens. OVERFLOW specifically means
+            // the device tried to send more than 32 bytes in a single transfer and
+            // the host truncated — i.e. the smoking gun for "we dropped a KZ batch."
+            qCWarning(hwKpodPlus) << "KZ EP02 unexpected rc:" << libusb_error_name(rc) << "transferred=" << transferred;
         }
     }
 }
