@@ -447,6 +447,10 @@ void KpodPlusUsbWorker::handleLostDevice(QString reason) {
         return;
     qCWarning(hwKpodPlus) << "Device lost:" << reason;
     m_devicePresent = false;
+    // Reset cached info so the page header clears immediately. The presence
+    // timer re-fills it on its next tick if the device recovers.
+    m_info = KpodPlusDeviceInfo{};
+    emit deviceInfoReady(m_info);
     QTimer::singleShot(0, this, &KpodPlusUsbWorker::closeDevice);
 }
 
@@ -486,6 +490,12 @@ void KpodPlusUsbWorker::onPresenceTimer() {
         openDevice();
     } else if (m_devicePresent && !now) {
         m_devicePresent = false;
+        // Reset cached info before closeDevice() so the façade's m_info
+        // re-emits with detected=false. Without this, the page header
+        // keeps showing "KPOD+ Detected" with stale firmware/ID values
+        // even after the user pulls the cable.
+        m_info = KpodPlusDeviceInfo{};
+        emit deviceInfoReady(m_info);
         closeDevice();
         emit deviceRemoved();
     }
