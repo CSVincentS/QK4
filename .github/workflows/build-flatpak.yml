@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  flatpak:
+  build:
     name: Flatpak
     runs-on: ubuntu-latest
     container:
