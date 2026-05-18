@@ -173,14 +173,23 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         int wpm = settings->kpodPlusKeyerSpeed();
         int pitchHz = settings->kpodPlusCwPitch();
 
-        // Sync WPM → K4 (KS command) + element length (KZL)
-        m_connectionController->sendCAT(QString("KS%1;").arg(wpm, 3, 10, QChar('0')));
+        // Sync WPM → K4 (KS command) + element length (KZL). The K4 does NOT echo SET
+        // commands, so we ALSO feed the same command to RadioState locally — that
+        // updates RadioState::keyerSpeed and emits keyerSpeedChanged immediately, which
+        // is what the side-panel WPM display and any other UI subscribers listen to.
+        // Without this local parse, the main-window UI would stay at the old WPM until
+        // the next time the K4 emits a full RDY dump.
+        const QString ksCmd = QString("KS%1;").arg(wpm, 3, 10, QChar('0'));
+        m_connectionController->sendCAT(ksCmd);
+        m_radioState->parseCATCommand(ksCmd);
         int ditMs = 1200 / wpm;
         m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
 
         // Sync pitch → K4 (CW command, value in tens of Hz: e.g. CW55; = 550 Hz)
         int pitchTenHz = pitchHz / 10;
-        m_connectionController->sendCAT(QString("CW%1;").arg(pitchTenHz, 2, 10, QChar('0')));
+        const QString cwCmd = QString("CW%1;").arg(pitchTenHz, 2, 10, QChar('0'));
+        m_connectionController->sendCAT(cwCmd);
+        m_radioState->parseCATCommand(cwCmd);
 
         // Sync iambic mode + paddle orientation → K4 (KP command)
         QChar iambic = settings->kpodPlusIambicMode() == 1 ? QChar('B') : QChar('A');
@@ -188,7 +197,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         int weight = m_radioState->keyingWeight();
         if (weight < 90)
             weight = 100; // Default if not yet received from K4
-        m_connectionController->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+        const QString kpCmd = QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0'));
+        m_connectionController->sendCAT(kpCmd);
+        m_radioState->parseCATCommand(kpCmd);
     });
 
     // K4 → settings + KPOD+ device sync. Always update the saved setting so the page UI
