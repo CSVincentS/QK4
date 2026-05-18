@@ -386,9 +386,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // worker thread (DirectConnection from halikeydevice.cpp). m_radioState->mode() reads a
     // non-atomic subsystem field concurrently with parseCATCommand()'s writes on the main
     // thread — data race. The atomic cache below is updated from a queued modeChanged.
-    m_cachedMode.store(static_cast<int>(m_radioState->mode()), std::memory_order_relaxed);
+    m_cachedMode.store(static_cast<int>(m_radioState->mode()), std::memory_order_release);
     connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
-        m_cachedMode.store(static_cast<int>(mode), std::memory_order_relaxed);
+        m_cachedMode.store(static_cast<int>(mode), std::memory_order_release);
         // V1.4 mode-transition cleanup: if a paddle/PTT was rising-edge-captured before the
         // transition, fire the matching up event to the OLD destination so neither the
         // IambicKeyer nor MainWindow gets stuck in a half-pressed state. CAS ensures the
@@ -411,7 +411,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
             // Suppress HaliKey dit when KPOD+ keyer owns the CW path
             if (isKpodPlusKeyerActive())
                 return;
-            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
+            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_acquire));
             if (mode == RadioState::CW || mode == RadioState::CW_R) {
                 m_iambicKeyer->setDitPaddle(pressed);
             }
@@ -440,7 +440,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
                 // RISING EDGE: pick a destination based on current mode and remember it,
                 // so the falling edge (or a mid-press mode change) can fire the matching
                 // up event to the SAME destination — even if the mode flipped meanwhile.
-                auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
+                auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_acquire));
                 const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
                 if (inCw && isV14) {
                     // KPOD+ owns the keyer? Drop and don't capture a destination — the

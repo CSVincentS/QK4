@@ -53,8 +53,12 @@ public:
     // lambdas that forward local-iambic KZ commands. When true, the local
     // iambic path drops its KZ emissions because the KPOD+ device is the
     // authoritative keyer.
-    void setKpodPlusKeyerActive(bool active) { m_kpodPlusKeyerActive.store(active, std::memory_order_relaxed); }
-    bool isKpodPlusKeyerActive() const { return m_kpodPlusKeyerActive.load(std::memory_order_relaxed); }
+    // Memory ordering: release on store, acquire on load. The gate is written on main
+    // (deviceConnected / deviceDisconnected handlers) and read on the I/O thread and on
+    // the HaliKey worker threads. Acquire/release pairs guarantee that any state set up
+    // before the writer flipped the gate is visible to readers after they observe the flip.
+    void setKpodPlusKeyerActive(bool active) { m_kpodPlusKeyerActive.store(active, std::memory_order_release); }
+    bool isKpodPlusKeyerActive() const { return m_kpodPlusKeyerActive.load(std::memory_order_acquire); }
 
 signals:
     void radioReady();                                             // Auth succeeded, K4 is live
