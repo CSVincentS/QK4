@@ -42,7 +42,7 @@
         },
         {
           "type": "file",
-          "path": "qk4_icon.png"
+          "path": "qk4.png"
         }
       ],
       "build-commands": [
@@ -50,7 +50,7 @@
         "cmake --build build -j$(nproc)",
         "install -Dm755 build/QK4 /app/bin/qk4",
         "install -Dm644 io.github.mikeg_dal.QK4.desktop /app/share/applications/io.github.mikeg_dal.QK4.desktop",
-        "install -Dm644 qk4_icon.png /app/share/icons/hicolor/128x128/apps/io.github.mikeg_dal.QK4.png"
+        "install -Dm644 qk4.png /app/share/icons/hicolor/128x128/apps/io.github.mikeg_dal.QK4.png"
       ]
     }
   ],
