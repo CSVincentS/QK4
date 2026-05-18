@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QString>
 #include <atomic>
+#include <mutex>
 
 struct libusb_context;
 struct libusb_device_handle;
@@ -105,6 +106,16 @@ private:
     bool openHandle();
     void releaseHandle();
 
+public:
+    // The façade wires this to the EP02 worker's transfer mutex so that
+    // releaseHandle() can wait for any in-flight EP02 read to finish before
+    // libusb_close frees the handle out from under it. Non-owning pointer;
+    // lifetime is owned by the EP02 worker.
+    void setEp02TransferMutex(std::mutex *m) { m_ep02TransferMutex = m; }
+
+private:
+    std::mutex *m_ep02TransferMutex = nullptr;
+
     libusb_context *m_ctx = nullptr;
     libusb_device_handle *m_handle = nullptr;
     bool m_interfaceClaimed = false;
@@ -134,6 +145,12 @@ public:
 
     void requestStop();
 
+    // Held by run() across each libusb_interrupt_transfer call. KpodPlusUsbWorker
+    // acquires this in releaseHandle() before libusb_close, so the close cannot
+    // race with an in-flight EP02 transfer holding a stale handle pointer. The
+    // mutex bounds the wait by the EP02 transfer timeout (100 ms max).
+    std::mutex *transferMutex() { return &m_transferMutex; }
+
 public slots:
     void run();
     void setDeviceHandle(quintptr handle); // 0 = clear
@@ -145,6 +162,7 @@ signals:
 private:
     std::atomic<libusb_device_handle *> m_handle{nullptr};
     std::atomic<bool> m_running{false};
+    std::mutex m_transferMutex;
 };
 
 #endif // KPODPLUSUSBWORKER_H

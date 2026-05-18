@@ -364,13 +364,37 @@ bool KpodPlusUsbWorker::openHandle() {
 
 void KpodPlusUsbWorker::releaseHandle() {
     if (m_handle) {
+        // Step 1: signal the EP02 reader to drop the handle. The DirectConnection to
+        // setDeviceHandle(0) means EP02's atomic handle is cleared synchronously on this
+        // thread BEFORE we proceed. EP02's next loop iteration will see null and skip
+        // the transfer.
         emit handleClosing();
-        if (m_interfaceClaimed) {
-            libusb_release_interface(m_handle, 0);
-            m_interfaceClaimed = false;
+
+        // Step 2: wait for any libusb_interrupt_transfer currently in flight on the
+        // EP02 thread to complete. The EP02 thread holds m_transferMutex across the
+        // libusb call; acquiring it here guarantees no transfer is mid-flight when we
+        // proceed to libusb_close. Bounded by the EP02 transfer timeout (100 ms max).
+        // Without this, libusb_close could free the handle out from under an in-flight
+        // transfer — use-after-free, caught by ASAN during hot-unplug stress.
+        if (m_ep02TransferMutex) {
+            std::lock_guard<std::mutex> lock(*m_ep02TransferMutex);
+            if (m_interfaceClaimed) {
+                libusb_release_interface(m_handle, 0);
+                m_interfaceClaimed = false;
+            }
+            libusb_close(m_handle);
+            m_handle = nullptr;
+        } else {
+            // No EP02 worker registered (e.g. tests, or if the façade didn't wire the
+            // mutex). Fall back to the unsynchronized close — same behavior as before
+            // the sync mutex was added.
+            if (m_interfaceClaimed) {
+                libusb_release_interface(m_handle, 0);
+                m_interfaceClaimed = false;
+            }
+            libusb_close(m_handle);
+            m_handle = nullptr;
         }
-        libusb_close(m_handle);
-        m_handle = nullptr;
     }
 }
 
@@ -589,7 +613,18 @@ void KpodPlusEp02Worker::run() {
         }
 
         int transferred = 0;
-        const int rc = libusb_interrupt_transfer(h, 0x82, buffer, sizeof(buffer), &transferred, kEp02TimeoutMs);
+        int rc;
+        {
+            // Held during the libusb call so USB worker's releaseHandle() (which acquires
+            // the same mutex before libusb_close) waits for any in-flight transfer to
+            // finish before the handle is freed. Bounded by the kEp02TimeoutMs timeout.
+            std::lock_guard<std::mutex> lock(m_transferMutex);
+            // Re-check handle after acquiring the lock; releaseHandle may have just cleared
+            // it via setDeviceHandle(0). Avoids an unnecessary syscall with a stale h.
+            if (!m_handle.load(std::memory_order_acquire))
+                continue;
+            rc = libusb_interrupt_transfer(h, 0x82, buffer, sizeof(buffer), &transferred, kEp02TimeoutMs);
+        }
         if (rc == LIBUSB_SUCCESS && transferred > 0) {
             QByteArray data(reinterpret_cast<const char *>(buffer), transferred);
             // Diagnostic: timestamp each KZ batch so on-air vs wire-out timing can be compared

@@ -19,6 +19,10 @@ KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     m_usbThread->setObjectName("KpodPlusUSB");
     m_usbWorker = new KpodPlusUsbWorker();
     m_usbWorker->moveToThread(m_usbThread);
+    // Cross-link: the USB worker's releaseHandle() acquires the EP02 worker's transfer
+    // mutex before libusb_close so the close cannot race with an in-flight EP02 transfer.
+    // Non-owning pointer; EP02 worker outlives the USB worker (EP02 stops first in dtor).
+    m_usbWorker->setEp02TransferMutex(m_ep02Worker->transferMutex());
     connect(m_usbThread, &QThread::started, m_usbWorker, &KpodPlusUsbWorker::start);
     connect(m_usbThread, &QThread::finished, m_usbWorker, &QObject::deleteLater);
 
