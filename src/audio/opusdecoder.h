@@ -36,13 +36,17 @@ public:
     // Decode to float (returns float32 stereo PCM)
     QByteArray decodeFloat(const QByteArray &opusData);
 
+    // S16 -> float32 normalization factor. Public because AudioController's TX
+    // mic path (EM0 RAW float) uses the same conversion and was previously
+    // duplicating this value locally.
+    static constexpr float NORMALIZE_16BIT = 1.0f / 32768.0f;
+
 private:
     ::OpusDecoder *m_decoder;
     int m_sampleRate;
     int m_channels;
 
     // Normalization constants
-    static constexpr float NORMALIZE_16BIT = 1.0f / 32768.0f;
     // WHY: K4 RAW modes (EM0/EM1) ship samples with ~4× headroom over nominal S16
     // (empirical peaks up to ~131k = 2^17). Normalizing by 2^17 keeps transients
     // ≤ 1.0 in float so the ±1.0 clamp in AudioEngine never hard-clips them.
