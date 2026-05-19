@@ -18,7 +18,6 @@
 #include "controllers/subdivindicatorcontroller.h"
 #include "controllers/txstatecontroller.h"
 #include "controllers/sidecontroldisplaycontroller.h"
-#include "controllers/filterindicatorcontroller.h"
 #include "controllers/popupmanager.h"
 #include "utils/macroids.h"
 #include "ui/dialogs/optionsdialog.h"
@@ -145,7 +144,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     m_sideControlDisplayController = new SideControlDisplayController(m_radioState, m_sideControlPanel, this);
 
-    m_filterIndicatorController = new FilterIndicatorController(m_radioState, m_filterAWidget, m_filterBWidget, this);
+    // Filter indicator widgets observe RadioState directly (PATTERNS.md
+    // Direct Observation). The former FilterIndicatorController was a
+    // pure-forwarding thin shell and has been deleted.
+    m_filterAWidget->observe(m_radioState, FilterIndicatorWidget::Vfo::A);
+    m_filterBWidget->observe(m_radioState, FilterIndicatorWidget::Vfo::B);
 
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
@@ -289,7 +292,8 @@ void MainWindow::setupRadioStateWiring() {
     // RIT/XIT label state + wheel/click handling owned by RitXitController.
 
     // Filter position indicators
-    // Filter indicator widgets (VFO A/B) driven by FilterIndicatorController.
+    // Filter indicator widgets (VFO A/B) observe RadioState directly via
+    // FilterIndicatorWidget::observe() — see setupControllers().
     // AFX / AGC / APF button labels + APF VFO indicator driven by PopupManager's
     // wireRxRowButtonLabels() — logical home since PopupManager owns those buttons.
 
