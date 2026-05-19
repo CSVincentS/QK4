@@ -441,7 +441,11 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // WHY read m_cachedMode instead of m_radioState->mode(): this lambda runs on the HaliKey
     // worker thread (DirectConnection from halikeydevice.cpp). m_radioState->mode() reads a
     // non-atomic subsystem field concurrently with parseCATCommand()'s writes on the main
-    // thread — data race. The atomic cache below is updated from a queued modeChanged.
+    // thread — data race. The atomic cache below is updated from modeChanged via
+    // AutoConnection — both this controller and RadioState live on the main thread, so
+    // AutoConnection resolves to DirectConnection and the store runs synchronously on the
+    // main thread alongside parseCATCommand. The HaliKey worker thread reads with acquire
+    // ordering, paired with the release store here.
     m_cachedMode.store(static_cast<int>(m_radioState->mode()), std::memory_order_release);
     connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
         m_cachedMode.store(static_cast<int>(mode), std::memory_order_release);
