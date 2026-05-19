@@ -77,39 +77,47 @@ public:
     int bandNumberForName(const QString &bandName) const;
     void setSelectedBandByNumber(int bandNum);
 
-    // Button-row popups (Main RX, Sub RX, TX). Expose toggle + close +
-    // button-label setters. The anchor getters return the ButtonRowPopup
-    // QWidgets so external callers (ButtonRowDispatcher, AntennaConfigController)
-    // can position secondary popups relative to them. CONVENTIONS Rule 2
-    // exception — owned-object accessors are deliberately exposed here for
-    // anchoring; the cleaner pattern (PopupManager accepts a position tag
-    // and resolves its own anchor internally) is tracked as a future
-    // refactor and not yet executed.
+    // Identifies which of the three button-row lanes a secondary popup
+    // should anchor against. ButtonRowDispatcher invokes secondary popups
+    // by naming the lane it is currently in; PopupManager resolves the
+    // lane to the right anchor widget internally — eliminating the
+    // earlier circular pattern where callers fetched a popup anchor from
+    // PopupManager only to pass it back into PopupManager's own show*
+    // call.
+    enum class ButtonRowLane { MainRx, SubRx, Tx };
+
     void toggleMainRx();
     void toggleSubRx();
     void toggleTx();
-    QWidget *mainRxPopupAnchor() const;
-    QWidget *subRxPopupAnchor() const;
-    QWidget *txPopupAnchor() const;
+
+    // WHY (CONVENTIONS Rule 2 documented exception): a single anchor
+    // resolver is retained for external callers (currently only
+    // AntennaConfigController) that need a QWidget to position their
+    // own popups against. The previous three-getter API (mainRxPopupAnchor
+    // / subRxPopupAnchor / txPopupAnchor) was collapsed here to one
+    // method taking the lane enum. Internal PopupManager show* methods
+    // no longer expose this — they take the lane directly.
+    QWidget *anchorForLane(ButtonRowLane lane) const;
+
     void setMainRxButtonLabel(int index, const QString &primary, const QString &alternate,
                               bool alternateIsAmber = true);
     void setSubRxButtonLabel(int index, const QString &primary, const QString &alternate, bool alternateIsAmber = true);
     void setTxButtonLabel(int index, const QString &primary, const QString &alternate, bool alternateIsAmber = true);
 
     // Secondary popups (RX/TX EQ, line in/out, mic input/config, VOX
-    // gain & anti-VOX, SSB TX bandwidth, CW keying weight). MainWindow's
-    // button-row click handlers call these. They internally know which
-    // trigger button to position above; the caller passes the anchor.
-    void showRxEqAbove(QWidget *anchor);
-    void showTxEqAbove(QWidget *anchor);
-    void showLineOutAbove(QWidget *anchor);
-    void showLineInAbove(QWidget *anchor);
-    void showMicInputAbove(QWidget *anchor);
-    void showMicConfigAbove(QWidget *anchor); // Mic type is inferred from RadioState.
-    void showVoxGainAbove(QWidget *anchor);   // configures popup for gain mode first
-    void showAntiVoxAbove(QWidget *anchor);   // configures popup for anti-vox mode first
-    void showSsbBwAbove(QWidget *anchor);
-    void showKeyingWeightAbove(QWidget *anchor);
+    // gain & anti-VOX, SSB TX bandwidth, CW keying weight). Callers pass
+    // the ButtonRowLane they're currently in; PopupManager resolves the
+    // anchor internally.
+    void showRxEqAbove(ButtonRowLane lane);
+    void showTxEqAbove(ButtonRowLane lane);
+    void showLineOutAbove(ButtonRowLane lane);
+    void showLineInAbove(ButtonRowLane lane);
+    void showMicInputAbove(ButtonRowLane lane);
+    void showMicConfigAbove(ButtonRowLane lane); // Mic type is inferred from RadioState.
+    void showVoxGainAbove(ButtonRowLane lane);   // configures popup for gain mode first
+    void showAntiVoxAbove(ButtonRowLane lane);   // configures popup for anti-vox mode first
+    void showSsbBwAbove(ButtonRowLane lane);
+    void showKeyingWeightAbove(ButtonRowLane lane);
 
 signals:
     // User picked a band from the band popup. MainWindow::onBandSelected

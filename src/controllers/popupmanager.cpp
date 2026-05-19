@@ -296,16 +296,16 @@ void PopupManager::toggleTx() {
     }
 }
 
-QWidget *PopupManager::mainRxPopupAnchor() const {
-    return m_mainRxRow;
-}
-
-QWidget *PopupManager::subRxPopupAnchor() const {
-    return m_subRxRow;
-}
-
-QWidget *PopupManager::txPopupAnchor() const {
-    return m_txRow;
+QWidget *PopupManager::anchorForLane(ButtonRowLane lane) const {
+    switch (lane) {
+    case ButtonRowLane::MainRx:
+        return m_mainRxRow;
+    case ButtonRowLane::SubRx:
+        return m_subRxRow;
+    case ButtonRowLane::Tx:
+        return m_txRow;
+    }
+    return nullptr;
 }
 
 void PopupManager::setMainRxButtonLabel(int index, const QString &primary, const QString &alternate,
@@ -896,19 +896,22 @@ void PopupManager::wireKeyingWeightPopup() {
     });
 }
 
-void PopupManager::showRxEqAbove(QWidget *anchor) {
+void PopupManager::showRxEqAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_rxEqPopup->setAllBands(m_radioState->rxEqBands());
     if (anchor)
         m_rxEqPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showTxEqAbove(QWidget *anchor) {
+void PopupManager::showTxEqAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_txEqPopup->setAllBands(m_radioState->txEqBands());
     if (anchor)
         m_txEqPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showLineOutAbove(QWidget *anchor) {
+void PopupManager::showLineOutAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
     m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
     m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
@@ -916,7 +919,8 @@ void PopupManager::showLineOutAbove(QWidget *anchor) {
         m_lineOutPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showLineInAbove(QWidget *anchor) {
+void PopupManager::showLineInAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
     m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
     m_lineInPopup->setSource(m_radioState->lineInSource());
@@ -924,13 +928,15 @@ void PopupManager::showLineInAbove(QWidget *anchor) {
         m_lineInPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showMicInputAbove(QWidget *anchor) {
+void PopupManager::showMicInputAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_micInputPopup->setCurrentInput(m_radioState->micInput());
     if (anchor)
         m_micInputPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showMicConfigAbove(QWidget *anchor) {
+void PopupManager::showMicConfigAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     const int input = m_radioState->micInput();
     if (input == 2) // LINE IN only — no mic config
         return;
@@ -948,7 +954,8 @@ void PopupManager::showMicConfigAbove(QWidget *anchor) {
         m_micConfigPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showVoxGainAbove(QWidget *anchor) {
+void PopupManager::showVoxGainAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     const bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
     m_voxPopup->setPopupMode(VoxPopupWidget::VoxGain);
     m_voxPopup->setDataMode(isDataMode);
@@ -958,7 +965,8 @@ void PopupManager::showVoxGainAbove(QWidget *anchor) {
         m_voxPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showAntiVoxAbove(QWidget *anchor) {
+void PopupManager::showAntiVoxAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_voxPopup->setPopupMode(VoxPopupWidget::AntiVox);
     m_voxPopup->setValue(m_radioState->antiVox());
     m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
@@ -966,7 +974,8 @@ void PopupManager::showAntiVoxAbove(QWidget *anchor) {
         m_voxPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showSsbBwAbove(QWidget *anchor) {
+void PopupManager::showSsbBwAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_ssbBwPopup->setEssbEnabled(m_radioState->essbEnabled());
     const int bw = m_radioState->ssbTxBw();
     if (bw >= 24 && bw <= 45)
@@ -975,7 +984,8 @@ void PopupManager::showSsbBwAbove(QWidget *anchor) {
         m_ssbBwPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showKeyingWeightAbove(QWidget *anchor) {
+void PopupManager::showKeyingWeightAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     const int weight = m_radioState->keyingWeight();
     if (weight >= 90 && weight <= 125)
         m_keyingWeightPopup->setWeight(weight);

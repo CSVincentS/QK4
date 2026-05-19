@@ -36,13 +36,13 @@ void ButtonRowDispatcher::onMainRxClicked(int index) {
 
     switch (index) {
     case 0: // ANT CFG
-        m_antennaCfg->showMainRxPopupAbove(m_popupManager->mainRxPopupAnchor());
+        m_antennaCfg->showMainRxPopupAbove(m_popupManager->anchorForLane(PopupManager::ButtonRowLane::MainRx));
         break;
     case 1: // RX EQ
-        m_popupManager->showRxEqAbove(m_popupManager->mainRxPopupAnchor());
+        m_popupManager->showRxEqAbove(PopupManager::ButtonRowLane::MainRx);
         break;
     case 2: // LINE OUT
-        m_popupManager->showLineOutAbove(m_popupManager->mainRxPopupAnchor());
+        m_popupManager->showLineOutAbove(PopupManager::ButtonRowLane::MainRx);
         break;
     case 3: { // AFX — cycle OFF → DELAY → PITCH → OFF
         const int nextMode = (m_radioState->afxMode() + 1) % 3;
@@ -96,13 +96,13 @@ void ButtonRowDispatcher::onSubRxClicked(int index) {
 
     switch (index) {
     case 0: // ANT CFG (Sub RX)
-        m_antennaCfg->showSubRxPopupAbove(m_popupManager->subRxPopupAnchor());
+        m_antennaCfg->showSubRxPopupAbove(m_popupManager->anchorForLane(PopupManager::ButtonRowLane::SubRx));
         break;
     case 1: // RX EQ — shared popup positioned above the Sub RX row
-        m_popupManager->showRxEqAbove(m_popupManager->subRxPopupAnchor());
+        m_popupManager->showRxEqAbove(PopupManager::ButtonRowLane::SubRx);
         break;
     case 2: // LINE OUT
-        m_popupManager->showLineOutAbove(m_popupManager->subRxPopupAnchor());
+        m_popupManager->showLineOutAbove(PopupManager::ButtonRowLane::SubRx);
         break;
     case 3: { // AFX — same FX command as Main RX (global setting)
         const int nextMode = (m_radioState->afxMode() + 1) % 3;
@@ -155,19 +155,19 @@ void ButtonRowDispatcher::onTxClicked(int index) {
         return;
     switch (index) {
     case 0: // ANT CFG
-        m_antennaCfg->showTxPopupAbove(m_popupManager->txPopupAnchor());
+        m_antennaCfg->showTxPopupAbove(m_popupManager->anchorForLane(PopupManager::ButtonRowLane::Tx));
         break;
     case 1: // TX EQ
-        m_popupManager->showTxEqAbove(m_popupManager->txPopupAnchor());
+        m_popupManager->showTxEqAbove(PopupManager::ButtonRowLane::Tx);
         break;
     case 2: // LINE IN
-        m_popupManager->showLineInAbove(m_popupManager->txPopupAnchor());
+        m_popupManager->showLineInAbove(PopupManager::ButtonRowLane::Tx);
         break;
     case 3: // MIC INPUT
-        m_popupManager->showMicInputAbove(m_popupManager->txPopupAnchor());
+        m_popupManager->showMicInputAbove(PopupManager::ButtonRowLane::Tx);
         break;
     case 4: // VOX GAIN
-        m_popupManager->showVoxGainAbove(m_popupManager->txPopupAnchor());
+        m_popupManager->showVoxGainAbove(PopupManager::ButtonRowLane::Tx);
         break;
     case 5: { // CW: paddle toggle N↔R. Voice/data: SSB BW popup.
         const auto mode = m_radioState->mode();
@@ -183,14 +183,14 @@ void ButtonRowDispatcher::onTxClicked(int index) {
             m_connection->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(newPaddle).arg(weight, 3, 10, QChar('0')));
             m_radioState->setPaddleOrientation(newPaddle);
         } else {
-            m_popupManager->showSsbBwAbove(m_popupManager->txPopupAnchor());
+            m_popupManager->showSsbBwAbove(PopupManager::ButtonRowLane::Tx);
         }
         break;
     }
     case 6: { // CW: keying weight popup. Voice/data: ESSB toggle.
         const auto mode = m_radioState->mode();
         if (mode == RadioState::CW || mode == RadioState::CW_R) {
-            m_popupManager->showKeyingWeightAbove(m_popupManager->txPopupAnchor());
+            m_popupManager->showKeyingWeightAbove(PopupManager::ButtonRowLane::Tx);
         } else {
             const bool newState = !m_radioState->essbEnabled();
             int bw = m_radioState->ssbTxBw();
@@ -208,7 +208,7 @@ void ButtonRowDispatcher::onTxClicked(int index) {
             // Optimistic — ES SET is echoed, but also immediately re-paint labels.
             m_radioState->setEssbEnabled(newState);
             m_radioState->setSsbTxBw(bw);
-            if (m_popupManager->txPopupAnchor()) {
+            if (m_popupManager->anchorForLane(PopupManager::ButtonRowLane::Tx)) {
                 const QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
                 m_popupManager->setTxButtonLabel(5, "SSB BW", bwStr, false);
                 m_popupManager->setTxButtonLabel(6, "ESSB", newState ? "ON" : "OFF", false);
@@ -225,7 +225,7 @@ void ButtonRowDispatcher::onTxRightClicked(int index) {
     if (!m_connection->isConnected())
         return;
     if (index == 4) { // ANTIVOX popup
-        m_popupManager->showAntiVoxAbove(m_popupManager->txPopupAnchor());
+        m_popupManager->showAntiVoxAbove(PopupManager::ButtonRowLane::Tx);
     } else if (index == 5) { // CW only: iambic A↔B toggle
         const auto mode = m_radioState->mode();
         if (mode == RadioState::CW || mode == RadioState::CW_R) {
@@ -240,14 +240,14 @@ void ButtonRowDispatcher::onTxRightClicked(int index) {
     } else if (index == 3) { // MIC CFG — skips LINE IN (input==2)
         if (m_radioState->micInput() == 2)
             return;
-        m_popupManager->showMicConfigAbove(m_popupManager->txPopupAnchor());
+        m_popupManager->showMicConfigAbove(PopupManager::ButtonRowLane::Tx);
     }
 }
 
 void ButtonRowDispatcher::refreshTxButtonsForMode() {
     // TX popup's anchor is nullptr until setBottomMenuBar is injected
     // and the popup is first constructed; skip early refreshes.
-    if (!m_popupManager->txPopupAnchor())
+    if (!m_popupManager->anchorForLane(PopupManager::ButtonRowLane::Tx))
         return;
 
     const RadioState::Mode mode = m_radioState->mode();
