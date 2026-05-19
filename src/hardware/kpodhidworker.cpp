@@ -229,13 +229,12 @@ void KpodHidWorker::onPollTimer() {
     if (!m_hidDevice)
         return;
 
-    // Windows hidapi requires report ID as the first byte (0x00 for unnumbered reports);
-    // POSIX hidapi takes the raw 8-byte buffer. Keep the platform split inline — it's the
-    // entire wire difference.
 #ifdef Q_OS_WIN
+    // Windows hidapi requires report ID as the first byte (0x00 for unnumbered reports).
     unsigned char cmd[9] = {0x00, 'u', 0, 0, 0, 0, 0, 0, 0};
     int writeResult = hid_write(m_hidDevice, cmd, sizeof(cmd));
 #else
+    // POSIX hidapi takes the raw 8-byte buffer (no report ID prefix).
     unsigned char cmd[8] = {'u', 0, 0, 0, 0, 0, 0, 0};
     int writeResult = hid_write(m_hidDevice, cmd, sizeof(cmd));
 #endif
