@@ -18,9 +18,12 @@ static QString bandNumberToLabel(const QString &bn) {
 
 // Poll commands - based on KPA1500 Programming Reference
 // ^AI = ATU Inline state, ^AN = Antenna selection
-// Note: ^FS is Fan Speed (not fault status), removed from polling
+// Note: ^FS is Fan Speed (not fault status), removed from polling.
+// ^VM1 (PA voltage) and ^VM2 (PA current) were removed — nothing in QK4
+// displays them today; if/when a UI consumer is added, restore them here
+// alongside the parser branches and re-introduce paVoltage/paCurrent state.
 const QString KPA1500Client::POLL_COMMANDS =
-    "^BN;^WS;^TM;^RVM;^FC;^OS;^FL;^AI;^AM;^AN;^IP;^SN;^PC;^VM1;^VM2;^VM3;^VM5;^LR;^CR;^PWF;^PWR;^PWD;";
+    "^BN;^WS;^TM;^RVM;^FC;^OS;^FL;^AI;^AM;^AN;^IP;^SN;^PC;^VM3;^VM5;^LR;^CR;^PWF;^PWR;^PWD;";
 
 KPA1500Client::KPA1500Client(QObject *parent)
     : QObject(parent), m_socket(new QTcpSocket(this)), m_pollTimer(new QTimer(this)), m_port(1500),
@@ -186,10 +189,8 @@ void KPA1500Client::parseSingleResponse(const QString &response) {
     // ^BN - Band Number (convert to label e.g. "20m")
     if (cmd.startsWith("BN")) {
         QString band = bandNumberToLabel(cmd.mid(2));
-        if (m_bandName != band) {
-            m_bandName = band;
-            emit bandChanged(band);
-        }
+        // Band name is polled by Kpa1500Page via bandName() getter — no signal needed.
+        m_bandName = band;
     }
     // ^SN - Serial Number
     else if (cmd.startsWith("SN")) {
@@ -272,32 +273,6 @@ void KPA1500Client::parseSingleResponse(const QString &response) {
         if (ok && m_drivePower != power) {
             m_drivePower = power;
             emit powerChanged(m_forwardPower, m_reflectedPower, m_drivePower);
-        }
-    }
-    // ^VM1 - PA Voltage
-    else if (cmd.startsWith("VM1")) {
-        bool ok;
-        double voltage = cmd.mid(3).toDouble(&ok);
-        if (ok) {
-            // VM1 reports in millivolts, convert to volts
-            voltage = voltage / 1000.0;
-            if (m_paVoltage != voltage) {
-                m_paVoltage = voltage;
-                emit paVoltageChanged(voltage);
-            }
-        }
-    }
-    // ^VM2 - PA Current
-    else if (cmd.startsWith("VM2")) {
-        bool ok;
-        double current = cmd.mid(3).toDouble(&ok);
-        if (ok) {
-            // VM2 reports in milliamps, convert to amps
-            current = current / 1000.0;
-            if (m_paCurrent != current) {
-                m_paCurrent = current;
-                emit paCurrentChanged(current);
-            }
         }
     }
     // ^AN - Antenna Select (returns ^ANx; where x=1-9, or ^ANxx; for 10-32)
