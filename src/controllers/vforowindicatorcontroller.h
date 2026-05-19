@@ -16,9 +16,10 @@ class QLabel;
 //
 // Scoped intentionally to the "simple" state-label handlers; RIT/XIT
 // handling lives elsewhere (RitXitController) because it cross-calls
-// frequency display logic. BSet / Sub / Div label styling also stays
-// in MainWindow for now — that set changes mode-label color and SUB
-// visibility in ways that touch several widgets.
+// frequency display logic. Sub-RX and Div-mode indicator styling moved
+// to SubDivIndicatorController. BSet label visibility still lives in
+// MainWindow — it touches mode-label color across several widgets in
+// ways that are coupled to mode change rather than a single indicator.
 class VfoRowIndicatorController : public QObject {
     Q_OBJECT
 

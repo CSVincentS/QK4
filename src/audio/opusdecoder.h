@@ -9,11 +9,15 @@
  *        (EM0..EM3) and emits stereo Float32 PCM. Volume/mix/balance is applied later in
  *        AudioEngine at playback time, not here.
  *
- *        Per-mode gain notes:
- *          EM0 (32-bit container, S16-range payload) — S16 normalization, no boost
- *          EM1 (S16LE)                               — S16 normalization, no boost
- *          EM2 (Opus → S16)                          — S16 normalization × K4_GAIN_BOOST
- *          EM3 (Opus → float)                        — K4_GAIN_BOOST only
+ *        Per-mode normalization + gain (verified empirically; see commit 24f4e45):
+ *          EM0 (32-bit container, S16-range payload) — NORMALIZE_K4_RAW (1/2^17) only.
+ *                                                       Accounts for K4's ~4× headroom
+ *                                                       over nominal S16.
+ *          EM1 (S16LE)                               — NORMALIZE_16BIT × K4_EM1_GAIN_BOOST (16×).
+ *                                                       Compensates for K4 shipping EM1 at
+ *                                                       ~-35 dBFS (~18× quieter than EM0).
+ *          EM2 (Opus → S16)                          — NORMALIZE_16BIT × K4_GAIN_BOOST (32×).
+ *          EM3 (Opus → float)                        — K4_GAIN_BOOST (32×) only.
  */
 class OpusDecoder : public QObject {
     Q_OBJECT

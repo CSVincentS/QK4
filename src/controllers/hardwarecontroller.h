@@ -96,7 +96,10 @@ private:
     // from the HaliKey worker thread. That path must know the current operating mode to
     // route dit/PTT correctly, but reading m_radioState->mode() from the worker thread
     // races with parseCATCommand writing it on the main thread. Mirror mode into this
-    // atomic from a queued modeChanged connection; the DirectConnection lambda reads it.
+    // atomic from modeChanged. The connection itself is AutoConnection — both RadioState
+    // and HardwareController live on the main thread, so it resolves to DirectConnection
+    // and the store runs synchronously on the main thread alongside parseCATCommand. The
+    // HaliKey worker thread reads with acquire ordering, paired with the release store.
     std::atomic<int> m_cachedMode{0}; // initialized to RadioState::Unknown in the .cpp
 
     // V1.4 PTT-line demux destination: the V1.4 firmware multiplexes paddle dit and foot

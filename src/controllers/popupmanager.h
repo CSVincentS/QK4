@@ -78,10 +78,13 @@ public:
     void setSelectedBandByNumber(int bandNum);
 
     // Button-row popups (Main RX, Sub RX, TX). Expose toggle + close +
-    // button-label setters. Anchor getters are TEMPORARY seams for the
-    // secondary popups (EQ, line, mic, vox, …) still owned by MainWindow —
-    // they need a QWidget to position above. Once those popups move here
-    // (PopupManager slice 3), the anchor getters should be dropped.
+    // button-label setters. The anchor getters return the ButtonRowPopup
+    // QWidgets so external callers (ButtonRowDispatcher, AntennaConfigController)
+    // can position secondary popups relative to them. CONVENTIONS Rule 2
+    // exception — owned-object accessors are deliberately exposed here for
+    // anchoring; the cleaner pattern (PopupManager accepts a position tag
+    // and resolves its own anchor internally) is tracked as a future
+    // refactor and not yet executed.
     void toggleMainRx();
     void toggleSubRx();
     void toggleTx();
