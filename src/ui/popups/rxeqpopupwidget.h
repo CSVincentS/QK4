@@ -1,9 +1,9 @@
 #ifndef RXEQPOPUPWIDGET_H
 #define RXEQPOPUPWIDGET_H
 
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include "ui/styling/k4styles.h"
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 #include <QLabel>
 #include <QMenu>
 #include <QPushButton>

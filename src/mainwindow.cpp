@@ -20,7 +20,7 @@
 #include "controllers/sidecontroldisplaycontroller.h"
 #include "controllers/filterindicatorcontroller.h"
 #include "controllers/popupmanager.h"
-#include "models/macroids.h"
+#include "utils/macroids.h"
 #include "ui/dialogs/optionsdialog.h"
 #include "ui/widgets/notificationwidget.h"
 #include "ui/widgets/vforowwidget.h"

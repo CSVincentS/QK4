@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QPushButton>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * @brief Floating popup for LINE IN source + level (SoundCard vs LineInJack). Sends back level

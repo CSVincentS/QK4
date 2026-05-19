@@ -8,7 +8,7 @@
 #include <QTimer>
 #include <QVector>
 #include <memory>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 // Forward declarations for overlay widgets
 class DbmScaleOverlay;

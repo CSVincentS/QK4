@@ -5,7 +5,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QLabel>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * @brief Standalone floating window for the K4's on-radio decoder output (CW / AFSK / FSK / PSK /

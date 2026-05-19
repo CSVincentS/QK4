@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QPushButton>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * @brief Floating popup for SSB / ESSB TX bandwidth. The valid range and title switch based on

@@ -6,7 +6,7 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 // Forward declarations
 class QLabel;

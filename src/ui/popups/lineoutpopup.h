@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QPushButton>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * @brief Floating popup for LINE OUT L/R levels (0-40) with optional "R = L" link. Emits

@@ -179,12 +179,12 @@ set(SOURCES
     src/ui/dialogs/macrodialog.cpp
     src/ui/widgets/notificationwidget.cpp
     src/ui/styling/k4styles.cpp
-    src/ui/styling/k4popupbase.cpp
+    src/ui/popups/k4popupbase.cpp
     src/ui/widgets/kpa1500minipanel.cpp
     src/ui/overlays/sidecontroloverlay.cpp
     src/ui/overlays/monoverlay.cpp
     src/ui/overlays/baloverlay.cpp
-    src/ui/widgets/wheelaccumulator.cpp
+    src/utils/wheelaccumulator.cpp
     src/hardware/kpoddevice.cpp
     src/hardware/kpodhidworker.cpp
     src/hardware/kpodplusdevice.cpp
@@ -254,7 +254,7 @@ set(HEADERS
     src/models/radiostate/qskcontrolstate.h
     src/models/radiostate/textdecodestate.h
     src/models/menumodel.h
-    src/models/macroids.h
+    src/utils/macroids.h
     src/ui/dialogs/radiomanagerdialog.h
     src/ui/widgets/dualcontrolbutton.h
     src/ui/widgets/sidecontrolpanel.h
@@ -300,12 +300,12 @@ set(HEADERS
     src/ui/dialogs/macrodialog.h
     src/ui/widgets/notificationwidget.h
     src/ui/styling/k4styles.h
-    src/ui/styling/k4popupbase.h
+    src/ui/popups/k4popupbase.h
     src/ui/widgets/kpa1500minipanel.h
     src/ui/overlays/sidecontroloverlay.h
     src/ui/overlays/monoverlay.h
     src/ui/overlays/baloverlay.h
-    src/ui/widgets/wheelaccumulator.h
+    src/utils/wheelaccumulator.h
     src/hardware/kpoddevice.h
     src/hardware/kpodhidworker.h
     src/hardware/kpodplusdevice.h

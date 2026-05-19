@@ -1,7 +1,7 @@
 #ifndef BANDPOPUPWIDGET_H
 #define BANDPOPUPWIDGET_H
 
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include <QList>
 #include <QMap>
 #include <QPushButton>

@@ -2,7 +2,7 @@
 
 #include "connectioncontroller.h"
 #include "controllers/popupmanager.h"
-#include "models/macroids.h"
+#include "utils/macroids.h"
 #include "settings/radiosettings.h"
 
 #include <QLoggingCategory>

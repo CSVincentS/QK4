@@ -1,7 +1,7 @@
 #ifndef KEYINGWEIGHTPOPUP_H
 #define KEYINGWEIGHTPOPUP_H
 
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 #include <QPushButton>
 #include <QWidget>
 

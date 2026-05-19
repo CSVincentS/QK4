@@ -4,7 +4,7 @@
 #include <QWidget>
 #include <QString>
 #include <QColor>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * DualControlButton - A dual-function control button for QK4

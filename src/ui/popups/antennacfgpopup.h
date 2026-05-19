@@ -1,7 +1,7 @@
 #ifndef ANTENNACFGPOPUP_H
 #define ANTENNACFGPOPUP_H
 
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QVector>

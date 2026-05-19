@@ -1,4 +1,4 @@
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include "ui/styling/k4styles.h"
 #include <QApplication>
 #include <QHideEvent>
