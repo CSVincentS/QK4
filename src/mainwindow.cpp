@@ -323,6 +323,9 @@ void MainWindow::setupHardwareController() {
             m_bottomMenuBar->setPttActive(active);
         }
     });
+
+    // Hardware-side errors (HaliKey port-open failures today) → notification overlay
+    connect(m_hardwareController, &HardwareController::hardwareError, this, &MainWindow::onHardwareError);
 }
 
 void MainWindow::setupCatServer() {
@@ -1502,6 +1505,12 @@ void MainWindow::onConnectionError(const QString &error) {
                                                QString("color: %1; font-size: %2px; font-weight: bold;")
                                                    .arg(K4Styles::Colors::TxRed)
                                                    .arg(K4Styles::Dimensions::FontSizeButton));
+}
+
+void MainWindow::onHardwareError(const QString &error) {
+    if (m_notificationWidget) {
+        m_notificationWidget->showMessage(error, 5000);
+    }
 }
 
 void MainWindow::onRadioReady() {

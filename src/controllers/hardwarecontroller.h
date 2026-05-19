@@ -56,6 +56,13 @@ signals:
     // HaliKey footswitch PTT → MainWindow triggers TX
     void pttRequested(bool active);
 
+    // Hardware error (port open failure, MIDI subsystem error, etc.) → MainWindow
+    // shows it on the notification overlay. Currently fed by HalikeyDevice's
+    // connectionError signal; future device errors can route here too. Prefix the
+    // emitted message with the device name (e.g. "HaliKey: <text>") so the user
+    // can tell where it came from.
+    void hardwareError(const QString &message);
+
 private slots:
     void onKpodEncoderRotated(int ticks);
     void onKpodPollError(const QString &error);

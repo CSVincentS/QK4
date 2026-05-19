@@ -551,6 +551,12 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
         QMetaObject::invokeMethod(m_iambicKeyer, "stop", Qt::QueuedConnection);
     });
+
+    // Surface HaliKey port-open failures to the user via NotificationWidget. Without
+    // this connect, openPort() failures (nonexistent serial port, busy MIDI device,
+    // permission denied) were silently swallowed.
+    connect(m_halikeyDevice, &HalikeyDevice::connectionError, this,
+            [this](const QString &error) { emit hardwareError(QStringLiteral("HaliKey: %1").arg(error)); });
 }
 
 void HardwareController::shutdownSidetone() {

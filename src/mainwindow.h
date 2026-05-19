@@ -62,6 +62,7 @@ protected:
 private slots:
     void onConnectionStateChanged(TcpClient::ConnectionState state);
     void onConnectionError(const QString &error);
+    void onHardwareError(const QString &error);
     void onRadioReady();
     void onAuthFailed();
     void onCatResponse(const QString &response);
