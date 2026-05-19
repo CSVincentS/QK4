@@ -55,9 +55,6 @@ public:
     void setOutputDevice(const QString &deviceId);
     void setMicGain(float gain); // 0.0 to 1.0
 
-signals:
-    void pttStateChanged(bool active);
-
 private slots:
     void onMicrophoneFrame(const QByteArray &s16leData);
     void onStreamingLatencyChanged(int tier);

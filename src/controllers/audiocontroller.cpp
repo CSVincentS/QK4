@@ -146,7 +146,6 @@ void AudioController::setPttActive(bool active) {
         // PTT release: do nothing to the engine. The mic stays open, the poll timer keeps
         // running, and onMicrophoneFrame drops frames because m_pttActive is now false.
         // The mic is closed only on K4 disconnect / app shutdown via AudioEngine::stop().
-        emit pttStateChanged(active);
     }
 }
 
