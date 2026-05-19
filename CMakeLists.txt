@@ -300,6 +300,7 @@ set(HEADERS
     src/ui/dialogs/macrodialog.h
     src/ui/widgets/notificationwidget.h
     src/ui/styling/k4styles.h
+    src/ui/styling/k4constants.h
     src/ui/popups/k4popupbase.h
     src/ui/widgets/kpa1500minipanel.h
     src/ui/overlays/sidecontroloverlay.h

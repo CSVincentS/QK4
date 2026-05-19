@@ -7,7 +7,7 @@
 #include "ui/pages/kpodpage.h"
 #include "ui/pages/kpa1500page.h"
 #include "ui/pages/dxclusterpage.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
 #include <QHBoxLayout>

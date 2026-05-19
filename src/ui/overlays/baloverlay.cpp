@@ -1,5 +1,5 @@
 #include "ui/overlays/baloverlay.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <QFont>

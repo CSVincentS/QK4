@@ -1,5 +1,5 @@
 #include "ui/widgets/dualcontrolbutton.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>

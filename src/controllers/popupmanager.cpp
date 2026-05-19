@@ -22,7 +22,7 @@
 #include "ui/popups/rxeqpopupwidget.h"
 #include "ui/popups/ssbbwpopup.h"
 #include "ui/popups/voxpopup.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QTimer>

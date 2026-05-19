@@ -1,5 +1,5 @@
 #include "ui/widgets/vforowwidget.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include <QHBoxLayout>
 #include <QResizeEvent>
 

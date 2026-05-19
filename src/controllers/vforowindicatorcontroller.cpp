@@ -2,7 +2,7 @@
 
 #include "controllers/spectrumcontroller.h"
 #include "models/radiostate.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "ui/widgets/vforowwidget.h"
 
 #include <QLabel>

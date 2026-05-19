@@ -2,7 +2,7 @@
 
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "ui/widgets/nethealthwidget.h"
 
 #include <QDateTime>

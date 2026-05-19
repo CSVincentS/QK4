@@ -3,7 +3,7 @@
 
 #include <QColor>
 #include <QWidget>
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 
 // Compact filter indicator widget showing filter position,
 // bandwidth shape, and shift position above a horizontal line

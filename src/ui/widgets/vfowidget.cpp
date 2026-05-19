@@ -1,5 +1,5 @@
 #include "ui/widgets/vfowidget.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "ui/widgets/txmeterwidget.h"
 #include "ui/widgets/frequencydisplaywidget.h"
 #include "dsp/minipan_rhi.h"

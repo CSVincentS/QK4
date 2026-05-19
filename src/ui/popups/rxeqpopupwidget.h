@@ -2,7 +2,7 @@
 #define RXEQPOPUPWIDGET_H
 
 #include "ui/popups/k4popupbase.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "utils/wheelaccumulator.h"
 #include <QLabel>
 #include <QMenu>

@@ -1,5 +1,5 @@
 #include "ui/widgets/nethealthwidget.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include <QLabel>
 #include <QPainter>
 #include <QScreen>
