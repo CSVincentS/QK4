@@ -3,10 +3,10 @@
 #include "audio/audioengine.h"
 #include "audio/audiologging.h"
 #include "audio/opusdecoder.h"
-#include "audio/opusencoder.h"
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
 #include "network/protocol.h"
+#include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 
@@ -14,13 +14,11 @@ Q_LOGGING_CATEGORY(qk4Audio, "qk4.audio")
 
 AudioController::AudioController(ConnectionController *connController, RadioState *radioState, QObject *parent)
     : QObject(parent), m_connectionController(connController), m_radioState(radioState),
-      m_audioEngine(new AudioEngine(nullptr)), m_opusDecoder(new OpusDecoder(nullptr)),
-      m_opusEncoder(new OpusEncoder(nullptr)) {
-    // Initialize Opus decoder (K4 sends 12kHz stereo: left=Main, right=Sub)
+      m_audioEngine(new AudioEngine(nullptr)), m_opusDecoder(new OpusDecoder(nullptr)) {
+    // Initialize Opus decoder (K4 sends 12kHz stereo: left=Main, right=Sub).
+    // The TX-side OpusEncoder is owned by AudioEngine and lives on the audio
+    // thread (PR 12); AudioController no longer touches it.
     m_opusDecoder->initialize(12000, 2);
-
-    // Initialize Opus encoder for TX audio (12kHz mono)
-    m_opusEncoder->initialize(12000, 1);
 
     // Load saved audio device settings BEFORE moveToThread (only stores strings/floats,
     // no Qt audio objects exist yet, so direct calls are safe)
@@ -57,8 +55,11 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     connect(m_audioEngine, &AudioEngine::bufferStatus, m_connectionController->networkMetrics(),
             &NetworkMetrics::onBufferStatus);
 
-    // TX audio path: mic frame → encode → send packet
-    connect(m_audioEngine, &AudioEngine::microphoneFrame, this, &AudioController::onMicrophoneFrame);
+    // TX audio path (PR 12): encode + packetize run on the audio thread; the
+    // resulting wire-ready packet goes straight to TcpClient::sendRaw, which
+    // auto-marshals from the audio thread to its own IO thread. AutoConnection
+    // resolves to QueuedConnection across the audio→IO boundary (one hop).
+    connect(m_audioEngine, &AudioEngine::txPacketReady, m_connectionController->tcpClient(), &TcpClient::sendRaw);
 
     // SL tier changes → update TX frame size
     connect(m_radioState, &RadioState::streamingLatencyChanged, this, &AudioController::onStreamingLatencyChanged);
@@ -87,7 +88,6 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
 AudioController::~AudioController() {
     disconnect(this);
     delete m_opusDecoder;
-    delete m_opusEncoder;
 
     if (m_audioThread) {
         QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::BlockingQueuedConnection);
@@ -110,9 +110,12 @@ void AudioController::startAudio(float mainVolume, float subVolume, float micGai
     m_audioEngine->setMicGain(micGain);
 
     // Set initial TX frame size from radio profile's SL tier
-    int sl = m_connectionController->currentRadio().streamingLatency;
-    m_txFrameSamples = RadioUtils::slTierToFrameSamples(sl);
-    m_audioEngine->setFrameSamples(m_txFrameSamples);
+    const int sl = m_connectionController->currentRadio().streamingLatency;
+    m_audioEngine->setFrameSamples(RadioUtils::slTierToFrameSamples(sl));
+
+    // Set encode mode from radio profile (audio thread reads this atomic on
+    // every captured frame to pick the wire format).
+    m_audioEngine->setEncodeMode(m_connectionController->currentRadio().encodeMode);
 }
 
 void AudioController::stopAudio() {
@@ -131,22 +134,20 @@ void AudioController::shutdown() {
 }
 
 void AudioController::setPttActive(bool active) {
-    if (!active || m_connectionController->isConnected()) {
-        m_pttActive = active;
-        if (active) {
-            m_txSequence = 0;
-            // Open the mic device on the audio thread (idempotent — first PTT press in
-            // a session pays the OS audio backend cold-start; subsequent presses are
-            // a no-op). Flush any partial-frame tail left from the previous transmission
-            // so it can't leak into this one's first frame. Frame-level send-gating is
-            // performed in onMicrophoneFrame via m_pttActive.
-            QMetaObject::invokeMethod(m_audioEngine, "openMic", Qt::QueuedConnection);
-            QMetaObject::invokeMethod(m_audioEngine, "flushMicBuffer", Qt::QueuedConnection);
-        }
-        // PTT release: do nothing to the engine. The mic stays open, the poll timer keeps
-        // running, and onMicrophoneFrame drops frames because m_pttActive is now false.
-        // The mic is closed only on K4 disconnect / app shutdown via AudioEngine::stop().
-    }
+    // Ignore PTT-on when disconnected; always honor PTT-off so a stuck-active
+    // state can be cleared regardless of connection state.
+    if (active && !m_connectionController->isConnected())
+        return;
+
+    // Forward to AudioEngine (audio thread). setPttActive there atomically
+    // gates the encode pipeline, opens the mic on rising edge if needed, and
+    // resets the txSequence counter + flushes the partial-frame tail.
+    QMetaObject::invokeMethod(m_audioEngine, "setPttActive", Qt::QueuedConnection, Q_ARG(bool, active));
+}
+
+bool AudioController::isPttActive() const {
+    // Lock-free atomic read from AudioEngine — safe from any thread.
+    return m_audioEngine ? m_audioEngine->isPttActive() : false;
 }
 
 void AudioController::setMainVolume(float vol) {
@@ -194,67 +195,6 @@ void AudioController::setMicGain(float gain) {
         QMetaObject::invokeMethod(m_audioEngine, "setMicGain", Qt::QueuedConnection, Q_ARG(float, gain));
 }
 
-void AudioController::onMicrophoneFrame(const QByteArray &s16leData) {
-    // Only transmit when PTT is active and connected
-    if (!m_pttActive || !m_connectionController->isConnected()) {
-        return;
-    }
-
-    QByteArray audioData;
-
-    switch (m_connectionController->currentRadio().encodeMode) {
-    case 0: // EM0 - RAW 32-bit float stereo
-    {
-        // Convert mono S16LE to stereo float32 (K4 expects stereo: L=Main, R=Sub)
-        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leData.constData());
-        int sampleCount = s16leData.size() / sizeof(qint16);
-
-        audioData.resize(sampleCount * 2 * sizeof(float)); // Stereo output
-        float *output = reinterpret_cast<float *>(audioData.data());
-
-        for (int i = 0; i < sampleCount; i++) {
-            float normalized = static_cast<float>(samples[i]) * OpusDecoder::NORMALIZE_16BIT;
-            output[i * 2] = normalized;     // Left channel
-            output[i * 2 + 1] = normalized; // Right channel (duplicate)
-        }
-        break;
-    }
-
-    case 1: // EM1 - RAW 16-bit S16LE stereo
-    {
-        // Convert mono S16LE to stereo S16LE (K4 expects stereo: L=Main, R=Sub)
-        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leData.constData());
-        int sampleCount = s16leData.size() / sizeof(qint16);
-
-        audioData.resize(sampleCount * 2 * sizeof(qint16)); // Stereo output
-        qint16 *output = reinterpret_cast<qint16 *>(audioData.data());
-
-        for (int i = 0; i < sampleCount; i++) {
-            output[i * 2] = samples[i];     // Left channel
-            output[i * 2 + 1] = samples[i]; // Right channel (duplicate)
-        }
-        break;
-    }
-
-    case 2: // EM2 - Opus Int
-    case 3: // EM3 - Opus Float
-    default:
-        // Use Opus encoding (encoder handles mono-to-stereo internally)
-        audioData = m_opusEncoder->encode(s16leData, m_txFrameSamples);
-        break;
-    }
-
-    if (audioData.isEmpty()) {
-        return;
-    }
-
-    // Build and send the audio packet with the selected encode mode and frame size
-    QByteArray packet = Protocol::buildAudioPacket(audioData, m_txSequence++,
-                                                   m_connectionController->currentRadio().encodeMode, m_txFrameSamples);
-    m_connectionController->sendRawPacket(packet);
-}
-
 void AudioController::onStreamingLatencyChanged(int tier) {
-    m_txFrameSamples = RadioUtils::slTierToFrameSamples(tier);
-    m_audioEngine->setFrameSamples(m_txFrameSamples);
+    m_audioEngine->setFrameSamples(RadioUtils::slTierToFrameSamples(tier));
 }

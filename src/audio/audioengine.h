@@ -11,6 +11,8 @@
 #include <QMutex>
 #include <atomic>
 
+class OpusEncoder;
+
 /**
  * @brief Qt audio I/O + Opus pipeline for both RX (speaker) and TX (microphone) paths.
  *
@@ -71,6 +73,18 @@ public:
     void setFrameSamples(int samples); // 240, 480, 720, or 1440
     int frameSamples() const { return m_frameSamples.load(std::memory_order_relaxed); }
 
+    // TX encode mode (0=EM0 RAW32, 1=EM1 S16, 2=EM2 Opus int, 3=EM3 Opus float).
+    // Atomic so the audio-thread encode path reads it lock-free.
+    void setEncodeMode(int mode);
+    int encodeMode() const { return m_encodeMode.load(std::memory_order_relaxed); }
+
+    // PTT gate for the TX encode path. Setting to true on PTT-on edge also
+    // opens the mic (if needed) and flushes any partial-frame tail from the
+    // previous transmission. The TX encode runs on the audio thread; reading
+    // m_pttActive there is a lock-free atomic load.
+    Q_INVOKABLE void setPttActive(bool active);
+    bool isPttActive() const { return m_pttActive.load(std::memory_order_relaxed); }
+
     // Microphone settings
     Q_INVOKABLE void setMicGain(float gain); // 0.0 to 1.0
     float micGain() const { return m_micGain.load(std::memory_order_relaxed); }
@@ -89,7 +103,11 @@ public:
     static QList<QPair<QString, QString>> availableOutputDevices(); // (id, description)
 
 signals:
-    void microphoneFrame(const QByteArray &s16leData); // Complete frame (S16LE @ 12kHz, size matches SL tier)
+    // Encoded TX packet ready for the wire. Emitted on the audio thread;
+    // TcpClient::sendRaw() auto-marshals to the I/O thread. PR 12 moved the
+    // encode pipeline here from AudioController (main thread) so a busy GUI
+    // event loop can no longer stall voice TX packet emission.
+    void txPacketReady(const QByteArray &packet);
     void bufferStatus(int queueBytes, int maxBytes, bool prebuffering);
 
 private slots:
@@ -104,6 +122,10 @@ private:
     // Reads from input48k, writes into the pre-allocated m_resampleBuf12k
     // member and returns a const reference to it. Avoids per-poll allocation.
     const QByteArray &resample48kTo12k(const QByteArray &input48k);
+
+    // Encode + packetize one captured S16LE mono frame and emit txPacketReady.
+    // Runs on the audio thread, called from onMicDataReady when PTT is active.
+    void encodeAndSendFrame(const QByteArray &s16leMonoFrame, int frameSamples, int encodeMode);
 
     // Apply MX routing + volume + balance to a raw [main, sub] interleaved packet
     void applyMixAndVolume(QByteArray &packet);
@@ -155,6 +177,13 @@ private:
     static constexpr int INPUT_BUFFER_SIZE = 19200;
 
     // Microphone gain uses cubic curve for fine control at low levels
+
+    // TX encode pipeline state. Lives here (audio thread) instead of in
+    // AudioController (main thread) so a busy GUI doesn't stall voice TX.
+    OpusEncoder *m_opusEncoder = nullptr; // Owned, deleted in destructor
+    quint8 m_txSequence = 0;              // Audio-thread-only — no atomic needed
+    std::atomic<int> m_encodeMode{3};     // EM3 (Opus float) default
+    std::atomic<bool> m_pttActive{false}; // TX gate; read on every mic frame
 
     // Microphone frame buffering for Opus encoding
     // Buffer accumulates S16LE samples at 12kHz until we have a complete frame.
