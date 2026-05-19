@@ -26,7 +26,18 @@ public:
     HardwareController(RadioState *radioState, ConnectionController *connController, QObject *parent = nullptr);
     ~HardwareController();
 
-    // Accessors for OptionsDialog integration
+    // WHY (CONVENTIONS Rule 2 documented exception): these five accessors return
+    // raw pointers to owned sub-objects. OptionsDialog's per-device pages
+    // (KpodPage, HaliKeyPage, CwKeyerPage, SidetonePage) need direct handles to
+    // construct their configuration widgets, observe per-device signals, and
+    // invoke device-specific setters that don't belong on a generic controller
+    // façade (e.g. KpodPlusDevice::sendConfigCommand parameters, IambicKeyer
+    // mode-A/mode-B selection, SidetoneGenerator waveform tuning). Wrapping all
+    // of this in HardwareController would inflate its surface area without
+    // collapsing any cross-controller coupling. Same shape as
+    // ConnectionController::tcpClient(). If a future page only needs a single
+    // signal or property, prefer adding a HardwareController-level signal or
+    // getter and remove that consumer's dependency on the raw pointer.
     KpodDevice *kpodDevice() const { return m_kpodDevice; }
     KpodPlusDevice *kpodPlusDevice() const { return m_kpodPlusDevice; }
     HalikeyDevice *halikeyDevice() const { return m_halikeyDevice; }

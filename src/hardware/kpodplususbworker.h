@@ -138,6 +138,14 @@ private:
 // EP01 worker. Emits keyerDataReceived(QByteArray) — wired by the façade
 // directly to TcpClient on the I/O thread (queued), so the main thread is
 // never on the hot path.
+//
+// THREADING CONSTRAINT: run() is a blocking synchronous loop that NEVER
+// returns to the Qt event loop. As a result, every connect() targeting this
+// QObject MUST use Qt::DirectConnection — queued events posted to it will
+// sit unhandled forever. setDeviceHandle is annotated as a slot for symmetry
+// but is invoked via direct method call from the USB worker, not via a
+// queued signal. Adding a new signal or slot to this class without using
+// DirectConnection is silently broken (Qt will not warn).
 class KpodPlusEp02Worker : public QObject {
     Q_OBJECT
 
