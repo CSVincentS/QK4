@@ -14,7 +14,7 @@ Q_LOGGING_CATEGORY(netTcp, "net.tcp")
 TcpClient::TcpClient(QObject *parent)
     : QObject(parent), m_socket(new QSslSocket(this)), m_protocol(new Protocol(this)), m_authTimer(new QTimer(this)),
       m_connectTimer(new QTimer(this)), m_pingTimer(new QTimer(this)), m_retryTimer(new QTimer(this)),
-      m_port(K4Protocol::DEFAULT_PORT), m_useTls(false), m_encodeMode(3), m_streamingLatency(3), m_state(Disconnected),
+      m_port(K4Protocol::DEFAULT_PORT), m_useTls(false), m_encodeMode(3), m_streamingLatency(3),
       m_authResponseReceived(false) {
     // Socket signals
     connect(m_socket, &QSslSocket::connected, this, &TcpClient::onSocketConnected);
@@ -47,7 +47,7 @@ TcpClient::TcpClient(QObject *parent)
     // Protocol signals - any packet means auth succeeded
     connect(m_protocol, &Protocol::packetReceived, this, [this](quint8 type, const QByteArray &payload) {
         Q_UNUSED(payload)
-        if (m_state == Authenticating && !m_authResponseReceived) {
+        if (m_state.load(std::memory_order_acquire) == Authenticating && !m_authResponseReceived) {
             m_authResponseReceived = true;
             m_authTimer->stop();
             qCDebug(netTcp) << "Authentication successful, received packet type:" << type;
@@ -92,11 +92,13 @@ TcpClient::~TcpClient() {
 
 void TcpClient::connectToHost(const QString &host, quint16 port, const QString &password, bool useTls,
                               const QString &identity, int encodeMode, int streamingLatency) {
-    qCDebug(netTcp) << "connectToHost called, state=" << m_state << "socket=" << m_socket->state();
-    if (m_state != Disconnected) {
+    qCDebug(netTcp) << "connectToHost called, state=" << m_state.load(std::memory_order_acquire)
+                    << "socket=" << m_socket->state();
+    if (m_state.load(std::memory_order_acquire) != Disconnected) {
         qCDebug(netTcp) << "Not disconnected, calling disconnectFromHost first";
         disconnectFromHost();
-        qCDebug(netTcp) << "After disconnect: state=" << m_state << "socket=" << m_socket->state();
+        qCDebug(netTcp) << "After disconnect: state=" << m_state.load(std::memory_order_acquire)
+                        << "socket=" << m_socket->state();
     }
 
     m_host = host;
@@ -119,7 +121,7 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
         qCDebug(netTcp) << "Resolving mDNS hostname:" << m_host;
         QHostInfo::lookupHost(m_host, this, [this](const QHostInfo &info) {
             // Guard: user may have disconnected while resolution was in flight
-            if (m_state != Connecting)
+            if (m_state.load(std::memory_order_acquire) != Connecting)
                 return;
 
             if (info.error() != QHostInfo::NoError || info.addresses().isEmpty()) {
@@ -207,7 +209,8 @@ void TcpClient::attemptConnection() {
 }
 
 void TcpClient::disconnectFromHost() {
-    qCDebug(netTcp) << "disconnectFromHost called, state=" << m_state << "socket=" << m_socket->state();
+    qCDebug(netTcp) << "disconnectFromHost called, state=" << m_state.load(std::memory_order_acquire)
+                    << "socket=" << m_socket->state();
     m_connectTimer->stop();
     m_retryTimer->stop();
     stopPingTimer();
@@ -215,7 +218,7 @@ void TcpClient::disconnectFromHost() {
 
     if (m_socket->state() != QAbstractSocket::UnconnectedState) {
         // Send graceful disconnect command
-        if (m_state == Connected) {
+        if (m_state.load(std::memory_order_acquire) == Connected) {
             sendCAT(K4Protocol::Commands::DISCONNECT);
         }
         m_socket->disconnectFromHost();
@@ -229,7 +232,7 @@ bool TcpClient::isConnected() const {
 }
 
 TcpClient::ConnectionState TcpClient::connectionState() const {
-    return m_state;
+    return m_state.load(std::memory_order_acquire);
 }
 
 void TcpClient::sendCAT(const QString &command) {
@@ -238,13 +241,13 @@ void TcpClient::sendCAT(const QString &command) {
         QMetaObject::invokeMethod(this, "sendCAT", Qt::QueuedConnection, Q_ARG(QString, command));
         return;
     }
-    if (m_state == Connected) {
+    if (m_state.load(std::memory_order_acquire) == Connected) {
         QByteArray packet = Protocol::buildCATPacket(command);
         m_socket->write(packet);
         m_socket->flush();
         qCDebug(catTx) << "sent:" << command << "(" << packet.size() << "bytes)";
     } else {
-        qCWarning(catTx) << "DROPPED (state=" << m_state << "):" << command;
+        qCWarning(catTx) << "DROPPED (state=" << m_state.load(std::memory_order_acquire) << "):" << command;
     }
 }
 
@@ -274,10 +277,11 @@ void TcpClient::sendRaw(const QByteArray &data) {
 }
 
 void TcpClient::setState(ConnectionState state) {
-    if (m_state != state) {
+    const ConnectionState prev = m_state.load(std::memory_order_acquire);
+    if (prev != state) {
         static const char *names[] = {"Disconnected", "Connecting", "Authenticating", "Connected"};
-        qCDebug(netTcp) << "State:" << names[m_state] << "->" << names[state];
-        m_state = state;
+        qCDebug(netTcp) << "State:" << names[prev] << "->" << names[state];
+        m_state.store(state, std::memory_order_release);
         m_connected.store(state == Connected, std::memory_order_relaxed);
         emit stateChanged(state);
 
@@ -328,11 +332,12 @@ void TcpClient::onSocketEncrypted() {
 }
 
 void TcpClient::onSocketDisconnected() {
-    qCDebug(netTcp) << "Socket disconnected (was state=" << m_state << "authReceived=" << m_authResponseReceived << ")";
+    qCDebug(netTcp) << "Socket disconnected (was state=" << m_state.load(std::memory_order_acquire)
+                    << "authReceived=" << m_authResponseReceived << ")";
     stopPingTimer();
     m_authTimer->stop();
 
-    if (m_state == Authenticating && !m_authResponseReceived) {
+    if (m_state.load(std::memory_order_acquire) == Authenticating && !m_authResponseReceived) {
         emit authenticationFailed();
         emit errorOccurred("Authentication failed - connection closed by radio");
     }
@@ -351,7 +356,8 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
     m_authTimer->stop();
 
     QString errorMsg = m_socket->errorString();
-    qCDebug(netTcp) << "Socket error:" << error << errorMsg << "state=" << m_state << "socket=" << m_socket->state()
+    const ConnectionState stateNow = m_state.load(std::memory_order_acquire);
+    qCDebug(netTcp) << "Socket error:" << error << errorMsg << "state=" << stateNow << "socket=" << m_socket->state()
                     << "retry=" << m_retryCount;
 
     // On local subnets, macOS returns EHOSTUNREACH immediately when the ARP cache
@@ -363,7 +369,7 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
     constexpr int kArpRetryIntervalMs = 500;
     constexpr int kArpMaxRetries = 2;
     bool arpTransient =
-        (error == QAbstractSocket::NetworkError && m_state == Connecting && m_retryCount < kArpMaxRetries);
+        (error == QAbstractSocket::NetworkError && stateNow == Connecting && m_retryCount < kArpMaxRetries);
     if (arpTransient) {
         m_retryCount++;
         qCDebug(netTcp) << "ARP-cold retry" << m_retryCount << "in" << kArpRetryIntervalMs << "ms";
@@ -372,7 +378,7 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
         return;
     }
 
-    if (m_state == Authenticating) {
+    if (stateNow == Authenticating) {
         emit authenticationFailed();
     }
 
@@ -400,7 +406,7 @@ void TcpClient::onPreSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticat
 }
 
 void TcpClient::onConnectTimeout() {
-    if (m_state == Connecting) {
+    if (m_state.load(std::memory_order_acquire) == Connecting) {
         qCDebug(netTcp) << "Connection timeout - failed to establish" << (m_useTls ? "TLS" : "TCP") << "connection";
         emit errorOccurred("Connection timed out - radio unreachable");
         m_socket->abort();
@@ -409,7 +415,7 @@ void TcpClient::onConnectTimeout() {
 }
 
 void TcpClient::onAuthTimeout() {
-    if (m_state == Authenticating && !m_authResponseReceived) {
+    if (m_state.load(std::memory_order_acquire) == Authenticating && !m_authResponseReceived) {
         qCDebug(netTcp) << "Authentication timeout";
         emit authenticationFailed();
         emit errorOccurred("Authentication timeout - no response from radio");
@@ -418,7 +424,7 @@ void TcpClient::onAuthTimeout() {
 }
 
 void TcpClient::onPingTimer() {
-    if (m_state == Connected) {
+    if (m_state.load(std::memory_order_acquire) == Connected) {
         qint64 epoch = QDateTime::currentSecsSinceEpoch();
         sendCAT(QString("PING%1;").arg(epoch));
         m_pingElapsed.start();

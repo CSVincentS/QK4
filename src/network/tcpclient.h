@@ -107,7 +107,16 @@ private:
     QString m_identity;     // TLS-PSK identity (optional)
     int m_encodeMode;       // Audio encode mode (0-3)
     int m_streamingLatency; // Remote streaming audio latency (0-7)
-    ConnectionState m_state;
+    // WHY atomic: m_state is written on the IO thread (this object's affinity)
+    // by setState() and read on the main thread via connectionState() →
+    // ConnectionController::connectionState() → MainWindow seeding paths. A
+    // plain enum read/written across threads is a data race (UB on weakly
+    // ordered architectures). Writes use memory_order_release; reads use
+    // memory_order_acquire — including the IO-thread internal reads, so the
+    // pattern is uniform (compiles to the same code as relaxed on x86 and one
+    // dmb ish on ARM). Sister field m_connected has the same shape for the
+    // same reason.
+    std::atomic<ConnectionState> m_state{Disconnected};
     std::atomic<bool> m_connected{false}; // Thread-safe read for isConnected()
     bool m_authResponseReceived;
 
