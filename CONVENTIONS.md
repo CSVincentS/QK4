@@ -225,10 +225,10 @@ Current exempt files (do not green-light new additions that bloat these further)
 |------|----:|-------|
 | `src/mainwindow.cpp` | 1758 | Down from 4967 pre-refactor. Remaining scope is genuine coordination (setupUi, event-filter dispatch, lifecycle). Further decomposition is judgment territory. |
 | `src/dsp/panadapter_rhi.cpp` | 1871 | Naturally large — RHI pipeline + buffer management. Low priority. |
-| `src/models/radiostate.cpp` | 1128 | Down from 2893 pre-refactor. Handler registry + façade delegation. |
+| `src/models/radiostate.cpp` | 1147 | Down from 2893 pre-refactor. Handler registry + façade delegation. |
 | `src/dsp/minipan_rhi.cpp` | 1065 | Mirrors panadapter structure. |
-| `src/models/radiostate.h` | 883 | Down from 1156 pre-refactor; 11 subsystem struct references + public API. |
-| `src/controllers/spectrumcontroller.cpp` | 891 | Close to threshold — hold the line. |
+| `src/models/radiostate.h` | 896 | Down from 1156 pre-refactor; 11 subsystem struct references + public API. |
+| `src/controllers/spectrumcontroller.cpp` | 945 | Past 800-LOC threshold — split candidate (DX cluster spot overlay wiring is the natural extraction target). |
 | `src/ui/popups/displaypopupwidget.cpp` | 865 | Close to threshold — hold the line. |
 
 ### 8. [review] Every Extraction is Traced First
