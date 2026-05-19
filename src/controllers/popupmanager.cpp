@@ -1,7 +1,6 @@
 #include "popupmanager.h"
 
 #include "connectioncontroller.h"
-#include "dsp/panadapter_rhi.h"
 #include "models/radiostate.h"
 #include "spectrumcontroller.h"
 #include "ui/popups/bandpopupwidget.h"
@@ -393,8 +392,7 @@ void PopupManager::wireDisplayPopup() {
         // Optimistic updates — K4 may not echo this command.
         if (!isExt) {
             m_radioState->setWaterfallHeight(next);
-            m_spectrum->panadapterA()->setWaterfallHeight(next);
-            m_spectrum->panadapterB()->setWaterfallHeight(next);
+            m_spectrum->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
             m_vfoA->setMiniPanWaterfallHeight(next);
             m_vfoB->setMiniPanWaterfallHeight(next);

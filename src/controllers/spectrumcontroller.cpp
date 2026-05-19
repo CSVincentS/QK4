@@ -45,6 +45,27 @@ void SpectrumController::clearDisplays() {
         m_panadapterB->clear();
 }
 
+void SpectrumController::setAmplitudeUnits(bool useSUnits) {
+    if (m_panadapterA)
+        m_panadapterA->setAmplitudeUnits(useSUnits);
+    if (m_panadapterB)
+        m_panadapterB->setAmplitudeUnits(useSUnits);
+}
+
+void SpectrumController::setFskMarkTone(int toneHz) {
+    if (m_panadapterA)
+        m_panadapterA->setFskMarkTone(toneHz);
+    if (m_panadapterB)
+        m_panadapterB->setFskMarkTone(toneHz);
+}
+
+void SpectrumController::setWaterfallHeight(int percent) {
+    if (m_panadapterA)
+        m_panadapterA->setWaterfallHeight(percent);
+    if (m_panadapterB)
+        m_panadapterB->setWaterfallHeight(percent);
+}
+
 void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA, VFOWidget *vfoB) {
     m_vfoA = vfoA;
     m_vfoB = vfoB;
