@@ -195,8 +195,12 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         QChar iambic = settings->kpodPlusIambicMode() == 1 ? QChar('B') : QChar('A');
         QChar paddle = settings->kpodPlusPaddleReversed() ? QChar('R') : QChar('N');
         int weight = m_radioState->keyingWeight();
+        // WHY: K4 KP command accepts weights 090..125 (ratio × 100, where 100 = 1:1).
+        // `weight < 90` catches BOTH the -1 not-yet-received sentinel AND any value
+        // below the K4's documented minimum (shouldn't happen but defends the wire).
+        // Fall back to 100 (1:1 ratio — the K4 factory default).
         if (weight < 90)
-            weight = 100; // Default if not yet received from K4
+            weight = 100;
         const QString kpCmd = QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0'));
         m_connectionController->sendCAT(kpCmd);
         m_radioState->parseCATCommand(kpCmd);
