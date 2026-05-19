@@ -232,7 +232,6 @@ constexpr const char *BorderNormal = "#606060";
 constexpr const char *BorderHover = "#808080";
 constexpr const char *BorderPressed = "#909090";
 constexpr const char *BorderSelected = "#AAAAAA";
-constexpr const char *BorderLight = "#909090";
 
 // Dialog-specific colors
 constexpr const char *DialogBorder = "#333333"; // Dialog borders and separators

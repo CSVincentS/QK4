@@ -2,9 +2,11 @@
 #define MACROCONTROLLER_H
 
 #include <QObject>
+#include <QPointer>
 
 class ConnectionController;
 class PopupManager;
+class QWidget;
 
 // Dispatches macro invocations from the Fn popup, KPOD hardware buttons,
 // and the PF1-PF4 right-side-panel buttons. Translates built-in function
@@ -20,7 +22,10 @@ class MacroController : public QObject {
     Q_OBJECT
 
 public:
-    explicit MacroController(ConnectionController *connection, PopupManager *popupManager, QObject *parent = nullptr);
+    // dialogParent: widget to anchor stub QMessageBox dialogs to (typically MainWindow).
+    // Stored as QPointer so cleanup is safe if the parent widget is destroyed first.
+    MacroController(ConnectionController *connection, PopupManager *popupManager, QWidget *dialogParent,
+                    QObject *parent = nullptr);
     ~MacroController() override;
 
     // Public entry point for PF1-PF4 clicks and HardwareController's
@@ -42,6 +47,7 @@ private slots:
 private:
     ConnectionController *m_connection; // injected, not owned
     PopupManager *m_popupManager;       // injected, not owned
+    QPointer<QWidget> m_dialogParent;   // injected, not owned
 };
 
 #endif // MACROCONTROLLER_H

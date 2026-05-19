@@ -10,8 +10,6 @@
 
 #include "network/dxclusterclient.h"
 
-class RadioState;
-
 // Per-cluster connection instance
 struct DxClusterInstance {
     DxClusterClient *client = nullptr;
@@ -25,7 +23,7 @@ class DxClusterController : public QObject {
     Q_OBJECT
 
 public:
-    explicit DxClusterController(RadioState *radioState, QObject *parent = nullptr);
+    explicit DxClusterController(QObject *parent = nullptr);
     ~DxClusterController();
 
     // Per-cluster connection management (keyed by settings index)
@@ -59,7 +57,6 @@ private:
     void pruneExpiredSpots();
 
     QMap<int, DxClusterInstance> m_instances;
-    RadioState *m_radioState;
     QVector<DxSpot> m_spots;
     QTimer *m_agingTimer;
     int m_spotMaxAgeSec = 600;

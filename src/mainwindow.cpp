@@ -82,7 +82,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_bandNavController = new BandNavigationController(m_radioState, m_connectionController, m_popupManager, this);
     // Mode label refresh on ESSB toggle is observed directly by
     // ModeLabelController via RadioState::essbChanged.
-    m_macroController = new MacroController(m_connectionController, m_popupManager, this);
+    m_macroController = new MacroController(m_connectionController, m_popupManager, /*dialogParent=*/this, this);
     connect(m_macroController, &MacroController::macroDialogRequested, this, [this]() {
         closeAllPopups();
         m_popupManager->openMacroDialog();
@@ -202,7 +202,7 @@ void MainWindow::setupControllers() {
     m_spectrumController = new SpectrumController(m_connectionController, m_radioState, this);
 
     // DX Cluster controller owns the cluster TCP client and spot cache
-    m_dxClusterController = new DxClusterController(m_radioState, this);
+    m_dxClusterController = new DxClusterController(this);
     m_spectrumController->setDxClusterController(m_dxClusterController);
 }
 
