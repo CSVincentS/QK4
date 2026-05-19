@@ -15,9 +15,10 @@ class QWidget;
 // IDs the K4 reports dynamically (Mouse L/R QSY, FSK Mark-Tone, Spectrum
 // Amplitude Units).
 //
-// MainWindow retains: onBandSelected (the BandPopup is separate), the
-// bottom menu bar wiring (menuClicked → showMenuOverlay), and the
-// onCatResponse MEDF routing (forwards cmd to menuModel()->parseMEDF/parseME).
+// MainWindow retains: onBandSelected (the BandPopup is separate) and the
+// bottom menu bar wiring (menuClicked → showMenuOverlay). MEDF/ME CAT
+// routing goes through ingestMedf() / ingestMe() task methods below;
+// model is kept private.
 //
 // See PATTERNS.md → Controller Pattern.
 class MenuController : public QObject {
@@ -28,11 +29,12 @@ public:
                             QObject *parent = nullptr);
     ~MenuController() override;
 
-    // For MainWindow::onCatResponse — routes MEDF/ME CAT lines into the
-    // menu model. Exposing menuModel() is the minimum-surface way to keep
-    // that routing working. (An alternative is ingestMedf()/ingestMe()
-    // methods on MenuController, but they'd be 1-line forwarders.)
-    MenuModel *menuModel() const;
+    // CAT routing entry points used by MainWindow::onCatResponse. Each
+    // forwards into the encapsulated MenuModel. Returning void (the model's
+    // bool return is discarded by all current callers).
+    void ingestMedf(const QString &cmd);
+    void ingestMe(const QString &cmd);
+    void clearModel();
 
     // Task-level overlay API. Positions the overlay above the spectrum
     // container (resolved internally from the injected SpectrumController).

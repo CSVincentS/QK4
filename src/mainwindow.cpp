@@ -1501,10 +1501,7 @@ void MainWindow::onConnectionStateChanged(TcpClient::ConnectionState state) {
 }
 
 void MainWindow::onConnectionError(const QString &error) {
-    m_statusBarController->setConnectionStatus("Error: " + error,
-                                               QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                   .arg(K4Styles::Colors::TxRed)
-                                                   .arg(K4Styles::Dimensions::FontSizeButton));
+    m_statusBarController->showError(error);
 }
 
 void MainWindow::onHardwareError(const QString &error) {
@@ -1572,9 +1569,7 @@ void MainWindow::onRadioReady() {
 
 void MainWindow::onAuthFailed() {
     qCDebug(qk4Main) << "Authentication failed";
-    m_statusBarController->setConnectionStatus("Auth Failed", QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                                  .arg(K4Styles::Colors::TxRed)
-                                                                  .arg(K4Styles::Dimensions::FontSizeButton));
+    m_statusBarController->showAuthFailed();
 }
 
 void MainWindow::onCatResponse(const QString &response) {
@@ -1588,29 +1583,13 @@ void MainWindow::onCatResponse(const QString &response) {
 
         m_radioState->parseCATCommand(cmd + ";");
 
-        // Parse MEDF (menu definitions) from RDY response
+        // Menu system routing — MenuController encapsulates the MenuModel.
+        // BN / BN$ are parsed by BandNavigationController which subscribes
+        // to catResponseReceived directly; not handled here.
         if (cmd.startsWith("MEDF")) {
-            m_menuController->menuModel()->parseMEDF(cmd + ";");
-        }
-        // Route ME (menu value) commands to MenuModel for real-time updates
-        else if (cmd.startsWith("ME")) {
-            m_menuController->menuModel()->parseME(cmd + ";");
-        }
-        // Parse BN$ (Band Number) response for VFO B (Sub RX)
-        else if (cmd.startsWith("BN$")) {
-            // VFO B band number: BN$nn where nn is 00-10 or 16-25
-            bool ok;
-            int bandNum = cmd.mid(3, 2).toInt(&ok);
-            if (ok)
-                m_bandNavController->setCurrentBand(bandNum, true);
-        }
-        // Parse BN (Band Number) response for VFO A
-        else if (cmd.startsWith("BN")) {
-            // VFO A band number: BNnn where nn is 00-10 or 16-25
-            bool ok;
-            int bandNum = cmd.mid(2, 2).toInt(&ok);
-            if (ok)
-                m_bandNavController->setCurrentBand(bandNum, false);
+            m_menuController->ingestMedf(cmd + ";");
+        } else if (cmd.startsWith("ME")) {
+            m_menuController->ingestMe(cmd + ";");
         }
     }
 }
@@ -1644,7 +1623,7 @@ void MainWindow::resetUiForDisconnect() {
     m_filterAWidget->resetToDefaults();
     m_filterBWidget->resetToDefaults();
     m_statusBarController->clearReadings();
-    m_menuController->menuModel()->clear();
+    m_menuController->clearModel();
     m_kpa1500UiController->disconnectFromHost();
 
     m_modeLabelController->reset();

@@ -141,12 +141,6 @@ void StatusBarController::setTitle(const QString &text) {
     m_titleLabel->setText(text);
 }
 
-void StatusBarController::setConnectionStatus(const QString &text, const QString &styleSheet) {
-    m_connectionStatusLabel->setText(text);
-    if (!styleSheet.isEmpty())
-        m_connectionStatusLabel->setStyleSheet(styleSheet);
-}
-
 void StatusBarController::showDisconnected() {
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
@@ -166,6 +160,20 @@ void StatusBarController::showConnected() {
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                                .arg(K4Styles::Colors::StatusGreen)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
+}
+
+void StatusBarController::showError(const QString &errorMessage) {
+    m_connectionStatusLabel->setText("Error: " + errorMessage);
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                               .arg(K4Styles::Colors::TxRed)
+                                               .arg(K4Styles::Dimensions::FontSizeButton));
+}
+
+void StatusBarController::showAuthFailed() {
+    m_connectionStatusLabel->setText("Auth Failed");
+    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                               .arg(K4Styles::Colors::TxRed)
                                                .arg(K4Styles::Dimensions::FontSizeButton));
 }
 

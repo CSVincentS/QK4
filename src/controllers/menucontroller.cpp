@@ -32,8 +32,19 @@ MenuController::~MenuController() {
     disconnect(this);
 }
 
-MenuModel *MenuController::menuModel() const {
-    return m_menuModel;
+void MenuController::ingestMedf(const QString &cmd) {
+    if (m_menuModel)
+        m_menuModel->parseMEDF(cmd);
+}
+
+void MenuController::ingestMe(const QString &cmd) {
+    if (m_menuModel)
+        m_menuModel->parseME(cmd);
+}
+
+void MenuController::clearModel() {
+    if (m_menuModel)
+        m_menuModel->clear();
 }
 
 bool MenuController::isOverlayVisible() const {
