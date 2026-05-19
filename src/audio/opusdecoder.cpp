@@ -138,36 +138,29 @@ QByteArray OpusDecoder::decode(const QByteArray &opusData) {
     if (!m_decoder)
         return QByteArray();
 
-    // Max frame size for 12kHz = 120ms * 12000 = 1440 samples per channel
-    const int maxFrameSize = 1440;
-    QVector<opus_int16> pcm(maxFrameSize * m_channels);
-
     int samples = opus_decode(m_decoder, reinterpret_cast<const unsigned char *>(opusData.constData()), opusData.size(),
-                              pcm.data(), maxFrameSize, 0);
+                              m_pcmIntScratch.data(), MAX_FRAME_SAMPLES_PER_CHANNEL, 0);
 
     if (samples < 0) {
         qCWarning(qk4Audio) << "OpusDecoder: decode failed:" << opus_strerror(samples);
         return QByteArray();
     }
 
-    return QByteArray(reinterpret_cast<const char *>(pcm.constData()), samples * m_channels * sizeof(opus_int16));
+    return QByteArray(reinterpret_cast<const char *>(m_pcmIntScratch.data()),
+                      samples * m_channels * sizeof(opus_int16));
 }
 
 QByteArray OpusDecoder::decodeFloat(const QByteArray &opusData) {
     if (!m_decoder)
         return QByteArray();
 
-    // Max frame size for 12kHz = 120ms * 12000 = 1440 samples per channel
-    const int maxFrameSize = 1440;
-    QVector<float> pcm(maxFrameSize * m_channels);
-
     int samples = opus_decode_float(m_decoder, reinterpret_cast<const unsigned char *>(opusData.constData()),
-                                    opusData.size(), pcm.data(), maxFrameSize, 0);
+                                    opusData.size(), m_pcmFloatScratch.data(), MAX_FRAME_SAMPLES_PER_CHANNEL, 0);
 
     if (samples < 0) {
         qCWarning(qk4Audio) << "OpusDecoder: decodeFloat failed:" << opus_strerror(samples);
         return QByteArray();
     }
 
-    return QByteArray(reinterpret_cast<const char *>(pcm.constData()), samples * m_channels * sizeof(float));
+    return QByteArray(reinterpret_cast<const char *>(m_pcmFloatScratch.data()), samples * m_channels * sizeof(float));
 }

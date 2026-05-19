@@ -100,8 +100,10 @@ private:
     bool setupAudioOutput();
     bool setupAudioInput();
 
-    // Resample 48kHz Float32 samples to 12kHz (4:1 decimation with averaging)
-    QByteArray resample48kTo12k(const QByteArray &input48k);
+    // Resample 48kHz Float32 samples to 12kHz (4:1 decimation with averaging).
+    // Reads from input48k, writes into the pre-allocated m_resampleBuf12k
+    // member and returns a const reference to it. Avoids per-poll allocation.
+    const QByteArray &resample48kTo12k(const QByteArray &input48k);
 
     // Apply MX routing + volume + balance to a raw [main, sub] interleaved packet
     void applyMixAndVolume(QByteArray &packet);
@@ -159,6 +161,17 @@ private:
     // Frame size is dynamic, matching the SL tier (240/480/720/1440 samples).
     std::atomic<int> m_frameSamples{240}; // Default 20ms, updated on SL change
     QByteArray m_micBuffer;
+    // Offset into m_micBuffer of the next byte to emit. Eliminates the
+    // per-poll O(N) memmove from QByteArray::remove(0, n) — instead we just
+    // bump this and compact only when the offset exceeds half the buffer's
+    // capacity.
+    int m_micReadOffset = 0;
+
+    // Pre-allocated scratch for resample48kTo12k. Sized to INPUT_BUFFER_SIZE/4
+    // bytes (the 4:1 decimation ratio means 12kHz output is 1/4 the 48kHz input
+    // size; INPUT_BUFFER_SIZE bytes of 48kHz Float32 = INPUT_BUFFER_SIZE/16
+    // samples = INPUT_BUFFER_SIZE/16 * 4 bytes of 12kHz output = INPUT_BUFFER_SIZE/4).
+    QByteArray m_resampleBuf12k;
 
     // Timer for polling microphone data (more reliable than readyRead signal)
     QTimer *m_micPollTimer;
@@ -173,6 +186,10 @@ private:
     // Write staging buffer: holds processed PCM that couldn't be written in one feed cycle
     // Audio-thread-only (no mutex needed) — safety net for partial QIODevice::write()
     QByteArray m_writeBuffer;
+
+    // Reused per feedAudioDevice() cycle. Hoisted from a per-call stack QList
+    // so the 100 Hz feed timer doesn't construct a fresh list each tick.
+    QList<QByteArray> m_feedBatch;
 
     // Jitter buffer constants (adapt to any SL level automatically).
     // WHY PREBUFFER_PACKETS = 1: SL-tier packets already encode the jitter runway (SL7 carries

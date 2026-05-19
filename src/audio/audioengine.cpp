@@ -29,6 +29,16 @@ AudioEngine::AudioEngine(QObject *parent)
     m_feedTimer->setInterval(FEED_INTERVAL_MS);
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
+    // Pre-size hot-path buffers so the per-poll / per-frame paths reuse capacity.
+    // m_micBuffer holds 12kHz S16LE samples queued up to one max frame (SL7 = 1440
+    // samples = 2880 bytes); 2× that gives headroom for partial frames + the next
+    // poll's data before we compact. m_resampleBuf12k holds 48kHz→12kHz output
+    // for one poll cycle (INPUT_BUFFER_SIZE = 19200 bytes of 48kHz Float32 → 4800
+    // bytes of 12kHz Float32). m_feedBatch is dimensioned for ~4 packets per cycle.
+    m_micBuffer.reserve(2 * 1440 * sizeof(qint16));
+    m_resampleBuf12k.reserve(INPUT_BUFFER_SIZE / 4);
+    m_feedBatch.reserve(4);
+
     // WHY setupAudioInput() is deferred until the first openMic() call:
     // Qt's mic-permission callback on macOS runs on the main-thread runloop. During connection
     // startup, AudioController calls into the AudioEngine from the IO thread via
@@ -91,6 +101,7 @@ void AudioEngine::stop() {
     }
 
     m_micBuffer.clear();
+    m_micReadOffset = 0;
 }
 
 bool AudioEngine::setupAudioOutput() {
@@ -218,8 +229,9 @@ void AudioEngine::feedAudioDevice() {
     // Query sink capacity (audio-thread-only, no mutex needed)
     int bytesFree = m_audioSink->bytesFree();
 
-    // Drain queue under a short lock, then write outside the lock
-    QList<QByteArray> localPackets;
+    // Drain queue under a short lock, then write outside the lock. m_feedBatch
+    // is a member to avoid constructing a fresh QList on every 10 ms tick.
+    m_feedBatch.clear();
     int preDrainQueueBytes;
     bool snapshotPrebuffering;
     {
@@ -248,14 +260,14 @@ void AudioEngine::feedAudioDevice() {
             QByteArray pkt = m_audioQueue.dequeue();
             m_queueBytes -= pkt.size();
             bytesFree -= headSize;
-            localPackets.append(std::move(pkt));
+            m_feedBatch.append(std::move(pkt));
         }
     }
 
     emit bufferStatus(preDrainQueueBytes, MAX_QUEUE_BYTES, snapshotPrebuffering);
 
     // Apply mix/volume and write to audio sink without holding the lock
-    for (QByteArray &packet : localPackets) {
+    for (QByteArray &packet : m_feedBatch) {
         applyMixAndVolume(packet);
         qint64 written = m_audioSinkDevice->write(packet.constData(), packet.size());
         if (written < packet.size()) {
@@ -380,21 +392,25 @@ void AudioEngine::closeMic() {
     }
     m_audioSourceDevice = nullptr;
     m_micBuffer.clear();
+    m_micReadOffset = 0;
 }
 
 void AudioEngine::flushMicBuffer() {
     m_micBuffer.clear();
+    m_micReadOffset = 0;
 }
 
-QByteArray AudioEngine::resample48kTo12k(const QByteArray &input48k) {
-    // Simple 4:1 decimation with averaging filter
-    // 48kHz / 4 = 12kHz
+const QByteArray &AudioEngine::resample48kTo12k(const QByteArray &input48k) {
+    // Simple 4:1 decimation with averaging filter (48kHz / 4 = 12kHz).
+    // Writes into the pre-allocated m_resampleBuf12k member; resize() at the
+    // pre-reserved capacity is alloc-free.
     const float *inputSamples = reinterpret_cast<const float *>(input48k.constData());
     int inputCount = input48k.size() / sizeof(float);
     int outputCount = inputCount / 4;
+    const int outputBytes = outputCount * static_cast<int>(sizeof(float));
 
-    QByteArray output12k;
-    output12k.reserve(outputCount * sizeof(float));
+    m_resampleBuf12k.resize(outputBytes);
+    float *output = reinterpret_cast<float *>(m_resampleBuf12k.data());
 
     for (int i = 0; i < outputCount; i++) {
         // Average 4 samples for simple low-pass filtering
@@ -405,11 +421,10 @@ QByteArray AudioEngine::resample48kTo12k(const QByteArray &input48k) {
             sum += inputSamples[srcIdx + j];
             count++;
         }
-        float avg = (count > 0) ? (sum / count) : 0.0f;
-        output12k.append(reinterpret_cast<const char *>(&avg), sizeof(float));
+        output[i] = (count > 0) ? (sum / count) : 0.0f;
     }
 
-    return output12k;
+    return m_resampleBuf12k;
 }
 
 void AudioEngine::onMicDataReady() {
@@ -422,8 +437,8 @@ void AudioEngine::onMicDataReady() {
         return;
     }
 
-    // Resample from 48kHz to 12kHz
-    QByteArray data12k = resample48kTo12k(data48k);
+    // Resample from 48kHz to 12kHz (writes into pre-allocated member buffer)
+    const QByteArray &data12k = resample48kTo12k(data48k);
 
     // Convert Float32 to S16LE, apply gain, and buffer for frame-based emission
     const float *floatData = reinterpret_cast<const float *>(data12k.constData());
@@ -438,17 +453,22 @@ void AudioEngine::onMicDataReady() {
         m_micBuffer.append(reinterpret_cast<const char *>(&s16Sample), sizeof(qint16));
     }
 
-    // Emit complete frames (size matches SL tier: 240/480/720/1440 samples)
-    // Use offset-based reading to avoid O(n) buffer shifts per frame
-    int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(qint16));
-    int offset = 0;
-    while (m_micBuffer.size() - offset >= frameBytes) {
-        QByteArray frame = m_micBuffer.mid(offset, frameBytes);
-        offset += frameBytes;
-        emit microphoneFrame(frame);
+    // Emit complete frames (size matches SL tier: 240/480/720/1440 samples).
+    // m_micReadOffset advances per emitted frame instead of remove(0, n)'s O(N)
+    // memmove on every poll. We compact only when the offset has grown past
+    // half the buffer's size — keeps amortized work O(1) per frame.
+    const int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(qint16));
+    while (m_micBuffer.size() - m_micReadOffset >= frameBytes) {
+        // mid() copies frameBytes into a new QByteArray. This copy is required
+        // for the QueuedConnection across the audio→main thread boundary; the
+        // receiver's event-loop slot may outlive the source data.
+        emit microphoneFrame(m_micBuffer.mid(m_micReadOffset, frameBytes));
+        m_micReadOffset += frameBytes;
     }
-    if (offset > 0) {
-        m_micBuffer.remove(0, offset); // Single shift for all consumed frames
+    // Compact lazily: only when the consumed prefix is at least half the buffer.
+    if (m_micReadOffset > 0 && m_micReadOffset * 2 >= m_micBuffer.size()) {
+        m_micBuffer.remove(0, m_micReadOffset);
+        m_micReadOffset = 0;
     }
 }
 

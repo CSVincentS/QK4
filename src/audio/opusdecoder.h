@@ -2,6 +2,7 @@
 #define OPUSDECODER_H
 
 #include <QObject>
+#include <array>
 #include <opus/opus.h>
 
 /**
@@ -49,6 +50,19 @@ private:
     ::OpusDecoder *m_decoder;
     int m_sampleRate;
     int m_channels;
+
+    // Max frame size for 12kHz audio = 120ms * 12000 = 1440 samples per channel.
+    // Stereo is the only configured channel count (m_channels = 2 from initialize).
+    static constexpr int MAX_FRAME_SAMPLES_PER_CHANNEL = 1440;
+    static constexpr int MAX_SCRATCH_SAMPLES = MAX_FRAME_SAMPLES_PER_CHANNEL * 2; // stereo
+
+    // Pre-allocated scratch buffers for opus_decode / opus_decode_float. Previously
+    // each call allocated a per-frame QVector — at SL0 (50 Hz RX), that was 50+
+    // heap allocations per second on the IO thread just for scratch space. Fixed-
+    // size members reuse the same memory each frame; we still copy into the
+    // returned QByteArray (callers depend on QByteArray ownership semantics).
+    std::array<opus_int16, MAX_SCRATCH_SAMPLES> m_pcmIntScratch{};
+    std::array<float, MAX_SCRATCH_SAMPLES> m_pcmFloatScratch{};
 
     // Normalization constants
     // WHY: K4 RAW modes (EM0/EM1) ship samples with ~4× headroom over nominal S16

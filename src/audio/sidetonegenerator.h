@@ -56,6 +56,13 @@ private:
     std::atomic<int> m_keyerWpm{20};
     double m_phase = 0.0;
     Element m_currentElement = ElementNone;
+
+    // Pre-allocated PCM scratch buffer. Worst case is 5 WPM dah (720 ms tone +
+    // 240 ms inter-element space) at 48 kHz × 2 bytes = ~92 kB. Sized to
+    // 128 kB so a future slower-keyer mode doesn't realloc. Previously
+    // playElement() allocated a fresh QByteArray per CW element (7+ allocs/sec
+    // during keying). resize() against the pre-sized capacity is alloc-free.
+    QByteArray m_elementBuffer;
 };
 
 #endif // SIDETONEGENERATOR_H
