@@ -107,6 +107,7 @@ set(SOURCES
     src/controllers/txstatecontroller.cpp
     src/controllers/sidecontroldisplaycontroller.cpp
     src/controllers/sidecontrolscrollcontroller.cpp
+    src/controllers/rightsidecontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -230,6 +231,7 @@ set(HEADERS
     src/controllers/txstatecontroller.h
     src/controllers/sidecontroldisplaycontroller.h
     src/controllers/sidecontrolscrollcontroller.h
+    src/controllers/rightsidecontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

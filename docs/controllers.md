@@ -32,6 +32,8 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "Filter indicator shape / position wrong" | FilterIndicatorController | `src/controllers/filterindicatorcontroller.cpp` |
 | "Side panel knob values (BW/SHFT, power, mic gain) wrong" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
 | "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
+| "Side panel scroll wheels (WPM/Power/BW/HI/LO/RFGain/etc.) wrong" | SideControlScrollController | `src/controllers/sidecontrolscrollcontroller.cpp` |
+| "Right side panel button (PRE/NB/NR/NTCH/FIL/AB/REV/SPOT/MODE/PF1-4/RATE/LOCK/SUB) wrong" | RightSideController | `src/controllers/rightsidecontroller.cpp` |
 | "Menu overlay / MEDF system not working" | MenuController | `src/controllers/menucontroller.cpp` |
 | "Feature menu bar (ATTN/NB/NR/NOTCH) not working" | FeatureMenuController | `src/controllers/featuremenucontroller.cpp` |
 | "Text decode window not opening / updating" | TextDecodeController | `src/controllers/textdecodecontroller.cpp` |
@@ -83,6 +85,8 @@ Grouped by concern:
 - **ButtonRowDispatcher** — Main RX / Sub RX / TX button-row click → CAT / popup / mode-aware
 - **MacroController** — Fn popup / PF1-4 / F1-F12 / KPOD macro dispatch
 - **BandNavigationController** — band-popup selection → BN CAT + band-stack logic
+- **SideControlScrollController** — SideControlPanel scroll-wheel handlers (WPM/pitch/mic/comp/power QRP-QRO/delay/BW/HI/LO/SHIFT/RF gain/squelch); shared HI/LO filter-edge math
+- **RightSideController** — RightSidePanel button click → CAT / FeatureMenu / ModePopup / Macro dispatch. B-SET-aware APF + RATE + KHZ routing.
 
 ### Display / indicator (RadioState → widget)
 - **StatusBarController** — top status bar (clock, readings, K4+KPA status)

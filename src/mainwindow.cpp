@@ -19,8 +19,8 @@
 #include "controllers/txstatecontroller.h"
 #include "controllers/sidecontroldisplaycontroller.h"
 #include "controllers/sidecontrolscrollcontroller.h"
+#include "controllers/rightsidecontroller.h"
 #include "controllers/popupmanager.h"
-#include "utils/macroids.h"
 #include "ui/dialogs/optionsdialog.h"
 #include "ui/widgets/notificationwidget.h"
 #include "ui/widgets/vforowwidget.h"
@@ -615,131 +615,15 @@ void MainWindow::setupUi() {
     // Update BAL overlay and button when RadioState changes
     connect(m_radioState, &RadioState::balanceChanged, m_sideControlPanel, &SideControlPanel::updateBalance);
 
-    // Connect right side panel button signals to CAT commands
-    // Primary (left-click) signals
-    connect(m_rightSidePanel, &RightSidePanel::preClicked, this,
-            [this]() { m_connectionController->sendCAT("SW61;"); });
-    connect(m_rightSidePanel, &RightSidePanel::nbClicked, this, [this]() { m_connectionController->sendCAT("SW32;"); });
-    connect(m_rightSidePanel, &RightSidePanel::nrClicked, this, [this]() { m_connectionController->sendCAT("SW62;"); });
-    connect(m_rightSidePanel, &RightSidePanel::ntchClicked, this,
-            [this]() { m_connectionController->sendCAT("SW31;"); });
-    connect(m_rightSidePanel, &RightSidePanel::filClicked, this,
-            [this]() { m_connectionController->sendCAT("SW33;"); });
-    connect(m_rightSidePanel, &RightSidePanel::abClicked, this, [this]() { m_connectionController->sendCAT("SW41;"); });
-    connect(m_rightSidePanel, &RightSidePanel::revPressed, this,
-            [this]() { m_connectionController->sendCAT("SW160;"); });
-    connect(m_rightSidePanel, &RightSidePanel::revReleased, this,
-            [this]() { m_connectionController->sendCAT("SW161;"); });
-    connect(m_rightSidePanel, &RightSidePanel::atobClicked, this,
-            [this]() { m_connectionController->sendCAT("SW72;"); });
-    connect(m_rightSidePanel, &RightSidePanel::spotClicked, this,
-            [this]() { m_connectionController->sendCAT("SW42;"); });
-    connect(m_rightSidePanel, &RightSidePanel::modeClicked, this,
-            [this]() { m_modePopupController->toggleForBSet(m_bottomMenuBar); });
-
-    // Secondary (right-click) signals - these show feature menus with toggle behavior
-    // If same menu is open, close it; otherwise switch to the new menu
-    auto toggleFeatureMenu = [this](FeatureMenuBar::Feature feature) {
-        m_featureMenuController->toggleFeature(feature, m_bottomMenuBar);
-    };
-    connect(m_rightSidePanel, &RightSidePanel::attnClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::Attenuator); });
-    connect(m_rightSidePanel, &RightSidePanel::levelClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::NbLevel); });
-    connect(m_rightSidePanel, &RightSidePanel::adjClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::NrAdjust); });
-    connect(m_rightSidePanel, &RightSidePanel::manualClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::ManualNotch); });
-    connect(m_rightSidePanel, &RightSidePanel::apfClicked, this, [this]() {
-        // Toggle APF on/off for Main RX or Sub RX based on B SET state
-        if (m_radioState->bSetEnabled()) {
-            m_connectionController->sendCAT("AP$/;"); // Sub RX toggle
-        } else {
-            m_connectionController->sendCAT("AP/;"); // Main RX toggle
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::splitClicked, this,
-            [this]() { m_connectionController->sendCAT("SW145;"); });
-    connect(m_rightSidePanel, &RightSidePanel::btoaClicked, this,
-            [this]() { m_connectionController->sendCAT("SW147;"); });
-    connect(m_rightSidePanel, &RightSidePanel::autoClicked, this,
-            [this]() { m_connectionController->sendCAT("SW146;"); });
-    // altClicked (MODE/ALT right-click) - send SW148 for ALT function
-    connect(m_rightSidePanel, &RightSidePanel::altClicked, this,
-            [this]() { m_connectionController->sendCAT("SW148;"); });
-
-    // PF row primary (left-click) signals
-    connect(m_rightSidePanel, &RightSidePanel::bsetClicked, this,
-            [this]() { m_connectionController->sendCAT("SW44;"); });
-    connect(m_rightSidePanel, &RightSidePanel::clrClicked, this,
-            [this]() { m_connectionController->sendCAT("SW64;"); });
-    connect(m_rightSidePanel, &RightSidePanel::ritClicked, this,
-            [this]() { m_connectionController->sendCAT("SW54;"); });
-    connect(m_rightSidePanel, &RightSidePanel::xitClicked, this,
-            [this]() { m_connectionController->sendCAT("SW74;"); });
-
-    // PF row secondary (right-click) signals
-    // PF1-PF4 execute user-configured macros (or default K4 PF functions if no macro set)
-    connect(m_rightSidePanel, &RightSidePanel::pf1Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF1);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF1);
-        } else {
-            m_connectionController->sendCAT("SW153;"); // Default: K4 PF1
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::pf2Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF2);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF2);
-        } else {
-            m_connectionController->sendCAT("SW154;"); // Default: K4 PF2
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::pf3Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF3);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF3);
-        } else {
-            m_connectionController->sendCAT("SW155;"); // Default: K4 PF3
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::pf4Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF4);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF4);
-        } else {
-            m_connectionController->sendCAT("SW156;"); // Default: K4 PF4
-        }
-    });
-
-    // Bottom row signals (SUB, DIVERSITY, RATE, LOCK)
-    connect(m_rightSidePanel, &RightSidePanel::subClicked, this,
-            [this]() { m_connectionController->sendCAT("SW83;"); });
-    connect(m_rightSidePanel, &RightSidePanel::diversityClicked, this,
-            [this]() { m_connectionController->sendCAT("SW152;"); });
-    connect(m_rightSidePanel, &RightSidePanel::rateClicked, this, [this]() {
-        // Cycle fine rates: 1 Hz → 10 Hz → 100 Hz → 1 Hz
-        // B-SET aware: targets VFO B (VT$) when B SET is engaged
-        bool bSet = m_radioState->bSetEnabled();
-        int current = bSet ? m_radioState->tuningStepB() : m_radioState->tuningStep();
-        int next = (current >= 0 && current < 2) ? current + 1 : 0;
-        QString cmd = QString("%1%2;").arg(bSet ? "VT$" : "VT").arg(next);
-        m_connectionController->sendCAT(cmd);
-        m_radioState->parseCATCommand(cmd);
-    });
-    connect(m_rightSidePanel, &RightSidePanel::khzClicked, this, [this]() {
-        // Set tuning step to 1 kHz (VT3)
-        // B-SET aware: targets VFO B (VT$) when B SET is engaged
-        bool bSet = m_radioState->bSetEnabled();
-        QString cmd = bSet ? QStringLiteral("VT$3;") : QStringLiteral("VT3;");
-        m_connectionController->sendCAT(cmd);
-        m_radioState->parseCATCommand(cmd);
-    });
-    connect(m_rightSidePanel, &RightSidePanel::lockAClicked, this,
-            [this]() { m_connectionController->sendCAT("SW63;"); }); // Toggle Lock A
-    connect(m_rightSidePanel, &RightSidePanel::lockBClicked, this,
-            [this]() { m_connectionController->sendCAT("SW151;"); }); // Toggle Lock B
+    // RightSidePanel signal-to-CAT wiring lives on RightSideController.
+    // Extracted from MainWindow as part of the Phase 6 → Phase A pass; mirror
+    // of SideControlScrollController. Constructed here because all six of its
+    // dependencies (RadioState, ConnectionController, RightSidePanel,
+    // ModePopupController, FeatureMenuController, MacroController, and the
+    // BottomMenuBar anchor) exist at this point in setupUi().
+    m_rightSideController =
+        new RightSideController(m_radioState, m_connectionController, m_rightSidePanel, m_modePopupController,
+                                m_featureMenuController, m_macroController, m_bottomMenuBar, this);
 
     // Connect memory buttons (M1-M4, REC, STORE, RCL)
     // Primary actions (left click)

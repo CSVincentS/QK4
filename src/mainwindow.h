@@ -33,6 +33,7 @@ class SubDivIndicatorController;
 class TxStateController;
 class SideControlDisplayController;
 class SideControlScrollController;
+class RightSideController;
 class AntennaConfigController;
 class AntennaDisplayController;
 class TextDecodeController;
@@ -182,6 +183,7 @@ private:
     TxStateController *m_txStateController;
     SideControlDisplayController *m_sideControlDisplayController;
     SideControlScrollController *m_sideControlScrollController;
+    RightSideController *m_rightSideController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     AntennaDisplayController *m_antennaDisplayController;
