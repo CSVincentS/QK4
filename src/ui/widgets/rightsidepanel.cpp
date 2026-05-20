@@ -74,11 +74,11 @@ void RightSidePanel::setupUi() {
     m_spotBtn->installEventFilter(this);
     m_modeBtn->installEventFilter(this);
 
-    // KPA1500 mini panel (hidden until amplifier connects)
+    // Reserve a layout slot for the KPA1500 mini panel — the actual
+    // widget is constructed + owned by KPA1500UiController and dropped
+    // here via embedKpa1500Panel().
     m_layout->addSpacing(20);
-    m_kpa1500Mini = new Kpa1500MiniPanel(this);
-    m_kpa1500Mini->setVisible(false);
-    m_layout->addWidget(m_kpa1500Mini);
+    m_kpa1500SlotIdx = m_layout->count();
 
     // Add stretch to push remaining buttons to bottom (above PTT)
     m_layout->addStretch();
@@ -235,4 +235,10 @@ bool RightSidePanel::eventFilter(QObject *watched, QEvent *event) {
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+void RightSidePanel::embedKpa1500Panel(Kpa1500MiniPanel *panel) {
+    Q_ASSERT(m_kpa1500SlotIdx >= 0);
+    panel->setParent(this);
+    m_layout->insertWidget(m_kpa1500SlotIdx, panel);
 }

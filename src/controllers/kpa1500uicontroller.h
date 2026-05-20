@@ -5,6 +5,7 @@
 
 class KPA1500Client;
 class Kpa1500MiniPanel;
+class RightSidePanel;
 class StatusBarController;
 
 // Owns the KPA1500Client lifetime and keeps the right-side-panel mini
@@ -24,7 +25,12 @@ class KPA1500UiController : public QObject {
     Q_OBJECT
 
 public:
-    explicit KPA1500UiController(StatusBarController *statusBar, Kpa1500MiniPanel *miniPanel,
+    // RightSidePanel is the host for the mini panel widget — the
+    // controller constructs Kpa1500MiniPanel itself and hands it to
+    // RightSidePanel::embedKpa1500Panel() for layout placement. This
+    // removes the Rule 2 reach-in that previously had MainWindow pull
+    // the mini panel widget out of RightSidePanel.
+    explicit KPA1500UiController(StatusBarController *statusBar, RightSidePanel *rightSidePanel,
                                  QObject *parent = nullptr);
     ~KPA1500UiController() override;
 
@@ -44,7 +50,7 @@ public:
 
 private:
     StatusBarController *m_statusBar;  // injected, not owned
-    Kpa1500MiniPanel *m_miniPanel;     // injected, not owned
+    Kpa1500MiniPanel *m_miniPanel;     // constructed here, parent-owned by RightSidePanel
     KPA1500Client *m_client = nullptr; // owned via Qt parent (this)
 
     void onConnected();

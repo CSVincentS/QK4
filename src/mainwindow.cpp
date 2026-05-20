@@ -121,7 +121,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     setupHardwareController();
 
-    m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel->kpa1500Mini(), this);
+    m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel, this);
 
     m_processingDisplayController = new ProcessingDisplayController(m_radioState, m_vfoA, m_vfoB, this);
 
