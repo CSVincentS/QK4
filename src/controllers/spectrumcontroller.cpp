@@ -327,10 +327,22 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         m_vfoA->setMiniPanAveraging(level);
         m_vfoB->setMiniPanAveraging(level);
     });
-    connect(m_radioState, &RadioState::vfoACursorChanged, this,
-            [this](int mode) { m_panadapterA->setCursorVisible(mode == 1 || mode == 2); });
-    connect(m_radioState, &RadioState::vfoBCursorChanged, this,
-            [this](int mode) { m_panadapterB->setCursorVisible(mode == 1 || mode == 2); });
+    // VFO A/B cursor visibility drives BOTH panadapters: each pad shows the
+    // owning VFO's cursor as its primary and the other VFO's as a secondary
+    // overlay. CURS A must therefore toggle pad A's primary AND pad B's
+    // secondary; CURS B the reverse. Without the secondary wiring, a CURS
+    // toggle has no visible effect whenever the owning pad is hidden (e.g.
+    // CURS B in DISPLAY-A-only mode used to toggle only the hidden pad B).
+    connect(m_radioState, &RadioState::vfoACursorChanged, this, [this](int mode) {
+        const bool visible = (mode == 1 || mode == 2);
+        m_panadapterA->setCursorVisible(visible);
+        m_panadapterB->setSecondaryVisible(visible);
+    });
+    connect(m_radioState, &RadioState::vfoBCursorChanged, this, [this](int mode) {
+        const bool visible = (mode == 1 || mode == 2);
+        m_panadapterB->setCursorVisible(visible);
+        m_panadapterA->setSecondaryVisible(visible);
+    });
     connect(m_radioState, &RadioState::dualPanModeLcdChanged, this, [this](int mode) {
         switch (mode) {
         case 0:
