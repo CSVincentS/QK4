@@ -3,7 +3,7 @@
 > **Purpose:** if something is broken in the UI, find the owning controller here first.
 > Each entry maps a user-visible feature → the controller that owns it → the file path.
 
-Last updated: end of Phase 3 refactor (26 controllers).
+Last updated: architectural endgame refactor — RightSideController, MemoryButtonsController, CwController added (29 controllers).
 
 ---
 
@@ -29,7 +29,7 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "VFO AGC / preamp / attenuator / NB / NR indicator wrong" | ProcessingDisplayController | `src/controllers/processingdisplaycontroller.cpp` |
 | "Antenna label text (TX / RX Main / RX Sub) wrong" | AntennaDisplayController | `src/controllers/antennadisplaycontroller.cpp` |
 | "Antenna config popup (ANT CFG button) not working" | AntennaConfigController | `src/controllers/antennaconfigcontroller.cpp` |
-| "Filter indicator shape / position wrong" | FilterIndicatorController | `src/controllers/filterindicatorcontroller.cpp` |
+| "Filter indicator shape / position wrong" | FilterIndicatorWidget (Direct Observation — no controller) | `src/ui/widgets/filterindicatorwidget.cpp` |
 | "Side panel knob values (BW/SHFT, power, mic gain) wrong" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
 | "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
 | "Side panel scroll wheels (WPM/Power/BW/HI/LO/RFGain/etc.) wrong" | SideControlScrollController | `src/controllers/sidecontrolscrollcontroller.cpp` |
@@ -67,7 +67,7 @@ MainWindow is now ~1,800 LOC. What remains is genuinely MainWindow responsibilit
 
 ---
 
-## The 26 controllers at a glance
+## The 29 controllers at a glance
 
 Grouped by concern:
 
@@ -100,7 +100,6 @@ Grouped by concern:
 - **VfoFrequencyController** — VFO A/B frequency display (RIT/XIT offset applied)
 - **AntennaDisplayController** — TX / RX Main / RX Sub antenna label text
 - **ProcessingDisplayController** — AGC/preamp/attenuator/NB/NR indicators on VFOs
-- **FilterIndicatorController** — FilterIndicatorWidget shape/position
 - **SideControlDisplayController** — side panel knob values (BW/SHFT/HI/LO, power, mic gain, etc.), CW↔voice display swap
 - **VfoRowIndicatorController** — SPLIT/B-SET/VOX/QSK/TEST/ATU/MSG-bank labels (SPLIT and B-SET share the same screen slot — mutually exclusive visibility)
 - **SubDivIndicatorController** — SUB/DIV badges + VFO B dim state

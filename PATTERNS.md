@@ -464,9 +464,33 @@ class MyController : public QObject {
 
 ### Testing
 
-1. Each controller gets a unit test file at `tests/test_<controllername>.cpp` (see `tests/CMakeLists.txt` pattern).
-2. Construct with a real `RadioState` (no mocks — see `tests/test_radiostate.cpp` for the style).
-3. Verify public API + signal flow. Don't poke internal widgets.
+**Aspirational — no controller has a unit test today.** Controller-layer
+testing was deliberately deferred (it needs mock/fixture infrastructure
+for `RadioState` + `ConnectionController` that doesn't exist yet). If you
+add one, follow this shape: `tests/test_<controllername>.cpp`, construct
+with a real `RadioState` (no mocks — see `tests/test_radiostate.cpp`),
+verify public API + signal flow, don't poke internal widgets. Until then,
+controllers are covered by manual smoke testing per change.
+
+### Controller variants
+
+The structural template above covers the common case (controller owns its
+widgets, created with a `parentWidget`). Two variants are worth knowing:
+
+- **Injected-widget controller** — the widgets are created elsewhere (in
+  MainWindow's layout code) and handed to the controller as constructor
+  pointers; the controller owns only the wiring. `MemoryButtonsController`
+  is the reference example: it takes the seven M1-M4 / REC / STORE / RCL
+  `QPushButton*`s plus a `ConnectionController*`, wires their left-click
+  CAT dispatch, and installs its own event filter for the right-click alt
+  actions. The buttons stay parent-owned by the widget tree.
+
+- **Pure-orchestration controller** — owns no widgets and no threads; it
+  takes already-constructed devices/objects as injected pointers and wires
+  the signal graph across them. `CwController` is the reference example:
+  HardwareController constructs + owns the CW devices, CwController wires
+  their CW behavior together. Use this when the "what to construct" and
+  "how to wire it" concerns have genuinely different owners.
 
 ---
 
