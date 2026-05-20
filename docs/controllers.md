@@ -46,7 +46,8 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "Connection to K4 / status indicator wrong" | ConnectionController + MainWindow::updateConnectionState | `src/controllers/connectioncontroller.cpp` + `src/mainwindow.cpp` |
 | "Top status bar label / KPA1500 badge wrong" | StatusBarController | `src/controllers/statusbarcontroller.cpp` |
 | "Audio (RX/TX, PTT) not working" | AudioController | `src/controllers/audiocontroller.cpp` |
-| "KPOD / KPOD+ / HaliKey / sidetone not working" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
+| "KPOD knob / KPOD+ / HaliKey device not detected" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
+| "CW keying / paddle / sidetone / V1.4 PTT demux wrong" | CwController | `src/controllers/cwcontroller.cpp` |
 | "Spectrum / panadapter / click-tune not working" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
 | "DX cluster spots not appearing / cluster connect fail" | DxClusterController | `src/controllers/dxclustercontroller.cpp` |
 
@@ -74,7 +75,8 @@ Grouped by concern:
 - **ConnectionController** — TCP connection state machine, network I/O thread, CAT send
 - **AudioController** — audio engine, Opus codecs, PTT, audio thread
 - **SpectrumController** — panadapters, spectrum data routing, click-tune, passband overlays
-- **HardwareController** — KPOD, KPOD+, HaliKey, IambicKeyer, SidetoneGenerator (owns 3 hardware threads)
+- **HardwareController** — constructs + owns KPOD, KPOD+, HaliKey, IambicKeyer, SidetoneGenerator + their threads; KPOD tuning-knob → CAT; device-config push; signal forwarding
+- **CwController** — CW keying orchestration across the HardwareController-owned devices: IambicKeyer↔CAT/sidetone wiring, HaliKey paddle/PTT handlers, V1.4 PTT demux, KPOD+ keyer-active gate. See `cwcontroller.h` for the threading-invariant doc.
 - **DxClusterController** — DX cluster client (multi-instance; spot cache)
 
 ### Popup-family

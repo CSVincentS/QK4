@@ -42,6 +42,7 @@ class FilterIndicatorWidget;
 class FeatureMenuController;
 class ModePopupController;
 class HardwareController;
+class CwController;
 class DxClusterController;
 class KPA1500UiController;
 class CatServer;
@@ -187,6 +188,7 @@ private:
 
     // Hardware controller (owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads)
     HardwareController *m_hardwareController;
+    CwController *m_cwController;
 
     // KPA1500 amplifier UI controller (owns the KPA1500Client)
     KPA1500UiController *m_kpa1500UiController;

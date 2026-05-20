@@ -37,6 +37,7 @@
 #include "dsp/minipan_rhi.h"
 #include "ui/widgets/frequencydisplaywidget.h"
 #include "controllers/audiocontroller.h"
+#include "controllers/cwcontroller.h"
 #include "controllers/hardwarecontroller.h"
 #include "controllers/kpa1500uicontroller.h"
 #include "network/catserver.h"
@@ -325,12 +326,19 @@ void MainWindow::setupHardwareController() {
     // Hardware controller owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads
     m_hardwareController = new HardwareController(m_radioState, m_connectionController, this);
 
+    // CW controller wires the CW signal graph across the HardwareController-owned
+    // devices. Constructed immediately after so the devices exist; takes them by
+    // injected pointer. See cwcontroller.h.
+    m_cwController = new CwController(m_radioState, m_connectionController, m_hardwareController->iambicKeyer(),
+                                      m_hardwareController->sidetoneGenerator(), m_hardwareController->halikeyDevice(),
+                                      m_hardwareController->kpodPlusDevice(), this);
+
     // KPOD button presses → macro execution
     connect(m_hardwareController, &HardwareController::macroRequested, m_macroController,
             &MacroController::executeMacro);
 
     // HaliKey footswitch PTT → TX audio + UI indicator
-    connect(m_hardwareController, &HardwareController::pttRequested, this, [this](bool active) {
+    connect(m_cwController, &CwController::pttRequested, this, [this](bool active) {
         if (m_connectionController->isConnected()) {
             m_audioController->setPttActive(active);
             m_bottomMenuBar->setPttActive(active);
