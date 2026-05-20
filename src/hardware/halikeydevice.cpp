@@ -2,7 +2,6 @@
 #include "halikeymidiworker.h"
 #include "halikeyv14worker.h"
 #include "halikeyworkerbase.h"
-#include "settings/radiosettings.h"
 #include <QDebug>
 #include <RtMidi.h>
 
@@ -24,7 +23,7 @@ bool acceptEdge(bool raw, std::atomic<bool> &confirmed, std::atomic<qint64> &las
 }
 } // namespace
 
-HalikeyDevice::HalikeyDevice(QObject *parent) : QObject(parent) {
+HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent) : QObject(parent), m_deviceType(deviceType) {
     // Monotonic clock for debounce timestamping. Starting here means nowNs() == 0 represents
     // "construction time" — any real paddle event will have a positive timestamp, so the
     // first edge ever delivered will pass the bounce gate (0 - 0 < DEBOUNCE_NS) only on
@@ -64,9 +63,8 @@ bool HalikeyDevice::openPort(const QString &portName) {
     m_lastDahEdgeNs.store(0, std::memory_order_relaxed);
     m_lastPttEdgeNs.store(0, std::memory_order_relaxed);
 
-    // Create worker based on configured device type
-    int deviceType = RadioSettings::instance()->halikeyDeviceType();
-    if (deviceType == 1) {
+    // Create worker based on injected device type (0 = V1.4, 1 = MIDI)
+    if (m_deviceType == 1) {
         m_worker = new HaliKeyMidiWorker(portName);
     } else {
         m_worker = new HaliKeyV14Worker(portName);

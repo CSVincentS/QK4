@@ -35,7 +35,12 @@ class HalikeyDevice : public QObject {
     Q_OBJECT
 
 public:
-    explicit HalikeyDevice(QObject *parent = nullptr);
+    // deviceType: 0 = V1.4 serial, 1 = MIDI. HardwareController passes
+    // the current RadioSettings value at construction and re-sets it
+    // via setDeviceType() when settings change — this device class
+    // never reads RadioSettings itself, keeping the hardware layer
+    // decoupled from the settings singleton.
+    explicit HalikeyDevice(int deviceType, QObject *parent = nullptr);
     ~HalikeyDevice();
 
     // Port management
@@ -43,6 +48,12 @@ public:
     void closePort();
     bool isConnected() const;
     QString portName() const;
+
+    // Updates the worker variant used on the next openPort(). Does not
+    // re-open an in-flight connection — callers that want a live switch
+    // should closePort() + openPort() themselves.
+    void setDeviceType(int deviceType) { m_deviceType = deviceType; }
+    int deviceType() const { return m_deviceType; }
 
     // Available ports
     static QStringList availablePorts();
@@ -74,6 +85,7 @@ private:
 
     QString m_portName;
     bool m_connected = false;
+    int m_deviceType = 0; // 0 = V1.4 serial, 1 = MIDI. Set via ctor / setDeviceType.
 
     // Confirmed (post-debounce) paddle state — written and read across multiple worker
     // threads (RtMidi callback on MIDI variant, V1.4 monitor thread on serial variant).

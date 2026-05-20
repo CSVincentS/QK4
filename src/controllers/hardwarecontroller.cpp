@@ -256,9 +256,12 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     });
 
     // =========================================================================
-    // HaliKey CW paddle device
+    // HaliKey CW paddle device — device type injected here so HalikeyDevice
+    // itself doesn't reach into RadioSettings (Phase 3 layering cleanup).
     // =========================================================================
-    m_halikeyDevice = new HalikeyDevice(this);
+    m_halikeyDevice = new HalikeyDevice(RadioSettings::instance()->halikeyDeviceType(), this);
+    connect(RadioSettings::instance(), &RadioSettings::halikeyDeviceTypeChanged, m_halikeyDevice,
+            &HalikeyDevice::setDeviceType);
 
     // =========================================================================
     // Sidetone generator (dedicated thread for low-latency audio feedback)
