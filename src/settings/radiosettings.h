@@ -178,14 +178,6 @@ signals:
     void dxClusterSettingsChanged();
     void kpodPlusSettingsChanged();
 
-    // Fired by code that updates KPOD+ settings from K4 echoes (the K4 is the source
-    // of truth for keyer state). Distinct from kpodPlusSettingsChanged so the page UI
-    // can refresh its widgets WITHOUT the resync handler in HardwareController firing
-    // back to the K4 — that path listens to kpodPlusSettingsChanged only. The
-    // K4-echo writers use a QSignalBlocker to suppress kpodPlusSettingsChanged, then
-    // emit this signal explicitly so subscribers see the update.
-    void kpodPlusSettingsExternallyUpdated();
-
 private:
     explicit RadioSettings(QObject *parent = nullptr);
     void load();
