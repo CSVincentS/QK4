@@ -1,15 +1,14 @@
 #ifndef LINEOUTPOPUP_H
 #define LINEOUTPOPUP_H
 
-#include <QWidget>
-#include <QPushButton>
+#include "ui/popups/k4popupbase.h"
 #include "utils/wheelaccumulator.h"
+#include <QPushButton>
 
-/**
- * @brief Floating popup for LINE OUT L/R levels (0-40) with optional "R = L" link. Emits
- *        leftLevelChanged / rightLevelChanged / rightEqualsLeftChanged for MainWindow → CAT.
- */
-class LineOutPopupWidget : public QWidget {
+// Floating popup for LINE OUT L/R levels (0-40) with optional "R = L"
+// link. Emits leftLevelChanged / rightLevelChanged /
+// rightEqualsLeftChanged for MainWindow -> CAT.
+class LineOutPopupWidget : public K4PopupBase {
     Q_OBJECT
 
 public:
@@ -18,8 +17,6 @@ public:
     void setLeftLevel(int level);  // 0-40
     void setRightLevel(int level); // 0-40
     void setRightEqualsLeft(bool enabled);
-    void showAboveWidget(QWidget *widget);
-    void hidePopup();
 
     int leftLevel() const { return m_leftLevel; }
     int rightLevel() const { return m_rightLevel; }
@@ -31,9 +28,9 @@ signals:
     void rightEqualsLeftChanged(bool enabled);
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
+    QSize contentSize() const override;
+    void paintContent(QPainter &painter, const QRect &contentRect) override;
     void wheelEvent(QWheelEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
 
 private:
     void setupUi();
@@ -53,7 +50,6 @@ private:
     QPushButton *m_rightEqualsLeftBtn;
     QPushButton *m_closeBtn;
 
-    QWidget *m_referenceWidget = nullptr;
     WheelAccumulator m_wheelAccumulator;
 };
 
