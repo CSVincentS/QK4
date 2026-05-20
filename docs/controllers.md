@@ -34,6 +34,9 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
 | "Side panel scroll wheels (WPM/Power/BW/HI/LO/RFGain/etc.) wrong" | SideControlScrollController | `src/controllers/sidecontrolscrollcontroller.cpp` |
 | "Right side panel button (PRE/NB/NR/NTCH/FIL/AB/REV/SPOT/MODE/PF1-4/RATE/LOCK/SUB) wrong" | RightSideController | `src/controllers/rightsidecontroller.cpp` |
+| "Memory buttons M1-M4 / REC / STORE / RCL left/right click wrong" | MemoryButtonsController | `src/controllers/memorybuttonscontroller.cpp` |
+| "B-SET label visibility wrong (still showing SPLIT when B-SET on)" | VfoRowIndicatorController | `src/controllers/vforowindicatorcontroller.cpp` |
+| "Side panel BW/SHFT color wrong on Sub-RX active (B-SET)" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
 | "Menu overlay / MEDF system not working" | MenuController | `src/controllers/menucontroller.cpp` |
 | "Feature menu bar (ATTN/NB/NR/NOTCH) not working" | FeatureMenuController | `src/controllers/featuremenucontroller.cpp` |
 | "Text decode window not opening / updating" | TextDecodeController | `src/controllers/textdecodecontroller.cpp` |
@@ -87,6 +90,7 @@ Grouped by concern:
 - **BandNavigationController** — band-popup selection → BN CAT + band-stack logic
 - **SideControlScrollController** — SideControlPanel scroll-wheel handlers (WPM/pitch/mic/comp/power QRP-QRO/delay/BW/HI/LO/SHIFT/RF gain/squelch); shared HI/LO filter-edge math
 - **RightSideController** — RightSidePanel button click → CAT / FeatureMenu / ModePopup / Macro dispatch. B-SET-aware APF + RATE + KHZ routing.
+- **MemoryButtonsController** — M1-M4 / REC / STORE / RCL message-memory button dispatch. Primary left-click sends SW17/51/18/52/19/20/34; right-click on REC/STORE/RCL sends alt SW137/138/139 (BANK / AF REC / AF PLAY) via installed event filter.
 
 ### Display / indicator (RadioState → widget)
 - **StatusBarController** — top status bar (clock, readings, K4+KPA status)
@@ -96,7 +100,7 @@ Grouped by concern:
 - **ProcessingDisplayController** — AGC/preamp/attenuator/NB/NR indicators on VFOs
 - **FilterIndicatorController** — FilterIndicatorWidget shape/position
 - **SideControlDisplayController** — side panel knob values (BW/SHFT/HI/LO, power, mic gain, etc.), CW↔voice display swap
-- **VfoRowIndicatorController** — SPLIT/VOX/QSK/TEST/ATU/MSG-bank labels
+- **VfoRowIndicatorController** — SPLIT/B-SET/VOX/QSK/TEST/ATU/MSG-bank labels (SPLIT and B-SET share the same screen slot — mutually exclusive visibility)
 - **SubDivIndicatorController** — SUB/DIV badges + VFO B dim state
 - **TxStateController** — TX triangles + indicator colors + VFO meter mode flip + PA current calc
 - **RitXitController** — RIT/XIT label state + wheel accumulator + click handlers + BSet-aware display routing

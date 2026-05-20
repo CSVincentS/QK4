@@ -108,6 +108,7 @@ set(SOURCES
     src/controllers/sidecontroldisplaycontroller.cpp
     src/controllers/sidecontrolscrollcontroller.cpp
     src/controllers/rightsidecontroller.cpp
+    src/controllers/memorybuttonscontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -232,6 +233,7 @@ set(HEADERS
     src/controllers/sidecontroldisplaycontroller.h
     src/controllers/sidecontrolscrollcontroller.h
     src/controllers/rightsidecontroller.h
+    src/controllers/memorybuttonscontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

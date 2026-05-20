@@ -34,6 +34,7 @@ class TxStateController;
 class SideControlDisplayController;
 class SideControlScrollController;
 class RightSideController;
+class MemoryButtonsController;
 class AntennaConfigController;
 class AntennaDisplayController;
 class TextDecodeController;
@@ -139,7 +140,6 @@ private:
     QLabel *m_txIndicator;
     QWidget *m_vfoBSquare; // VfoSquareWidget - used for event filter
     QLabel *m_splitLabel;
-    QLabel *m_bSetLabel;
     QLabel *m_subLabel; // SUB indicator (green when sub RX enabled)
     QLabel *m_divLabel; // DIV indicator (green when diversity enabled)
     QLabel *m_msgBankLabel;
@@ -151,14 +151,8 @@ private:
     FilterIndicatorWidget *m_filterAWidget; // VFO A filter indicator
     FilterIndicatorWidget *m_filterBWidget; // VFO B filter indicator
 
-    // Memory buttons (M1-M4, REC, STORE, RCL)
-    QPushButton *m_m1Btn;
-    QPushButton *m_m2Btn;
-    QPushButton *m_m3Btn;
-    QPushButton *m_m4Btn;
-    QPushButton *m_recBtn;
-    QPushButton *m_storeBtn;
-    QPushButton *m_rclBtn;
+    // Memory buttons (M1-M4, REC, STORE, RCL) live in
+    // MemoryButtonsController — no pointers retained here.
     QLabel *m_voxLabel;
     QLabel *m_qskLabel;
     QLabel *m_txAntennaLabel;
@@ -184,6 +178,7 @@ private:
     SideControlDisplayController *m_sideControlDisplayController;
     SideControlScrollController *m_sideControlScrollController;
     RightSideController *m_rightSideController;
+    MemoryButtonsController *m_memoryButtonsController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     AntennaDisplayController *m_antennaDisplayController;

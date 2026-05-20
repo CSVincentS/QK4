@@ -20,6 +20,7 @@
 #include "controllers/sidecontroldisplaycontroller.h"
 #include "controllers/sidecontrolscrollcontroller.h"
 #include "controllers/rightsidecontroller.h"
+#include "controllers/memorybuttonscontroller.h"
 #include "controllers/popupmanager.h"
 #include "ui/dialogs/optionsdialog.h"
 #include "ui/widgets/notificationwidget.h"
@@ -127,8 +128,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_antennaDisplayController =
         new AntennaDisplayController(m_radioState, m_txAntennaLabel, m_rxAntALabel, m_rxAntBLabel, this);
 
-    const VfoRowIndicatorController::Labels rowLabels{m_splitLabel, m_txTriangle, m_txTriangleB, m_voxLabel,
-                                                      m_qskLabel,   m_atuLabel,   m_msgBankLabel};
+    const VfoRowIndicatorController::Labels rowLabels{
+        m_splitLabel, m_vfoRow->bSetLabel(), m_txTriangle, m_txTriangleB, m_voxLabel, m_qskLabel,
+        m_atuLabel,   m_msgBankLabel};
     m_vfoRowIndicatorController =
         new VfoRowIndicatorController(m_radioState, m_spectrumController, m_vfoRow, rowLabels, this);
 
@@ -501,18 +503,10 @@ void MainWindow::setupUi() {
     // DT updates + RadioState → popup sync. See controllers/modepopupcontroller.h.
     m_modePopupController = new ModePopupController(m_radioState, m_connectionController, this, this);
 
-    // B SET indicator visibility and side panel indicator color
-    connect(m_radioState, &RadioState::bSetChanged, this, [this](bool enabled) {
-        qCDebug(qk4Main) << "B SET changed:" << enabled;
-        // Show/hide B SET indicator (hide SPLIT when B SET active)
-        m_bSetLabel->setVisible(enabled);
-        m_splitLabel->setVisible(!enabled);
-
-        // Change side panel BW/SHFT indicator color (cyan=MainRx, green=SubRx)
-        m_sideControlPanel->setActiveReceiver(enabled);
-
-        // RIT/XIT display refresh on BSET toggle is handled inside RitXitController.
-    });
+    // B-SET handling (SPLIT/B-SET label swap + side panel active-receiver
+    // color) is split across VfoRowIndicatorController and
+    // SideControlDisplayController. RIT/XIT redraw on BSET toggle lives in
+    // RitXitController.
 
     // Bottom Menu Bar
     m_bottomMenuBar = new BottomMenuBar(centralWidget);
@@ -625,20 +619,10 @@ void MainWindow::setupUi() {
         new RightSideController(m_radioState, m_connectionController, m_rightSidePanel, m_modePopupController,
                                 m_featureMenuController, m_macroController, m_bottomMenuBar, this);
 
-    // Connect memory buttons (M1-M4, REC, STORE, RCL)
-    // Primary actions (left click)
-    connect(m_m1Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW17;"); });
-    connect(m_m2Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW51;"); });
-    connect(m_m3Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW18;"); });
-    connect(m_m4Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW52;"); });
-    connect(m_recBtn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW19;"); });
-    connect(m_storeBtn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW20;"); });
-    connect(m_rclBtn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW34;"); });
-
-    // Install event filters for right-click (alternate actions)
-    m_recBtn->installEventFilter(this);
-    m_storeBtn->installEventFilter(this);
-    m_rclBtn->installEventFilter(this);
+    // Memory buttons (M1-M4, REC, STORE, RCL) and their right-click event
+    // filter live on MemoryButtonsController. The buttons themselves are
+    // created in setupVfoSection() for layout placement; the controller is
+    // constructed there too because that's where the button pointers exist.
 
     // Connect bottom menu bar signals
     connect(m_bottomMenuBar, &BottomMenuBar::menuClicked, m_menuController, &MenuController::toggleOverlay);
@@ -757,9 +741,11 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_modeALabel->installEventFilter(this);
     m_modeBLabel->installEventFilter(this);
 
-    // SPLIT, B SET, and MSG Bank labels live in VfoRowWidget (positioned under TX)
+    // SPLIT and MSG Bank labels live in VfoRowWidget (positioned under TX).
+    // B-SET label is also a VfoRowWidget child but is accessed directly via
+    // m_vfoRow->bSetLabel() at VfoRowIndicatorController construction — no
+    // MainWindow member needed.
     m_splitLabel = m_vfoRow->splitLabel();
-    m_bSetLabel = m_vfoRow->bSetLabel();
     m_msgBankLabel = m_vfoRow->msgBankLabel();
 
     // RIT/XIT Box with border - constrained size
@@ -937,17 +923,17 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         return btn;
     };
 
-    m_m1Btn = createSimpleButton("M1");
-    m1m4Row->addWidget(m_m1Btn);
+    QPushButton *m1Btn = createSimpleButton("M1");
+    m1m4Row->addWidget(m1Btn);
 
-    m_m2Btn = createSimpleButton("M2");
-    m1m4Row->addWidget(m_m2Btn);
+    QPushButton *m2Btn = createSimpleButton("M2");
+    m1m4Row->addWidget(m2Btn);
 
-    m_m3Btn = createSimpleButton("M3");
-    m1m4Row->addWidget(m_m3Btn);
+    QPushButton *m3Btn = createSimpleButton("M3");
+    m1m4Row->addWidget(m3Btn);
 
-    m_m4Btn = createSimpleButton("M4");
-    m1m4Row->addWidget(m_m4Btn);
+    QPushButton *m4Btn = createSimpleButton("M4");
+    m1m4Row->addWidget(m4Btn);
 
     messageGroupLayout->addLayout(m1m4Row);
 
@@ -982,21 +968,25 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     // REC (dark grey like M keys, BANK sub-label)
     auto *recContainer = createMemoryButton("REC", "BANK", false);
-    m_recBtn = recContainer->findChild<QPushButton *>();
+    QPushButton *recBtn = recContainer->findChild<QPushButton *>();
     memoryRow->addWidget(recContainer);
 
     // STORE (lighter grey, AF REC sub-label)
     auto *storeContainer = createMemoryButton("STORE", "AF REC", true);
-    m_storeBtn = storeContainer->findChild<QPushButton *>();
+    QPushButton *storeBtn = storeContainer->findChild<QPushButton *>();
     memoryRow->addWidget(storeContainer);
 
     // RCL (lighter grey, AF PLAY sub-label)
     auto *rclContainer = createMemoryButton("RCL", "AF PLAY", true);
-    m_rclBtn = rclContainer->findChild<QPushButton *>();
+    QPushButton *rclBtn = rclContainer->findChild<QPushButton *>();
     memoryRow->addWidget(rclContainer);
 
     memoryRow->addStretch();
     centerLayout->addLayout(memoryRow);
+
+    // Owns left+right click wiring for the M1-M4 / REC / STORE / RCL buttons.
+    m_memoryButtonsController =
+        new MemoryButtonsController(m_connectionController, m1Btn, m2Btn, m3Btn, m4Btn, recBtn, storeBtn, rclBtn, this);
 
     centerLayout->addStretch(); // Balance below
     layout->addWidget(centerWidget);
@@ -1258,9 +1248,6 @@ void MainWindow::resetUiForDisconnect() {
     m_subDivIndicatorController->reset();
     m_ritXitController->reset();
 
-    // Residual MainWindow-only label (no owning controller for B SET).
-    m_bSetLabel->setVisible(false);
-
     m_radioState->reset();
 }
 
@@ -1277,24 +1264,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         return true;
     }
 
-    // Panadapter resize events handled by SpectrumController's eventFilter
-
-    // Handle right-click on memory buttons (alternate actions)
-    if (event->type() == QEvent::MouseButtonPress) {
-        auto *mouseEvent = static_cast<QMouseEvent *>(event);
-        if (mouseEvent->button() == Qt::RightButton) {
-            if (watched == m_recBtn) {
-                m_connectionController->sendCAT("SW137;"); // BANK
-                return true;
-            } else if (watched == m_storeBtn) {
-                m_connectionController->sendCAT("SW138;"); // AF REC
-                return true;
-            } else if (watched == m_rclBtn) {
-                m_connectionController->sendCAT("SW139;"); // AF PLAY
-                return true;
-            }
-        }
-    }
+    // Panadapter resize events handled by SpectrumController's eventFilter.
+    // Memory button right-clicks (REC/STORE/RCL) handled by
+    // MemoryButtonsController's own eventFilter.
 
     // RIT / XIT label clicks + wheel routed to RitXitController.
     if (watched == m_ritLabel && event->type() == QEvent::MouseButtonPress)
