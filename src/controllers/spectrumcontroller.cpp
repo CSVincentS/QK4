@@ -276,6 +276,12 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         m_connectionController->sendCAT(QString("FA%1;").arg(freq, 11, 10, QChar('0')));
         // Query back so the UI updates — K4 doesn't echo SET commands
         m_connectionController->sendCAT("FA;");
+        // Left-click selects VFO A as the working VFO — route the scroll wheel to
+        // it, mirroring the panadapter left-click handler. Without this, a prior
+        // right-click-to-VFO-B would leave the wheel stuck on VFO B.
+        m_scrollVfoB = false;
+        m_mouseVfoIndicatorA->setActiveVfo(false);
+        m_mouseVfoIndicatorB->setActiveVfo(false);
     });
     connect(m_spotOverlayB, &DxSpotOverlay::spotClicked, this, [this](qint64 freq) {
         if (!m_connectionController->isConnected() || freq <= 0)
@@ -284,6 +290,10 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         m_connectionController->sendCAT(QString("FB%1;").arg(freq, 11, 10, QChar('0')));
         m_connectionController->sendCAT("FB;");
+        // Spot click on Pan B tunes VFO B — route the scroll wheel to it.
+        m_scrollVfoB = true;
+        m_mouseVfoIndicatorA->setActiveVfo(true);
+        m_mouseVfoIndicatorB->setActiveVfo(true);
     });
 
     // Right-clicking a spot tunes VFO B to its exact dial frequency — mirrors the
