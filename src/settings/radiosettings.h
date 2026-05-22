@@ -139,19 +139,10 @@ public:
     void setTxEqPreset(int index, const EqPreset &preset); // Set preset 0-3
     void clearTxEqPreset(int index);                       // Clear preset 0-3
 
-    // KPOD+ keyer settings
-    int kpodPlusKeyerSpeed() const;
-    void setKpodPlusKeyerSpeed(int wpm);
-    int kpodPlusCwPitch() const;
-    void setKpodPlusCwPitch(int freqHz);
-    int kpodPlusIambicMode() const;
-    void setKpodPlusIambicMode(int mode); // 0=A, 1=B
-    bool kpodPlusPaddleReversed() const;
-    void setKpodPlusPaddleReversed(bool reversed);
+    // KPOD+ encode mode (KZ/KX). Keyer speed, CW pitch, iambic mode and paddle
+    // orientation are no longer stored — the KPOD+ mirrors the connected K4.
     int kpodPlusEncodeMode() const;
     void setKpodPlusEncodeMode(int mode); // 0=KZ, 1=KX
-    int kpodPlusStuckTimeout() const;
-    void setKpodPlusStuckTimeout(int seconds);
 
     // CW/data text-decode popup font size (per receiver, pixel value)
     int textDecodeFontSize(bool subRx) const;
@@ -219,13 +210,9 @@ private:
     QString m_dxClusterCallsign;
     int m_dxClusterSpotFontSize = 11; // K4Styles::Dimensions::FontSizeSpot default; clamped to [8, 16]
 
-    // KPOD+ keyer settings
-    int m_kpodPlusKeyerSpeed = 20;
-    int m_kpodPlusCwPitch = 550;
-    int m_kpodPlusIambicMode = 1; // 0=A, 1=B
-    bool m_kpodPlusPaddleReversed = false;
-    int m_kpodPlusEncodeMode = 0; // 0=KZ, 1=KX
-    int m_kpodPlusStuckTimeout = 60;
+    // KPOD+ encode mode (0=KZ, 1=KX). Keyer speed / CW pitch / iambic mode /
+    // paddle orientation are not stored — the KPOD+ mirrors the K4.
+    int m_kpodPlusEncodeMode = 0;
 
     QSettings m_settings;
 };

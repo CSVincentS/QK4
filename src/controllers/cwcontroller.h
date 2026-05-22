@@ -49,10 +49,13 @@ class KpodPlusDevice;
 //   src                                  | dst                | thread hop                | conn
 //   -------------------------------------|--------------------|---------------------------|--------
 //   RadioState::keyerSpeedChanged        | sidetone + keyer + | main -> sidetone thread   | invokeMethod queued
-//                                        | KZL to K4          | main -> keyer thread      |
-//                                        |                    | main -> I/O thread (sendCAT)
+//                                        | KZL to K4 +        | main -> keyer thread      |
+//                                        | KPOD+ setKeyerSpd  | main -> I/O thread (sendCAT)
 //   RadioState::keyerPaddleChanged       | keyer mode/reverse | main -> keyer thread      | invokeMethod queued
-//   RadioState::cwPitchChanged           | sidetone freq      | main -> sidetone thread   | invokeMethod queued
+//                                        | + KPOD+ setKeyer-  |                           |
+//                                        | Params             |                           |
+//   RadioState::cwPitchChanged           | sidetone freq +    | main -> sidetone thread   | invokeMethod queued
+//                                        | KPOD+ setCwPitch   |                           |
 //   RadioState::modeChanged              | m_cachedMode +     | main -> main (atomic)     | AutoConnection (Direct)
 //                                        | V1.4 PTT cleanup   |                           |
 //   IambicKeyer::elementStarted          | KZ. / KZ- to K4    | keyer -> I/O thread       | QueuedConnection
@@ -143,9 +146,10 @@ class KpodPlusDevice;
 // --------------------------------
 //   - KPOD USB tuning knob (encoder -> tuning CAT, button -> macro)
 //   - Device construction + thread management
-//   - Device-config push (applyKpodPlusConfig on KPOD+ plug-in pushes
-//     saved RadioSettings to the device — purely device lifecycle now
-//     that the K4-mirroring has been deleted)
+//   - Device-config push (applyKpodPlusConfig on KPOD+ plug-in pushes the
+//     current K4 keyer state from RadioState, encode mode from RadioSettings,
+//     and a fixed stuck timeout — device-arrival snapshot. Live K4 changes
+//     are mirrored to the KPOD+ by CwController, above)
 //   - Sidetone volume / output-device follow (audio device lifecycle,
 //     not CW behavior)
 //   - shutdownSidetone() public entry point used by MainWindow::closeEvent

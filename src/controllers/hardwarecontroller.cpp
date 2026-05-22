@@ -12,6 +12,11 @@
 
 Q_LOGGING_CATEGORY(qk4Hardware, "qk4.hardware")
 
+namespace {
+// The K4 reports no stuck-key timeout; push this fixed default to the KPOD+.
+constexpr int kKpodPlusStuckTimeoutSec = 60;
+} // namespace
+
 HardwareController::HardwareController(RadioState *radioState, ConnectionController *connController, QObject *parent)
     : QObject(parent), m_radioState(radioState), m_connectionController(connController) {
     // =========================================================================
@@ -69,19 +74,22 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(m_kpodPlusDevice, &KpodPlusDevice::buttonHeld, this,
             [this](int buttonNum) { emit macroRequested(QString("K-pod.%1H").arg(buttonNum)); });
 
-    // At KPOD+ plug-in, push the user's saved KPOD+ settings (from
-    // RadioSettings) down to the device. KPOD+ keyer state is intentionally
-    // independent of the K4/QK4 keyer state — RadioState is not consulted
-    // and the K4 is not informed of the KPOD+'s settings. User-driven
-    // changes on the KPOD+ settings page push to the device directly
-    // (see KpodPage handlers).
+    // At KPOD+ plug-in, push the current keyer config to the device. The K4 is
+    // the source of truth: keyer speed / CW pitch / iambic mode / paddle
+    // orientation come from RadioState (skipped while still at their sentinels,
+    // i.e. before the first K4 update arrives). Encode mode has no K4 equivalent
+    // and comes from RadioSettings; the K4 reports no stuck timeout so a fixed
+    // default is used. Live K4 changes are pushed by CwController.
     auto applyKpodPlusConfig = [this]() {
-        auto *settings = RadioSettings::instance();
-        m_kpodPlusDevice->setKeyerSpeed(settings->kpodPlusKeyerSpeed());
-        m_kpodPlusDevice->setCwPitch(settings->kpodPlusCwPitch());
-        m_kpodPlusDevice->setKeyerParams(settings->kpodPlusIambicMode(), settings->kpodPlusPaddleReversed());
-        m_kpodPlusDevice->setEncodeMode(settings->kpodPlusEncodeMode());
-        m_kpodPlusDevice->setStuckTimeout(settings->kpodPlusStuckTimeout());
+        if (m_radioState->keyerSpeed() > 0)
+            m_kpodPlusDevice->setKeyerSpeed(m_radioState->keyerSpeed());
+        if (m_radioState->cwPitch() > 0)
+            m_kpodPlusDevice->setCwPitch(m_radioState->cwPitch());
+        if (!m_radioState->iambicMode().isNull() && !m_radioState->paddleOrientation().isNull())
+            m_kpodPlusDevice->setKeyerParams(m_radioState->iambicMode() == 'B' ? 1 : 0,
+                                             m_radioState->paddleOrientation() == 'R');
+        m_kpodPlusDevice->setEncodeMode(RadioSettings::instance()->kpodPlusEncodeMode());
+        m_kpodPlusDevice->setStuckTimeout(kKpodPlusStuckTimeoutSec);
     };
 
     // Auto-start polling on device arrival. The KPOD+ keyer-active gate +

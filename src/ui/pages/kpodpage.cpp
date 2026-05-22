@@ -122,11 +122,11 @@ void KpodPage::setupKeyerConfigSection(QVBoxLayout *parentLayout) {
     keyerLayout->setSpacing(K4Styles::Dimensions::PaddingMedium);
 
     // Section title
-    auto *keyerTitle = new QLabel("Keyer Configuration", m_keyerConfigWidget);
+    auto *keyerTitle = new QLabel("KPOD+ Configuration", m_keyerConfigWidget);
     keyerTitle->setStyleSheet(K4Styles::Dialog::titleLabel());
     keyerLayout->addWidget(keyerTitle);
 
-    // Grid for keyer controls
+    // Grid for the keyer controls
     auto *gridWidget = new QWidget(m_keyerConfigWidget);
     auto *grid = new QGridLayout(gridWidget);
     grid->setContentsMargins(0, 0, 0, 0);
@@ -138,114 +138,27 @@ void KpodPage::setupKeyerConfigSection(QVBoxLayout *parentLayout) {
                              .arg(K4Styles::Dimensions::FontSizeButton);
 
     auto *settings = RadioSettings::instance();
-    int row = 0;
 
-    // WPM spinner (8-100)
-    auto *wpmLabel = new QLabel("Keyer Speed (WPM)", gridWidget);
-    wpmLabel->setStyleSheet(labelStyle);
-    m_wpmSpinner = new QSpinBox(gridWidget);
-    m_wpmSpinner->setRange(8, 100);
-    m_wpmSpinner->setValue(settings->kpodPlusKeyerSpeed());
-    grid->addWidget(wpmLabel, row, 0, Qt::AlignLeft);
-    grid->addWidget(m_wpmSpinner, row, 1, Qt::AlignLeft);
-    row++;
-
-    // CW Pitch spinner (400-1000 Hz, step 10)
-    auto *pitchLabel = new QLabel("CW Pitch (Hz)", gridWidget);
-    pitchLabel->setStyleSheet(labelStyle);
-    m_pitchSpinner = new QSpinBox(gridWidget);
-    m_pitchSpinner->setRange(400, 1000);
-    m_pitchSpinner->setSingleStep(10);
-    m_pitchSpinner->setValue(settings->kpodPlusCwPitch());
-    grid->addWidget(pitchLabel, row, 0, Qt::AlignLeft);
-    grid->addWidget(m_pitchSpinner, row, 1, Qt::AlignLeft);
-    row++;
-
-    // Iambic Mode: A / B
-    auto *iambicLabel = new QLabel("Iambic Mode", gridWidget);
-    iambicLabel->setStyleSheet(labelStyle);
-    m_iambicModeCombo = new QComboBox(gridWidget);
-    m_iambicModeCombo->addItem("Iambic A", 0);
-    m_iambicModeCombo->addItem("Iambic B", 1);
-    m_iambicModeCombo->setCurrentIndex(settings->kpodPlusIambicMode());
-    grid->addWidget(iambicLabel, row, 0, Qt::AlignLeft);
-    grid->addWidget(m_iambicModeCombo, row, 1, Qt::AlignLeft);
-    row++;
-
-    // Paddle Orientation: Normal / Reversed
-    auto *paddleLabel = new QLabel("Paddle Orientation", gridWidget);
-    paddleLabel->setStyleSheet(labelStyle);
-    m_paddleOrientCombo = new QComboBox(gridWidget);
-    m_paddleOrientCombo->addItem("Normal", 0);
-    m_paddleOrientCombo->addItem("Reversed", 1);
-    m_paddleOrientCombo->setCurrentIndex(settings->kpodPlusPaddleReversed() ? 1 : 0);
-    grid->addWidget(paddleLabel, row, 0, Qt::AlignLeft);
-    grid->addWidget(m_paddleOrientCombo, row, 1, Qt::AlignLeft);
-    row++;
-
-    // Encode Mode: Element (KZ) / ASCII (KX)
+    // Encode Mode: Element (KZ) / ASCII (KX). This is the only KPOD+ keyer
+    // setting still configured here — keyer speed, CW pitch, iambic mode and
+    // paddle orientation now mirror the connected K4 (see CwController) and
+    // have no manual control. Encode mode has no K4 equivalent.
     auto *encodeLabel = new QLabel("Encode Mode", gridWidget);
     encodeLabel->setStyleSheet(labelStyle);
     m_encodeModeCombo = new QComboBox(gridWidget);
     m_encodeModeCombo->addItem("Element (KZ)", 0);
     m_encodeModeCombo->addItem("ASCII (KX)", 1);
     m_encodeModeCombo->setCurrentIndex(settings->kpodPlusEncodeMode());
-    grid->addWidget(encodeLabel, row, 0, Qt::AlignLeft);
-    grid->addWidget(m_encodeModeCombo, row, 1, Qt::AlignLeft);
-    row++;
-
-    // Stuck Timeout spinner (5-600 sec)
-    auto *timeoutLabel = new QLabel("Stuck Timeout (sec)", gridWidget);
-    timeoutLabel->setStyleSheet(labelStyle);
-    m_stuckTimeoutSpinner = new QSpinBox(gridWidget);
-    m_stuckTimeoutSpinner->setRange(5, 600);
-    m_stuckTimeoutSpinner->setValue(settings->kpodPlusStuckTimeout());
-    grid->addWidget(timeoutLabel, row, 0, Qt::AlignLeft);
-    grid->addWidget(m_stuckTimeoutSpinner, row, 1, Qt::AlignLeft);
+    grid->addWidget(encodeLabel, 0, 0, Qt::AlignLeft);
+    grid->addWidget(m_encodeModeCombo, 0, 1, Qt::AlignLeft);
 
     grid->setColumnStretch(1, 1);
     keyerLayout->addWidget(gridWidget);
-
-    // Connect controls → settings + device immediately on change
-    connect(m_wpmSpinner, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int wpm) {
-        RadioSettings::instance()->setKpodPlusKeyerSpeed(wpm);
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->setKeyerSpeed(wpm);
-        }
-    });
-
-    connect(m_pitchSpinner, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int hz) {
-        RadioSettings::instance()->setKpodPlusCwPitch(hz);
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->setCwPitch(hz);
-        }
-    });
-
-    connect(m_iambicModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-        RadioSettings::instance()->setKpodPlusIambicMode(index);
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->setKeyerParams(index, m_paddleOrientCombo->currentIndex() == 1);
-        }
-    });
-
-    connect(m_paddleOrientCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-        RadioSettings::instance()->setKpodPlusPaddleReversed(index == 1);
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->setKeyerParams(m_iambicModeCombo->currentIndex(), index == 1);
-        }
-    });
 
     connect(m_encodeModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         RadioSettings::instance()->setKpodPlusEncodeMode(index);
         if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
             m_kpodPlusDevice->setEncodeMode(index);
-        }
-    });
-
-    connect(m_stuckTimeoutSpinner, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int sec) {
-        RadioSettings::instance()->setKpodPlusStuckTimeout(sec);
-        if (m_kpodPlusDevice && m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->setStuckTimeout(sec);
         }
     });
 
