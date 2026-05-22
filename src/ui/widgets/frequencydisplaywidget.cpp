@@ -87,18 +87,21 @@ void FrequencyDisplayWidget::parseFrequency(const QString &freq) {
     m_digits = digits;
 }
 
+int FrequencyDisplayWidget::displayStartIndex() const {
+    // The leading zero of a <10 MHz frequency is suppressed in the normal
+    // display — but NOT while editing, so digit 0 stays visible, clickable
+    // and cursor-addressable (you can't reach >=10 MHz otherwise) and the
+    // layout doesn't shift when digit 0 flips between '0' and non-'0'.
+    return (m_digits[0] == '0' && m_cursorPosition < 0) ? 1 : 0;
+}
+
 QString FrequencyDisplayWidget::formatWithDots() const {
     // Format: X.XXX.XXX or XX.XXX.XXX
     // Input: "07024980" -> Output: "7.024.980"
     // Input: "14024980" -> Output: "14.024.980"
 
     QString result;
-    int startIdx = 0;
-
-    // Skip leading zero for <10MHz frequencies
-    if (m_digits[0] == '0') {
-        startIdx = 1;
-    }
+    int startIdx = displayStartIndex();
 
     for (int i = startIdx; i < 8; ++i) {
         result.append(m_digits[i]);
@@ -136,7 +139,7 @@ int FrequencyDisplayWidget::digitIndexFromCharIndex(int charIndex) const {
     }
 
     // Adjust for leading zero skip
-    int offset = (m_digits[0] == '0') ? 1 : 0;
+    int offset = displayStartIndex();
     return offset + digitCount;
 }
 
@@ -236,7 +239,7 @@ void FrequencyDisplayWidget::paintEvent(QPaintEvent *) {
 
     // Draw each character
     int x = 0;
-    int digitIdx = (m_digits[0] == '0') ? 1 : 0; // Start digit index
+    int digitIdx = displayStartIndex(); // Start digit index
 
     for (int i = 0; i < display.length(); ++i) {
         QChar c = display[i];
@@ -306,8 +309,11 @@ void FrequencyDisplayWidget::mousePressEvent(QMouseEvent *event) {
             int digitPos = digitPositionFromX(event->pos().x());
             if (digitPos >= 0) {
                 if (m_cursorPosition < 0) {
-                    // Not in edit mode - enter it
-                    enterEditMode(digitPos);
+                    // Not in edit mode — enter it with the cursor at the
+                    // leftmost digit so a freshly-typed frequency fills from
+                    // the left (digitPos is only used to reposition the cursor
+                    // once already editing, below).
+                    enterEditMode(0);
                 } else {
                     // Already in edit mode - move cursor
                     m_cursorPosition = digitPos;
