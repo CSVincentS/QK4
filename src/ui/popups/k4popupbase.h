@@ -1,6 +1,7 @@
 #ifndef K4POPUPBASE_H
 #define K4POPUPBASE_H
 
+#include <QElapsedTimer>
 #include <QWidget>
 
 /**
@@ -58,6 +59,17 @@ public:
      * @brief Hide the popup and emit closed() signal.
      */
     void hidePopup();
+
+    /**
+     * @brief True while shown, and for a brief grace period after hiding.
+     *
+     * Toggle handlers (e.g. PopupManager::toggleFn) must use this instead of
+     * isVisible(): a click on the trigger button dismisses the popup via
+     * click-away (window deactivation on mouse-down) before the button's
+     * clicked() fires on mouse-up. Plain isVisible() would then read false
+     * and the toggle would immediately reopen the popup.
+     */
+    bool isVisibleOrJustHidden() const;
 
 signals:
     /**
@@ -121,6 +133,13 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void hideEvent(QHideEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    // Application-wide filter: a mouse press outside the popup dismisses it
+    // (click-away). Installed on qApp while shown, removed on hide.
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
+private:
+    // Restarted on every hide; powers isVisibleOrJustHidden().
+    QElapsedTimer m_hiddenTimer;
 };
 
 #endif // K4POPUPBASE_H

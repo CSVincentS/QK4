@@ -174,11 +174,12 @@ Base class for all popup widgets. Defined in `src/ui/k4popupbase.h`.
 
 #### What K4PopupBase Handles Automatically
 
-- Window flags (`Qt::Popup | Qt::FramelessWindowHint`)
+- Window flags (`Qt::Tool | Qt::FramelessWindowHint`)
 - Translucent background for shadow rendering
 - Drop shadow drawing (8-layer blur via `K4Styles::drawDropShadow`)
 - Popup background fill (`K4Styles::Colors::PopupBackground`)
 - Escape key closes popup
+- Click-away dismiss: an app-wide event filter closes the popup on a mouse press outside its window. Toggle handlers must read `isVisibleOrJustHidden()`, not `isVisible()`, so the dismissing click is not re-read as a reopen.
 - Screen boundary detection (keeps popup on-screen)
 - `closed()` signal emission on hide
 
@@ -186,7 +187,7 @@ Base class for all popup widgets. Defined in `src/ui/k4popupbase.h`.
 
 ```cpp
 // Constructor sets up:
-setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
+setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
 setAttribute(Qt::WA_TranslucentBackground);
 setFocusPolicy(Qt::StrongFocus);
 

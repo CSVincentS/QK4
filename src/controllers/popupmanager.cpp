@@ -167,7 +167,7 @@ void PopupManager::setVfos(VFOWidget *vfoA, VFOWidget *vfoB) {
 void PopupManager::toggleBand() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_bandPopup->isVisible();
+    const bool wasVisible = m_bandPopup->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_bandPopup->showAboveButton(m_bottomMenuBar->bandButton());
@@ -178,7 +178,7 @@ void PopupManager::toggleBand() {
 void PopupManager::toggleDisplay() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_displayPopup->isVisible();
+    const bool wasVisible = m_displayPopup->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_displayPopup->showAboveButton(m_bottomMenuBar->displayButton());
@@ -189,7 +189,7 @@ void PopupManager::toggleDisplay() {
 void PopupManager::toggleFn() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_fnPopup->isVisible();
+    const bool wasVisible = m_fnPopup->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_fnPopup->showAboveButton(m_bottomMenuBar->fnButton());
@@ -266,7 +266,7 @@ void PopupManager::closeOwnedPopups() {
 void PopupManager::toggleMainRx() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_mainRxRow->isVisible();
+    const bool wasVisible = m_mainRxRow->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_mainRxRow->showAboveButton(m_bottomMenuBar->mainRxButton());
@@ -277,7 +277,7 @@ void PopupManager::toggleMainRx() {
 void PopupManager::toggleSubRx() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_subRxRow->isVisible();
+    const bool wasVisible = m_subRxRow->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_subRxRow->showAboveButton(m_bottomMenuBar->subRxButton());
@@ -288,7 +288,7 @@ void PopupManager::toggleSubRx() {
 void PopupManager::toggleTx() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_txRow->isVisible();
+    const bool wasVisible = m_txRow->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_txRow->showAboveButton(m_bottomMenuBar->txButton());
