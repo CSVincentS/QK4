@@ -14,10 +14,10 @@ class QWidget;
 // behavior and looks up user-configured macros from RadioSettings for
 // CAT dispatch.
 //
-// Emits macroDialogRequested when the user selects the Macros built-in
-// so MainWindow can close its own popups (antenna/mode) in addition to
-// PopupManager-owned ones before showing the dialog — MacroController
-// does not have a direct handle on those.
+// Emits macroDialogRequested (Macros built-in) and softwareListRequested
+// (SwList built-in) so MainWindow can close its own popups (antenna/mode)
+// in addition to PopupManager-owned ones before showing the dialog/popup —
+// MacroController does not have a direct handle on those.
 class MacroController : public QObject {
     Q_OBJECT
 
@@ -39,6 +39,11 @@ signals:
     // the Fn popup. MainWindow listens and opens the macro-config dialog
     // after closing its own popups.
     void macroDialogRequested();
+
+    // Emitted when the user invokes the built-in "SW LIST" function from
+    // the Fn popup. MainWindow listens and opens the read-only Software
+    // List popup after closing its own popups.
+    void softwareListRequested();
 
 private slots:
     // Connected to PopupManager::macroFunctionTriggered in constructor.

@@ -89,6 +89,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
         closeAllPopups();
         m_popupManager->openMacroDialog();
     });
+    connect(m_macroController, &MacroController::softwareListRequested, this, [this]() {
+        closeAllPopups();
+        m_popupManager->openSoftwareList();
+    });
     m_antennaCfgController = new AntennaConfigController(m_radioState, m_connectionController, this, this);
     m_textDecodeController = new TextDecodeController(m_radioState, m_connectionController, this, this);
     m_buttonRowDispatcher = new ButtonRowDispatcher(m_radioState, m_connectionController, m_popupManager,

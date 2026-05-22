@@ -178,6 +178,7 @@ set(SOURCES
     src/ui/popups/voxpopup.cpp
     src/ui/popups/ssbbwpopup.cpp
     src/ui/popups/keyingweightpopup.cpp
+    src/ui/popups/softwarelistpopup.cpp
     src/ui/dialogs/textdecodewindow.cpp
     src/ui/dialogs/macrodialog.cpp
     src/ui/widgets/notificationwidget.cpp
@@ -302,6 +303,7 @@ set(HEADERS
     src/ui/popups/voxpopup.h
     src/ui/popups/ssbbwpopup.h
     src/ui/popups/keyingweightpopup.h
+    src/ui/popups/softwarelistpopup.h
     src/ui/dialogs/textdecodewindow.h
     src/ui/dialogs/macrodialog.h
     src/ui/widgets/notificationwidget.h

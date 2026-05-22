@@ -21,6 +21,7 @@ class MicConfigPopupWidget;
 class VoxPopupWidget;
 class SsbBwPopupWidget;
 class KeyingWeightPopupWidget;
+class SoftwareListPopupWidget;
 class QTimer;
 class QWidget;
 
@@ -61,6 +62,10 @@ public:
 
     // Task-level macro dialog open (called from MainWindow::openMacroDialog).
     void openMacroDialog();
+
+    // Task-level open of the read-only Software List popup (Fn → SW LIST).
+    // Reads firmware versions from RadioState and anchors above the Fn button.
+    void openSoftwareList();
 
     // Close the popups PopupManager owns. MainWindow's closeAllPopups()
     // calls this and then closes any popups still owned by MainWindow.
@@ -165,6 +170,7 @@ private:
     VoxPopupWidget *m_voxPopup;
     SsbBwPopupWidget *m_ssbBwPopup;
     KeyingWeightPopupWidget *m_keyingWeightPopup;
+    SoftwareListPopupWidget *m_softwareListPopup;
 
     void wireDisplayPopup();
     void wireEqPopups();

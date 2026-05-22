@@ -58,7 +58,7 @@ void MacroController::onFunctionTriggered(const QString &functionId) {
     } else if (functionId == MacroIds::Macros) {
         emit macroDialogRequested();
     } else if (functionId == MacroIds::SwList) {
-        QMessageBox::information(m_dialogParent, "Coming Soon", "Software list is not yet implemented.");
+        emit softwareListRequested();
     } else if (functionId == MacroIds::Update) {
         QMessageBox::information(m_dialogParent, "Coming Soon", "Update check is not yet implemented.");
     } else if (functionId == MacroIds::DxList) {

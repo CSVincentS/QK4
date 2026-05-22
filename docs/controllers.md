@@ -80,7 +80,7 @@ Grouped by concern:
 - **DxClusterController** — DX cluster client (multi-instance; spot cache)
 
 ### Popup-family
-- **PopupManager** — owns 13 popups: band, display, Fn, macro dialog, 3 button rows (Main/Sub/Tx), RX EQ, TX EQ, line in/out, mic input/config, VOX, SSB BW, keying weight. Also wires RX-row button label state observers.
+- **PopupManager** — owns 14 popups: band, display, Fn, macro dialog, 3 button rows (Main/Sub/Tx), RX EQ, TX EQ, line in/out, mic input/config, VOX, SSB BW, keying weight, software list. Also wires RX-row button label state observers.
 - **ModePopupController** — mode selector popup
 - **FeatureMenuController** — ATTN/NB/NR/NOTCH feature popup
 - **AntennaConfigController** — three antenna-config popups

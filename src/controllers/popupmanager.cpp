@@ -19,6 +19,7 @@
 #include "ui/popups/micconfigpopup.h"
 #include "ui/popups/micinputpopup.h"
 #include "ui/popups/rxeqpopupwidget.h"
+#include "ui/popups/softwarelistpopup.h"
 #include "ui/popups/ssbbwpopup.h"
 #include "ui/popups/voxpopup.h"
 #include "ui/styling/k4constants.h"
@@ -43,7 +44,8 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
       m_lineOutPopup(new LineOutPopupWidget(parentWidget)), m_lineInPopup(new LineInPopupWidget(parentWidget)),
       m_micInputPopup(new MicInputPopupWidget(parentWidget)), m_micConfigPopup(new MicConfigPopupWidget(parentWidget)),
       m_voxPopup(new VoxPopupWidget(parentWidget)), m_ssbBwPopup(new SsbBwPopupWidget(parentWidget)),
-      m_keyingWeightPopup(new KeyingWeightPopupWidget(parentWidget)) {
+      m_keyingWeightPopup(new KeyingWeightPopupWidget(parentWidget)),
+      m_softwareListPopup(new SoftwareListPopupWidget(parentWidget)) {
 
     m_macroDialog->hide();
 
@@ -212,6 +214,13 @@ void PopupManager::openMacroDialog() {
     m_macroDialog->setFocus();
 }
 
+void PopupManager::openSoftwareList() {
+    if (!m_bottomMenuBar)
+        return;
+    m_softwareListPopup->setVersions(m_radioState->firmwareVersions());
+    m_softwareListPopup->showAboveButton(m_bottomMenuBar->fnButton());
+}
+
 void PopupManager::closeOwnedPopups() {
     if (m_bandPopup->isVisible()) {
         m_bandPopup->hidePopup();
@@ -261,6 +270,8 @@ void PopupManager::closeOwnedPopups() {
         m_ssbBwPopup->hidePopup();
     if (m_keyingWeightPopup->isVisible())
         m_keyingWeightPopup->hidePopup();
+    if (m_softwareListPopup->isVisible())
+        m_softwareListPopup->hidePopup();
 }
 
 void PopupManager::toggleMainRx() {
