@@ -286,6 +286,28 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         m_connectionController->sendCAT("FB;");
     });
 
+    // Right-clicking a spot tunes VFO B to its exact dial frequency — mirrors the
+    // panadapter's "right-click → VFO B" click-tune convention, but snapped to the
+    // spot instead of the mouse-x. Disabled in the K4's "Left Only" mouse-QSY mode
+    // (m_mouseQsyMode == 0), same gate as the panadapter right-click handlers.
+    auto tuneVfoBToSpot = [this](qint64 freq) {
+        if (m_mouseQsyMode == 0)
+            return;
+        if (!m_connectionController->isConnected() || freq <= 0)
+            return;
+        if (m_radioState->lockB())
+            return;
+        m_connectionController->sendCAT(QString("FB%1;").arg(freq, 11, 10, QChar('0')));
+        m_connectionController->sendCAT("FB;");
+        // Right-click selects VFO B as the working VFO — route the scroll wheel to
+        // it, mirroring the panadapter right-click handler.
+        m_scrollVfoB = true;
+        m_mouseVfoIndicatorA->setActiveVfo(true);
+        m_mouseVfoIndicatorB->setActiveVfo(true);
+    };
+    connect(m_spotOverlayA, &DxSpotOverlay::spotRightClicked, this, tuneVfoBToSpot);
+    connect(m_spotOverlayB, &DxSpotOverlay::spotRightClicked, this, tuneVfoBToSpot);
+
     // Install event filter to reposition span buttons when panadapters resize
     m_panadapterA->installEventFilter(this);
     m_panadapterB->installEventFilter(this);
