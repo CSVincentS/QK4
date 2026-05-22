@@ -83,9 +83,21 @@ void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char
     auto *self = static_cast<HaliKeyMidiWorker *>(userData);
     if (!self->m_running)
         return;
-    if (message && !message->empty()) {
-        self->handleMidiMessage(deltaTime, *message);
-    }
+    if (!message || message->empty())
+        return;
+    // WHY marshal to the worker thread before doing anything Qt-related:
+    // RtMidi invokes this callback from its OWN internal thread (not a QThread).
+    // Emitting Qt signals from a non-Qt thread is undefined — Qt's event-queue
+    // machinery isn't guaranteed to work on threads it doesn't know about. Instead
+    // we copy the message bytes by value into a lambda and post it back to this
+    // worker (which IS a managed QThread). handleMidiMessage then runs on the
+    // worker thread and emits signals safely.
+    //
+    // Cost: one Qt-event-queue hop (~10-50 µs typical). Negligible vs. CW timing.
+    std::vector<unsigned char> copy = *message;
+    QMetaObject::invokeMethod(
+        self, [self, dt = deltaTime, msg = std::move(copy)]() { self->handleMidiMessage(dt, msg); },
+        Qt::QueuedConnection);
 }
 
 void HaliKeyMidiWorker::handleMidiMessage(double deltaTime, const std::vector<unsigned char> &message) {

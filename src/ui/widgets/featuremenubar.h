@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QPushButton>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * @brief Popup control bar for the ATTN / NB / NR / MANUAL NOTCH features. Shows a toggle, +/-

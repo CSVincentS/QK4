@@ -2,7 +2,7 @@
 
 #include "connectioncontroller.h"
 #include "controllers/popupmanager.h"
-#include "models/macroids.h"
+#include "utils/macroids.h"
 #include "settings/radiosettings.h"
 
 #include <QLoggingCategory>
@@ -11,8 +11,9 @@
 
 Q_LOGGING_CATEGORY(qk4Macro, "qk4.macro")
 
-MacroController::MacroController(ConnectionController *connection, PopupManager *popupManager, QObject *parent)
-    : QObject(parent), m_connection(connection), m_popupManager(popupManager) {
+MacroController::MacroController(ConnectionController *connection, PopupManager *popupManager, QWidget *dialogParent,
+                                 QObject *parent)
+    : QObject(parent), m_connection(connection), m_popupManager(popupManager), m_dialogParent(dialogParent) {
     connect(m_popupManager, &PopupManager::macroFunctionTriggered, this, &MacroController::onFunctionTriggered);
 }
 
@@ -57,11 +58,11 @@ void MacroController::onFunctionTriggered(const QString &functionId) {
     } else if (functionId == MacroIds::Macros) {
         emit macroDialogRequested();
     } else if (functionId == MacroIds::SwList) {
-        QMessageBox::information(nullptr, "Coming Soon", "Software list is not yet implemented.");
+        emit softwareListRequested();
     } else if (functionId == MacroIds::Update) {
-        QMessageBox::information(nullptr, "Coming Soon", "Update check is not yet implemented.");
+        QMessageBox::information(m_dialogParent, "Coming Soon", "Update check is not yet implemented.");
     } else if (functionId == MacroIds::DxList) {
-        QMessageBox::information(nullptr, "Coming Soon", "DX list is not yet implemented.");
+        QMessageBox::information(m_dialogParent, "Coming Soon", "DX list is not yet implemented.");
     } else {
         // User-configurable macro — look up + dispatch via executeMacro.
         executeMacro(functionId);

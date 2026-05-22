@@ -14,6 +14,26 @@ BandNavigationController::BandNavigationController(RadioState *radioState, Conne
                                                    PopupManager *popupManager, QObject *parent)
     : QObject(parent), m_radioState(radioState), m_connection(connection), m_popupManager(popupManager) {
     connect(m_popupManager, &PopupManager::bandSelected, this, &BandNavigationController::onBandSelected);
+    connect(m_connection, &ConnectionController::catResponseReceived, this, &BandNavigationController::onCatResponse);
+}
+
+void BandNavigationController::onCatResponse(const QString &response) {
+    // Each ;-delimited piece is a single CAT command. Parse BN / BN$
+    // echoes and ignore everything else — RadioState handles the rest.
+    const QStringList commands = response.split(';', Qt::SkipEmptyParts);
+    for (const QString &cmd : commands) {
+        if (cmd.startsWith("BN$")) {
+            bool ok;
+            const int bandNum = cmd.mid(3, 2).toInt(&ok);
+            if (ok)
+                setCurrentBand(bandNum, /*forVfoB=*/true);
+        } else if (cmd.startsWith("BN")) {
+            bool ok;
+            const int bandNum = cmd.mid(2, 2).toInt(&ok);
+            if (ok)
+                setCurrentBand(bandNum, /*forVfoB=*/false);
+        }
+    }
 }
 
 BandNavigationController::~BandNavigationController() {

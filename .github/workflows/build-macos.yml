@@ -24,7 +24,7 @@ jobs:
           restore-keys: brew-macos-
 
       - name: Install dependencies
-        run: brew install qt opus openssl@3 hidapi dbus brotli
+        run: brew install qt opus openssl@3 hidapi dbus brotli libusb
 
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.9
@@ -95,6 +95,12 @@ jobs:
           cp "$HIDAPI_LIB/libhidapi.0.dylib" "$FRAMEWORKS/"
           ln -sf libhidapi.0.dylib "$FRAMEWORKS/libhidapi.dylib"
 
+          # Copy libusb library
+          echo "=== Copying libusb library ==="
+          LIBUSB_LIB="$(brew --prefix libusb)/lib"
+          cp "$LIBUSB_LIB/libusb-1.0.0.dylib" "$FRAMEWORKS/"
+          ln -sf libusb-1.0.0.dylib "$FRAMEWORKS/libusb-1.0.dylib"
+
           # Fix permissions (Homebrew files may be read-only)
           chmod -R u+rw "$FRAMEWORKS/"
 
@@ -115,6 +121,10 @@ jobs:
           # Fix HIDAPI library path
           install_name_tool -id "@executable_path/../Frameworks/libhidapi.0.dylib" \
             "$FRAMEWORKS/libhidapi.0.dylib" || true
+
+          # Fix libusb library path
+          install_name_tool -id "@executable_path/../Frameworks/libusb-1.0.0.dylib" \
+            "$FRAMEWORKS/libusb-1.0.0.dylib" || true
 
           # Fix libdbus library path
           echo "=== Fixing libdbus paths ==="

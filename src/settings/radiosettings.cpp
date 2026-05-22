@@ -315,6 +315,87 @@ void RadioSettings::setSidetoneVolume(int value) {
     }
 }
 
+// =============================================================================
+// KPOD+ Keyer Settings
+// =============================================================================
+
+int RadioSettings::kpodPlusKeyerSpeed() const {
+    return m_kpodPlusKeyerSpeed;
+}
+
+void RadioSettings::setKpodPlusKeyerSpeed(int wpm) {
+    wpm = qBound(8, wpm, 100);
+    if (m_kpodPlusKeyerSpeed != wpm) {
+        m_kpodPlusKeyerSpeed = wpm;
+        save();
+        emit kpodPlusSettingsChanged();
+    }
+}
+
+int RadioSettings::kpodPlusCwPitch() const {
+    return m_kpodPlusCwPitch;
+}
+
+void RadioSettings::setKpodPlusCwPitch(int freqHz) {
+    freqHz = qBound(400, freqHz, 1000);
+    if (m_kpodPlusCwPitch != freqHz) {
+        m_kpodPlusCwPitch = freqHz;
+        save();
+        emit kpodPlusSettingsChanged();
+    }
+}
+
+int RadioSettings::kpodPlusIambicMode() const {
+    return m_kpodPlusIambicMode;
+}
+
+void RadioSettings::setKpodPlusIambicMode(int mode) {
+    mode = qBound(0, mode, 1);
+    if (m_kpodPlusIambicMode != mode) {
+        m_kpodPlusIambicMode = mode;
+        save();
+        emit kpodPlusSettingsChanged();
+    }
+}
+
+bool RadioSettings::kpodPlusPaddleReversed() const {
+    return m_kpodPlusPaddleReversed;
+}
+
+void RadioSettings::setKpodPlusPaddleReversed(bool reversed) {
+    if (m_kpodPlusPaddleReversed != reversed) {
+        m_kpodPlusPaddleReversed = reversed;
+        save();
+        emit kpodPlusSettingsChanged();
+    }
+}
+
+int RadioSettings::kpodPlusEncodeMode() const {
+    return m_kpodPlusEncodeMode;
+}
+
+void RadioSettings::setKpodPlusEncodeMode(int mode) {
+    mode = qBound(0, mode, 1);
+    if (m_kpodPlusEncodeMode != mode) {
+        m_kpodPlusEncodeMode = mode;
+        save();
+        emit kpodPlusSettingsChanged();
+    }
+}
+
+int RadioSettings::kpodPlusStuckTimeout() const {
+    return m_kpodPlusStuckTimeout;
+}
+
+void RadioSettings::setKpodPlusStuckTimeout(int seconds) {
+    seconds = qBound(5, seconds, 600);
+    if (m_kpodPlusStuckTimeout != seconds) {
+        m_kpodPlusStuckTimeout = seconds;
+        save();
+        emit kpodPlusSettingsChanged();
+    }
+}
+
 EqPreset RadioSettings::rxEqPreset(int index) const {
     if (index >= 0 && index < 4) {
         return m_rxEqPresets[index];
@@ -413,6 +494,19 @@ void RadioSettings::setDxClusterCallsign(const QString &callsign) {
     }
 }
 
+int RadioSettings::dxClusterSpotFontSize() const {
+    return m_dxClusterSpotFontSize;
+}
+
+void RadioSettings::setDxClusterSpotFontSize(int sizePx) {
+    sizePx = qBound(8, sizePx, 16); // mirrors K4Styles::Dimensions::FontSizeSpot{Min,Max}
+    if (m_dxClusterSpotFontSize != sizePx) {
+        m_dxClusterSpotFontSize = sizePx;
+        save();
+        emit dxClusterSettingsChanged();
+    }
+}
+
 void RadioSettings::load() {
     int count = m_settings.beginReadArray("radios");
     m_radios.clear();
@@ -461,6 +555,7 @@ void RadioSettings::load() {
     m_settings.endArray();
     m_dxClusterSpotAge = m_settings.value("dxCluster/spotAge", 600).toInt();
     m_dxClusterCallsign = m_settings.value("dxCluster/callsign", "").toString();
+    m_dxClusterSpotFontSize = qBound(8, m_settings.value("dxCluster/spotFontSize", 11).toInt(), 16);
 
     // Seed default cluster entry on first run
     if (m_dxClusters.isEmpty()) {
@@ -475,6 +570,14 @@ void RadioSettings::load() {
     m_halikeyEnabled = m_settings.value("halikey/enabled", false).toBool();
     m_halikeyDeviceType = m_settings.value("halikey/deviceType", 0).toInt();
     m_sidetoneVolume = m_settings.value("halikey/sidetoneVolume", 30).toInt();
+
+    // KPOD+ keyer settings
+    m_kpodPlusKeyerSpeed = m_settings.value("kpodPlus/keyerSpeed", 20).toInt();
+    m_kpodPlusCwPitch = m_settings.value("kpodPlus/cwPitch", 550).toInt();
+    m_kpodPlusIambicMode = m_settings.value("kpodPlus/iambicMode", 1).toInt();
+    m_kpodPlusPaddleReversed = m_settings.value("kpodPlus/paddleReversed", false).toBool();
+    m_kpodPlusEncodeMode = m_settings.value("kpodPlus/encodeMode", 0).toInt();
+    m_kpodPlusStuckTimeout = m_settings.value("kpodPlus/stuckTimeout", 60).toInt();
 
     // Macro settings
     int macroCount = m_settings.beginReadArray("macros");
@@ -571,6 +674,14 @@ void RadioSettings::save() {
     m_settings.setValue("halikey/deviceType", m_halikeyDeviceType);
     m_settings.setValue("halikey/sidetoneVolume", m_sidetoneVolume);
 
+    // KPOD+ keyer settings
+    m_settings.setValue("kpodPlus/keyerSpeed", m_kpodPlusKeyerSpeed);
+    m_settings.setValue("kpodPlus/cwPitch", m_kpodPlusCwPitch);
+    m_settings.setValue("kpodPlus/iambicMode", m_kpodPlusIambicMode);
+    m_settings.setValue("kpodPlus/paddleReversed", m_kpodPlusPaddleReversed);
+    m_settings.setValue("kpodPlus/encodeMode", m_kpodPlusEncodeMode);
+    m_settings.setValue("kpodPlus/stuckTimeout", m_kpodPlusStuckTimeout);
+
     // Macro settings
     m_settings.beginWriteArray("macros");
     int i = 0;
@@ -594,6 +705,7 @@ void RadioSettings::save() {
     m_settings.endArray();
     m_settings.setValue("dxCluster/spotAge", m_dxClusterSpotAge);
     m_settings.setValue("dxCluster/callsign", m_dxClusterCallsign);
+    m_settings.setValue("dxCluster/spotFontSize", m_dxClusterSpotFontSize);
 
     // RX EQ Presets (4 slots)
     for (int j = 0; j < 4; ++j) {

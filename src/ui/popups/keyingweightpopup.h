@@ -1,16 +1,20 @@
 #ifndef KEYINGWEIGHTPOPUP_H
 #define KEYINGWEIGHTPOPUP_H
 
-#include "ui/widgets/wheelaccumulator.h"
+#include "ui/popups/k4popupbase.h"
+#include "utils/wheelaccumulator.h"
 #include <QPushButton>
-#include <QWidget>
 
-/**
- * @brief Floating popup for CW keying-weight adjustment. Wraps the raw KP3 value (range 090-125,
- *        representing dit/dah ratio × 100) in a +/- interface. Emits `weightChanged(raw)` back to
- *        MainWindow which sends the `KP3` CAT command.
- */
-class KeyingWeightPopupWidget : public QWidget {
+// Floating popup for CW keying-weight adjustment. Wraps the raw KP3 value
+// (range 090-125, dit/dah ratio x 100) in a +/- interface. Emits
+// weightChanged(raw) back to PopupManager, which sends the KP3 CAT command.
+//
+// Migrated to K4PopupBase as PR 9.1 canary of the popup-uniformity pass:
+// gradient background + delimiter lines are preserved by overriding
+// paintContent(); the tight 8px vertical margin (vs base's 12px
+// PopupContentMargin) is preserved by setting contentsMargins() manually
+// in setupUi().
+class KeyingWeightPopupWidget : public K4PopupBase {
     Q_OBJECT
 public:
     explicit KeyingWeightPopupWidget(QWidget *parent = nullptr);
@@ -18,15 +22,12 @@ public:
     void setWeight(int weight); // Raw 090-125 value
     int weight() const { return m_weight; }
 
-    void showAboveWidget(QWidget *widget);
-    void hidePopup();
-
 signals:
     void weightChanged(int weight); // Raw 090-125 value
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
+    QSize contentSize() const override;
+    void paintContent(QPainter &painter, const QRect &contentRect) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:
@@ -39,8 +40,6 @@ private:
     QPushButton *m_decrementBtn;
     QPushButton *m_incrementBtn;
     QPushButton *m_closeBtn;
-
-    QWidget *m_referenceWidget = nullptr;
 
     int m_weight = 100; // Default 1.00 ratio (range 090-125)
     WheelAccumulator m_wheelAccumulator;

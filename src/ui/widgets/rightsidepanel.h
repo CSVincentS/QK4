@@ -43,8 +43,13 @@ public:
     // Access main layout for adding content
     QVBoxLayout *contentLayout() { return m_layout; }
 
-    // KPA1500 mini panel (embedded in stretch area)
-    Kpa1500MiniPanel *kpa1500Mini() { return m_kpa1500Mini; }
+    // Drop a KPA1500 mini panel into the reserved slot of this panel's
+    // vertical layout. RightSidePanel takes Qt parent ownership but
+    // KPA1500UiController constructs the widget and drives its state —
+    // this method exists so the panel layout's exact slot ordering stays
+    // here, not in the controller. Single-shot — calling twice is a
+    // programming error.
+    void embedKpa1500Panel(Kpa1500MiniPanel *panel);
 
 signals:
     // Button click signals (main function - left click)
@@ -103,7 +108,7 @@ private:
                                   bool isLighter = false);
 
     QVBoxLayout *m_layout;
-    Kpa1500MiniPanel *m_kpa1500Mini = nullptr;
+    int m_kpa1500SlotIdx = -1; // layout index reserved for KPA1500 mini panel
 
     // Button pointers (existing 5x2 grid)
     QPushButton *m_preBtn;

@@ -402,14 +402,14 @@ void setNoiseReductionLevelB(ProcessingState &state, RadioState &owner, int leve
 
 void setSsnrLevel(ProcessingState &state, RadioState &owner, int level) {
     if (state.ssnrLevel != level) {
-        state.ssnrLevel = qMin(level, 10);
+        state.ssnrLevel = qMin(level, 20);
         emit owner.processingChanged();
     }
 }
 
 void setSsnrLevelB(ProcessingState &state, RadioState &owner, int level) {
     if (state.ssnrLevelB != level) {
-        state.ssnrLevelB = qMin(level, 10);
+        state.ssnrLevelB = qMin(level, 20);
         emit owner.processingChangedB();
     }
 }

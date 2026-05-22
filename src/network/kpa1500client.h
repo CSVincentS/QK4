@@ -45,8 +45,6 @@ public:
     double reflectedPower() const { return m_reflectedPower; }
     double drivePower() const { return m_drivePower; }
     double swr() const { return m_swr; }
-    double paVoltage() const { return m_paVoltage; }
-    double paCurrent() const { return m_paCurrent; }
     double paTemperature() const { return m_paTemperature; }
     OperatingState operatingState() const { return m_operatingState; }
     FaultStatus faultStatus() const { return m_faultStatus; }
@@ -65,11 +63,8 @@ signals:
     void errorOccurred(const QString &error);
 
     // Data update signals
-    void bandChanged(const QString &band);
     void powerChanged(double forward, double reflected, double drive);
     void swrChanged(double swr);
-    void paVoltageChanged(double voltage);
-    void paCurrentChanged(double current);
     void paTemperatureChanged(double tempC);
     void operatingStateChanged(OperatingState state);
     void faultStatusChanged(FaultStatus status, const QString &faultCode);
@@ -106,8 +101,6 @@ private:
     double m_reflectedPower = 0.0;
     double m_drivePower = 0.0;
     double m_swr = 1.0;
-    double m_paVoltage = 0.0;
-    double m_paCurrent = 0.0;
     double m_paTemperature = 0.0;
     OperatingState m_operatingState = StateUnknown;
     FaultStatus m_faultStatus = FaultNone;

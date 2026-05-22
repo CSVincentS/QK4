@@ -32,7 +32,9 @@ class VfoFrequencyController;
 class SubDivIndicatorController;
 class TxStateController;
 class SideControlDisplayController;
-class FilterIndicatorController;
+class SideControlScrollController;
+class RightSideController;
+class MemoryButtonsController;
 class AntennaConfigController;
 class AntennaDisplayController;
 class TextDecodeController;
@@ -40,6 +42,7 @@ class FilterIndicatorWidget;
 class FeatureMenuController;
 class ModePopupController;
 class HardwareController;
+class CwController;
 class DxClusterController;
 class KPA1500UiController;
 class CatServer;
@@ -62,6 +65,7 @@ protected:
 private slots:
     void onConnectionStateChanged(TcpClient::ConnectionState state);
     void onConnectionError(const QString &error);
+    void onHardwareError(const QString &error);
     void onRadioReady();
     void onAuthFailed();
     void onCatResponse(const QString &response);
@@ -137,7 +141,6 @@ private:
     QLabel *m_txIndicator;
     QWidget *m_vfoBSquare; // VfoSquareWidget - used for event filter
     QLabel *m_splitLabel;
-    QLabel *m_bSetLabel;
     QLabel *m_subLabel; // SUB indicator (green when sub RX enabled)
     QLabel *m_divLabel; // DIV indicator (green when diversity enabled)
     QLabel *m_msgBankLabel;
@@ -149,14 +152,8 @@ private:
     FilterIndicatorWidget *m_filterAWidget; // VFO A filter indicator
     FilterIndicatorWidget *m_filterBWidget; // VFO B filter indicator
 
-    // Memory buttons (M1-M4, REC, STORE, RCL)
-    QPushButton *m_m1Btn;
-    QPushButton *m_m2Btn;
-    QPushButton *m_m3Btn;
-    QPushButton *m_m4Btn;
-    QPushButton *m_recBtn;
-    QPushButton *m_storeBtn;
-    QPushButton *m_rclBtn;
+    // Memory buttons (M1-M4, REC, STORE, RCL) live in
+    // MemoryButtonsController — no pointers retained here.
     QLabel *m_voxLabel;
     QLabel *m_qskLabel;
     QLabel *m_txAntennaLabel;
@@ -180,7 +177,9 @@ private:
     SubDivIndicatorController *m_subDivIndicatorController;
     TxStateController *m_txStateController;
     SideControlDisplayController *m_sideControlDisplayController;
-    FilterIndicatorController *m_filterIndicatorController;
+    SideControlScrollController *m_sideControlScrollController;
+    RightSideController *m_rightSideController;
+    MemoryButtonsController *m_memoryButtonsController;
     TextDecodeController *m_textDecodeController;
     AntennaConfigController *m_antennaCfgController;
     AntennaDisplayController *m_antennaDisplayController;
@@ -189,6 +188,7 @@ private:
 
     // Hardware controller (owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads)
     HardwareController *m_hardwareController;
+    CwController *m_cwController;
 
     // KPA1500 amplifier UI controller (owns the KPA1500Client)
     KPA1500UiController *m_kpa1500UiController;

@@ -1,10 +1,19 @@
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include "ui/styling/k4styles.h"
 #include <QApplication>
+#include <QEvent>
 #include <QHideEvent>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QScreen>
+
+namespace {
+// Grace period after a hide during which isVisibleOrJustHidden() stays true,
+// so the click that dismissed the popup via click-away is not re-read as a
+// request to reopen it. Long enough to span one button press→release.
+const int ReopenGuardMs = 250;
+} // namespace
 
 K4PopupBase::K4PopupBase(QWidget *parent) : QWidget(parent) {
     setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
@@ -91,6 +100,9 @@ void K4PopupBase::showAboveWidget(QWidget *referenceWidget) {
     move(popupX, popupY); // Move again after show in case Qt repositioned it
     raise();
     setFocus();
+    // Watch application-wide mouse presses so a click outside the popup
+    // dismisses it (click-away). Removed again in hideEvent().
+    qApp->installEventFilter(this);
 }
 
 void K4PopupBase::hidePopup() {
@@ -98,9 +110,34 @@ void K4PopupBase::hidePopup() {
     // closed() signal is emitted by hideEvent()
 }
 
+bool K4PopupBase::isVisibleOrJustHidden() const {
+    return isVisible() || (m_hiddenTimer.isValid() && m_hiddenTimer.elapsed() < ReopenGuardMs);
+}
+
 void K4PopupBase::hideEvent(QHideEvent *event) {
     QWidget::hideEvent(event);
+    qApp->removeEventFilter(this);
+    m_hiddenTimer.restart();
     emit closed();
+}
+
+bool K4PopupBase::eventFilter(QObject *watched, QEvent *event) {
+    // Click-away dismissal: a mouse press anywhere outside this popup's
+    // window closes it. The press is not consumed — it still reaches its
+    // target, so clicking another control works in the same gesture. The
+    // toggle handlers' isVisibleOrJustHidden() guard absorbs the case where
+    // that target is the popup's own trigger button.
+    //
+    // WHY an app-wide filter, not WindowDeactivate: these popups are Qt::Tool
+    // windows parented to the main window, so Qt keeps them "active" whenever
+    // the main window is active — WindowDeactivate never fires for an in-app
+    // click. A position test against a global mouse press is the reliable way.
+    if (event->type() == QEvent::MouseButtonPress && isVisible()) {
+        const QPoint globalPos = static_cast<QMouseEvent *>(event)->globalPosition().toPoint();
+        if (!frameGeometry().contains(globalPos))
+            hidePopup();
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void K4PopupBase::keyPressEvent(QKeyEvent *event) {

@@ -47,6 +47,13 @@ public:
     Q_INVOKABLE void sendCAT(const QString &command);
     Q_INVOKABLE void sendRaw(const QByteArray &data);
 
+    // WHY: lets the KPOD+ EP02 reader (HighPriority worker thread) deliver
+    // KZ batches straight to the I/O thread via a queued connection,
+    // bypassing the main thread. Trims trailing NUL padding from the
+    // device's 32-byte fixed-size frames and dispatches through sendCAT()
+    // so existing K4-packet framing and the cross-thread marshal apply.
+    Q_INVOKABLE void sendCATBytes(const QByteArray &raw);
+
     // Pre-RDY command string sent before the state dump on connect.
     // Must be called before connectToHost() — both are queued to the IO thread,
     // so ordering is guaranteed as long as the caller doesn't interleave.
@@ -100,7 +107,16 @@ private:
     QString m_identity;     // TLS-PSK identity (optional)
     int m_encodeMode;       // Audio encode mode (0-3)
     int m_streamingLatency; // Remote streaming audio latency (0-7)
-    ConnectionState m_state;
+    // WHY atomic: m_state is written on the IO thread (this object's affinity)
+    // by setState() and read on the main thread via connectionState() →
+    // ConnectionController::connectionState() → MainWindow seeding paths. A
+    // plain enum read/written across threads is a data race (UB on weakly
+    // ordered architectures). Writes use memory_order_release; reads use
+    // memory_order_acquire — including the IO-thread internal reads, so the
+    // pattern is uniform (compiles to the same code as relaxed on x86 and one
+    // dmb ish on ARM). Sister field m_connected has the same shape for the
+    // same reason.
+    std::atomic<ConnectionState> m_state{Disconnected};
     std::atomic<bool> m_connected{false}; // Thread-safe read for isConnected()
     bool m_authResponseReceived;
 

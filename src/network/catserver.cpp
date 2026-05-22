@@ -1,8 +1,9 @@
 // WHY: CatServer reads a fixed set of RadioState getters to build CAT
 // responses for WSJT-X / MacLoggerDX. Those getters are a frozen public
-// API during the planned RadioState subsystem split — see
-// docs/radiostate-catserver-api-contract.md for the list and the rules.
-// The regression gate is tests/test_catserver.cpp, pinned in CI.
+// API contract — see docs/radiostate-catserver-api-contract.md for the
+// list and the rules. The contract survived the 2026-04 RadioState
+// subsystem decomposition unchanged and must continue to. The regression
+// gate is tests/test_catserver.cpp, pinned in CI.
 #include "catserver.h"
 #include "models/radiostate.h"
 #include "protocol.h"

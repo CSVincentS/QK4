@@ -1,8 +1,8 @@
 #ifndef FNPOPUPWIDGET_H
 #define FNPOPUPWIDGET_H
 
-#include "ui/styling/k4popupbase.h"
-#include "models/macroids.h"
+#include "ui/popups/k4popupbase.h"
+#include "utils/macroids.h"
 #include <QVector>
 
 /**

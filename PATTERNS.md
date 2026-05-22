@@ -86,7 +86,7 @@ Rule: signals stay on `RadioState`; data and logic live in subsystems.
 
 ## Subsystem State
 
-`RadioState` is the only `QObject` in the model layer. All radio state is partitioned across 9 plain-struct subsystems in `src/models/radiostate/`, each with a matching `*Handlers` namespace of free functions that mutate the struct and emit via the façade.
+`RadioState` is the only `QObject` in the model layer. All radio state is partitioned across 11 plain-struct subsystems in `src/models/radiostate/`, each with a matching `*Handlers` namespace of free functions that mutate the struct and emit via the façade.
 
 ### Subsystem inventory
 
@@ -97,10 +97,12 @@ Rule: signals stay on `RadioState`; data and logic live in subsystems.
 | `ProcessingState` | NB / NR / PA / RA / GT / NA / NM (per VFO) | NB, NB$, NR, NR$, PA, PA$, RA, RA$, GT, GT$, NA, NA$, NM, NM$ |
 | `AntennaState` | Antenna selection + per-band masks + ATU | AN, AT, ACN, ACM, ACS, ACT, AR, AR$ |
 | `AudioEffectsState` | VOX, audio effects, APF, ESSB, EQ, line in/out, mic setup, monitor level, mix, balance | FX, AP, AP$, VX, VG, VI, ES, RE, TE, LO, LI, MI, MS, ML, MX, BL |
-| `DataControlState` | Data sub-mode, rate, tuning step, streaming latency | DT, DT$, DR, DR$, TD, TD$, TB, TB$, VT, VT$, SL |
+| `DataControlState` | Data sub-mode, rate, tuning step, streaming latency | DT, DT$, DR, DR$, VT, VT$, SL |
 | `SpectrumDisplayState` | All `#`-prefix panadapter/waterfall display state | #REF, #SPN, #SCL, #MP, #DPM, #DSM, #FPS, #WFC, #WFH, #AVG, #PKM, #FXT, #FXA, #FRZ, #VFA, #VFB, #AR, #NB$, #NBL$ (plus EXT variants) |
 | `TextDecodeState` | Text decoder mode / threshold / lines | TD, TD$, TB, TB$ |
 | `RxTxMeterState` | S-meter, TX meter cluster, RX/TX transition, supply volts/amps, radio identity, message bank, SB/DV/TS/BS toggles | SM, SM$, PO, TM, TX, RX, ID, OM, RV., ER, MN, SIFP, SB, DV, TS, BS |
+| `LevelsState` | TX power / mic gain / speech compression, RX RF gain + squelch (per VFO) | PC, MG, CP, RG, RG$, SQ, SQ$ |
+| `QskControlState` | Full-break-in (QSK) enable + per-mode TX-to-RX delay | SD |
 
 ### Why plain structs + free functions (Pattern C)
 
@@ -172,11 +174,12 @@ Base class for all popup widgets. Defined in `src/ui/k4popupbase.h`.
 
 #### What K4PopupBase Handles Automatically
 
-- Window flags (`Qt::Popup | Qt::FramelessWindowHint`)
+- Window flags (`Qt::Tool | Qt::FramelessWindowHint`)
 - Translucent background for shadow rendering
 - Drop shadow drawing (8-layer blur via `K4Styles::drawDropShadow`)
 - Popup background fill (`K4Styles::Colors::PopupBackground`)
 - Escape key closes popup
+- Click-away dismiss: an app-wide event filter closes the popup on a mouse press outside its window. Toggle handlers must read `isVisibleOrJustHidden()`, not `isVisible()`, so the dismissing click is not re-read as a reopen.
 - Screen boundary detection (keeps popup on-screen)
 - `closed()` signal emission on hide
 
@@ -184,7 +187,7 @@ Base class for all popup widgets. Defined in `src/ui/k4popupbase.h`.
 
 ```cpp
 // Constructor sets up:
-setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
+setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
 setAttribute(Qt::WA_TranslucentBackground);
 setFocusPolicy(Qt::StrongFocus);
 
@@ -312,25 +315,48 @@ src/ui/mypopup.cpp
 src/ui/mypopup.h
 ```
 
-### Step 4: Wire Up in MainWindow
+### Step 4: Wire Up in a Controller (NOT MainWindow)
+
+CONVENTIONS Rule 12 prohibits new widget member pointers on `MainWindow`. Popup
+ownership lives on a controller — typically `PopupManager` for popups in the
+shared registry, or a feature-specific controller (e.g. `ModePopupController`,
+`AntennaConfigController`) for popups tightly coupled to one slice of UI.
 
 ```cpp
-// mainwindow.h - Add member
-MyPopup *m_myPopup;
+// mypopupcontroller.h
+class MyPopupController : public QObject {
+    Q_OBJECT
+public:
+    MyPopupController(RadioState *state, ConnectionController *conn,
+                      QPushButton *trigger, QObject *parent = nullptr);
+    ~MyPopupController() override { disconnect(this); }
 
-// mainwindow.cpp - Create and connect
-m_myPopup = new MyPopup(this);
-connect(m_myPopup, &MyPopup::itemSelected, this, &MainWindow::onMyItemSelected);
-connect(m_myPopup, &MyPopup::closed, this, [this]() {
-    m_triggerButton->setStyleSheet(K4Styles::menuBarButton());  // Reset button
-});
+private:
+    QPointer<MyPopup> m_popup;       // QPointer if a parent owns lifetime, raw + manual otherwise
+    QPushButton *m_trigger;          // Not owned
+    // ... RadioState / ConnectionController handles
+};
 
-// Show popup when trigger button clicked
-connect(m_triggerButton, &QPushButton::clicked, this, [this]() {
-    m_myPopup->showAboveButton(m_triggerButton);
-    m_triggerButton->setStyleSheet(K4Styles::menuBarButtonActive());
-});
+// mypopupcontroller.cpp
+MyPopupController::MyPopupController(RadioState *state, ConnectionController *conn,
+                                     QPushButton *trigger, QObject *parent)
+    : QObject(parent), m_trigger(trigger) {
+    m_popup = new MyPopup(trigger->window());  // Parented to the top-level
+    connect(m_popup, &MyPopup::itemSelected, this, &MyPopupController::onItemSelected);
+    connect(m_popup, &MyPopup::closed, this, [this]() {
+        m_trigger->setStyleSheet(K4Styles::menuBarButton());
+    });
+    connect(m_trigger, &QPushButton::clicked, this, [this]() {
+        m_popup->showAboveButton(m_trigger);
+        m_trigger->setStyleSheet(K4Styles::menuBarButtonActive());
+    });
+}
 ```
+
+`MainWindow` then only constructs the controller — no popup pointer, no popup
+signal handlers, no popup-related slots. If the popup is part of the shared
+`PopupManager` registry, register it there instead and use
+`popupManager->togglePopup(PopupId::MyPopup)`.
 
 ### Custom Painting (Optional)
 
@@ -439,9 +465,33 @@ class MyController : public QObject {
 
 ### Testing
 
-1. Each controller gets a unit test file at `tests/test_<controllername>.cpp` (see `tests/CMakeLists.txt` pattern).
-2. Construct with a real `RadioState` (no mocks — see `tests/test_radiostate.cpp` for the style).
-3. Verify public API + signal flow. Don't poke internal widgets.
+**Aspirational — no controller has a unit test today.** Controller-layer
+testing was deliberately deferred (it needs mock/fixture infrastructure
+for `RadioState` + `ConnectionController` that doesn't exist yet). If you
+add one, follow this shape: `tests/test_<controllername>.cpp`, construct
+with a real `RadioState` (no mocks — see `tests/test_radiostate.cpp`),
+verify public API + signal flow, don't poke internal widgets. Until then,
+controllers are covered by manual smoke testing per change.
+
+### Controller variants
+
+The structural template above covers the common case (controller owns its
+widgets, created with a `parentWidget`). Two variants are worth knowing:
+
+- **Injected-widget controller** — the widgets are created elsewhere (in
+  MainWindow's layout code) and handed to the controller as constructor
+  pointers; the controller owns only the wiring. `MemoryButtonsController`
+  is the reference example: it takes the seven M1-M4 / REC / STORE / RCL
+  `QPushButton*`s plus a `ConnectionController*`, wires their left-click
+  CAT dispatch, and installs its own event filter for the right-click alt
+  actions. The buttons stay parent-owned by the widget tree.
+
+- **Pure-orchestration controller** — owns no widgets and no threads; it
+  takes already-constructed devices/objects as injected pointers and wires
+  the signal graph across them. `CwController` is the reference example:
+  HardwareController constructs + owns the CW devices, CwController wires
+  their CW behavior together. Use this when the "what to construct" and
+  "how to wire it" concerns have genuinely different owners.
 
 ---
 

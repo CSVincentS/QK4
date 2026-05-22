@@ -3,7 +3,9 @@
 
 #include <QColor>
 #include <QWidget>
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
+
+class RadioState;
 
 // Compact filter indicator widget showing filter position,
 // bandwidth shape, and shift position above a horizontal line
@@ -11,7 +13,14 @@ class FilterIndicatorWidget : public QWidget {
     Q_OBJECT
 
 public:
+    enum class Vfo { A, B };
+
     explicit FilterIndicatorWidget(QWidget *parent = nullptr);
+
+    // Direct Observation (PATTERNS.md): wire this widget's setters to the
+    // RadioState signals for the named VFO. Replaces the former
+    // FilterIndicatorController thin-shell. Call once after construction.
+    void observe(RadioState *state, Vfo vfo);
 
     // Filter position (1, 2, or 3) - displayed as FIL1/FIL2/FIL3
     void setFilterPosition(int position);

@@ -14,6 +14,7 @@ void RxTxMeterState::reset() {
     supplyVoltage = 0.0;
     supplyCurrent = 0.0;
     paDrainCurrent = 0.0;
+    calibratedPaEfficiency = 0.0;
     isTransmitting = false;
     subReceiverEnabled = false;
     diversityEnabled = false;
@@ -90,6 +91,23 @@ void handleTM(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
 
     emit owner.txMeterChanged(state.alcMeter, state.compressionDb, state.forwardPower, state.swrMeter);
     emit owner.swrChanged(state.swrMeter);
+
+    // Drive a smooth Id reading at TM frame rate (~10 Hz) by deriving drain current
+    // from fwdPower with the calibrated efficiency captured in handleSIRF. SIRF alone
+    // arrives at ~0.3 Hz and bounces because the K4 samples PA drain at instantaneous
+    // moments that land in CW key-up gaps — using TM frame rate + SIRF calibration
+    // gives both smoothness and accuracy. Fallback: a fixed η=0.34 (the historical
+    // hardcoded value) until the first SIRF lands, so the meter is never blank in TX.
+    if (state.isTransmitting && state.supplyVoltage > 0 && state.forwardPower > 0) {
+        constexpr double K4_PA_EFFICIENCY_FALLBACK = 0.34;
+        const double eff =
+            (state.calibratedPaEfficiency > 0) ? state.calibratedPaEfficiency : K4_PA_EFFICIENCY_FALLBACK;
+        const double derivedDrain = state.forwardPower / (state.supplyVoltage * eff);
+        if (!qFuzzyCompare(1.0 + derivedDrain, 1.0 + state.paDrainCurrent)) {
+            state.paDrainCurrent = derivedDrain;
+            emit owner.paDrainCurrentChanged(state.paDrainCurrent);
+        }
+    }
 }
 
 void handleTX(RxTxMeterState &state, RadioState &owner, const QString & /*cmd*/) {
@@ -223,6 +241,21 @@ void handleSIRF(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
         return;
     constexpr double K4_PM_TO_AMPS = 768.0;
     const double current = pmRaw / K4_PM_TO_AMPS;
+
+    // Capture the K4's actual efficiency at the current power/band so handleTM can
+    // derive a smooth Id at frame rate. Only update calibration when we have a real
+    // TX-time SIRF (current > 0.1 A — avoids divide-by-near-zero and TX-edge stale-zero
+    // frames) AND a sensible forward power reading. Calibration is sticky: it stays
+    // valid across band changes until the next valid SIRF resets it.
+    if (state.isTransmitting && current > 0.1 && state.forwardPower > 0 && state.supplyVoltage > 0) {
+        const double eff = state.forwardPower / (current * state.supplyVoltage);
+        // Sanity-clamp to a plausible PA-efficiency range (15–60 %). Outside this is
+        // almost certainly a stale value or PA-load mismatch; keep the previous good
+        // calibration rather than overwriting with noise.
+        if (eff > 0.15 && eff < 0.6)
+            state.calibratedPaEfficiency = eff;
+    }
+
     if (!qFuzzyCompare(1.0 + current, 1.0 + state.paDrainCurrent)) {
         state.paDrainCurrent = current;
         emit owner.paDrainCurrentChanged(state.paDrainCurrent);

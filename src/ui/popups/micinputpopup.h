@@ -1,14 +1,13 @@
 #ifndef MICINPUTPOPUP_H
 #define MICINPUTPOPUP_H
 
-#include <QWidget>
+#include "ui/popups/k4popupbase.h"
 #include <QPushButton>
 
-/**
- * @brief Floating popup for choosing the mic input source (Front / Rear / LINE IN / Front+Line /
- *        Rear+Line). Mirrors the K4's MC command options; emits inputChanged(0-4).
- */
-class MicInputPopupWidget : public QWidget {
+// Floating popup for choosing the mic input source (Front / Rear /
+// LINE IN / Front+Line / Rear+Line). Mirrors the K4 MC command options;
+// emits inputChanged(0-4).
+class MicInputPopupWidget : public K4PopupBase {
     Q_OBJECT
 public:
     explicit MicInputPopupWidget(QWidget *parent = nullptr);
@@ -16,15 +15,12 @@ public:
     void setCurrentInput(int input); // 0-4
     int currentInput() const { return m_currentInput; }
 
-    void showAboveWidget(QWidget *widget);
-    void hidePopup();
-
 signals:
     void inputChanged(int input);
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
+    QSize contentSize() const override;
+    void paintContent(QPainter &painter, const QRect &contentRect) override;
 
 private:
     void setupUi();
@@ -38,7 +34,6 @@ private:
     QPushButton *m_rearLineBtn;  // 4 = Rear + LINE IN
     QPushButton *m_closeBtn;
 
-    QWidget *m_referenceWidget = nullptr;
     int m_currentInput = 0;
 };
 

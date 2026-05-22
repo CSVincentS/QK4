@@ -32,7 +32,7 @@ jobs:
           sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
             qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
             qt6-shadertools-dev \
-            libopus-dev libhidapi-dev libssl-dev libasound2-dev
+            libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -42,7 +42,7 @@ jobs:
         # RadioState public API contract used by the CAT server (see
         # docs/radiostate-catserver-api-contract.md). It must stay green
         # across any RadioState refactor.
-        run: cmake --build build --target test_radiostate test_radiostate_registry test_radiostate_golden test_radioutils test_protocol test_catserver test_dxcluster
+        run: cmake --build build --target test_radiostate test_radiostate_registry test_radiostate_golden test_radioutils test_protocol test_catserver test_dxcluster test_kpodplususbworker
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
@@ -65,13 +65,13 @@ jobs:
           sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
             qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
             qt6-shadertools-dev \
-            libopus-dev libhidapi-dev libssl-dev libasound2-dev
+            libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
 
       - name: Configure CMake (sanitizers on for tests)
         run: cmake -B build-san -DCMAKE_BUILD_TYPE=Debug -DQK4_TESTS_SANITIZE=ON
 
       - name: Build instrumented tests
-        run: cmake --build build-san --target test_radiostate test_radiostate_registry test_radiostate_golden test_radioutils test_protocol test_catserver test_dxcluster
+        run: cmake --build build-san --target test_radiostate test_radiostate_registry test_radiostate_golden test_radioutils test_protocol test_catserver test_dxcluster test_kpodplususbworker
 
       - name: Run instrumented tests
         # UBSAN_OPTIONS=halt_on_error=1 makes CI fail fast on any UB detection.

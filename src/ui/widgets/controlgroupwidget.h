@@ -1,7 +1,7 @@
 #ifndef CONTROLGROUPWIDGET_H
 #define CONTROLGROUPWIDGET_H
 
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 #include <QWidget>
 
 /**

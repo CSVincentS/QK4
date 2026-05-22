@@ -3,7 +3,7 @@
 > **Purpose:** if something is broken in the UI, find the owning controller here first.
 > Each entry maps a user-visible feature → the controller that owns it → the file path.
 
-Last updated: end of Phase 3 refactor (26 controllers).
+Last updated: architectural endgame refactor — RightSideController, MemoryButtonsController, CwController added (29 controllers).
 
 ---
 
@@ -29,9 +29,14 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "VFO AGC / preamp / attenuator / NB / NR indicator wrong" | ProcessingDisplayController | `src/controllers/processingdisplaycontroller.cpp` |
 | "Antenna label text (TX / RX Main / RX Sub) wrong" | AntennaDisplayController | `src/controllers/antennadisplaycontroller.cpp` |
 | "Antenna config popup (ANT CFG button) not working" | AntennaConfigController | `src/controllers/antennaconfigcontroller.cpp` |
-| "Filter indicator shape / position wrong" | FilterIndicatorController | `src/controllers/filterindicatorcontroller.cpp` |
+| "Filter indicator shape / position wrong" | FilterIndicatorWidget (Direct Observation — no controller) | `src/ui/widgets/filterindicatorwidget.cpp` |
 | "Side panel knob values (BW/SHFT, power, mic gain) wrong" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
 | "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
+| "Side panel scroll wheels (WPM/Power/BW/HI/LO/RFGain/etc.) wrong" | SideControlScrollController | `src/controllers/sidecontrolscrollcontroller.cpp` |
+| "Right side panel button (PRE/NB/NR/NTCH/FIL/AB/REV/SPOT/MODE/PF1-4/RATE/LOCK/SUB) wrong" | RightSideController | `src/controllers/rightsidecontroller.cpp` |
+| "Memory buttons M1-M4 / REC / STORE / RCL left/right click wrong" | MemoryButtonsController | `src/controllers/memorybuttonscontroller.cpp` |
+| "B-SET label visibility wrong (still showing SPLIT when B-SET on)" | VfoRowIndicatorController | `src/controllers/vforowindicatorcontroller.cpp` |
+| "Side panel BW/SHFT color wrong on Sub-RX active (B-SET)" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
 | "Menu overlay / MEDF system not working" | MenuController | `src/controllers/menucontroller.cpp` |
 | "Feature menu bar (ATTN/NB/NR/NOTCH) not working" | FeatureMenuController | `src/controllers/featuremenucontroller.cpp` |
 | "Text decode window not opening / updating" | TextDecodeController | `src/controllers/textdecodecontroller.cpp` |
@@ -41,7 +46,8 @@ Last updated: end of Phase 3 refactor (26 controllers).
 | "Connection to K4 / status indicator wrong" | ConnectionController + MainWindow::updateConnectionState | `src/controllers/connectioncontroller.cpp` + `src/mainwindow.cpp` |
 | "Top status bar label / KPA1500 badge wrong" | StatusBarController | `src/controllers/statusbarcontroller.cpp` |
 | "Audio (RX/TX, PTT) not working" | AudioController | `src/controllers/audiocontroller.cpp` |
-| "KPOD / HaliKey / sidetone not working" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
+| "KPOD knob / KPOD+ / HaliKey device not detected" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
+| "CW keying / paddle / sidetone / V1.4 PTT demux wrong" | CwController | `src/controllers/cwcontroller.cpp` |
 | "Spectrum / panadapter / click-tune not working" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
 | "DX cluster spots not appearing / cluster connect fail" | DxClusterController | `src/controllers/dxclustercontroller.cpp` |
 
@@ -61,7 +67,7 @@ MainWindow is now ~1,800 LOC. What remains is genuinely MainWindow responsibilit
 
 ---
 
-## The 26 controllers at a glance
+## The 29 controllers at a glance
 
 Grouped by concern:
 
@@ -69,11 +75,12 @@ Grouped by concern:
 - **ConnectionController** — TCP connection state machine, network I/O thread, CAT send
 - **AudioController** — audio engine, Opus codecs, PTT, audio thread
 - **SpectrumController** — panadapters, spectrum data routing, click-tune, passband overlays
-- **HardwareController** — KPOD, HaliKey, IambicKeyer, SidetoneGenerator (owns 2 hardware threads)
+- **HardwareController** — constructs + owns KPOD, KPOD+, HaliKey, IambicKeyer, SidetoneGenerator + their threads; KPOD tuning-knob → CAT; device-config push; signal forwarding
+- **CwController** — CW keying orchestration across the HardwareController-owned devices: IambicKeyer↔CAT/sidetone wiring, HaliKey paddle/PTT handlers, V1.4 PTT demux, KPOD+ keyer-active gate. See `cwcontroller.h` for the threading-invariant doc.
 - **DxClusterController** — DX cluster client (multi-instance; spot cache)
 
 ### Popup-family
-- **PopupManager** — owns 13 popups: band, display, Fn, macro dialog, 3 button rows (Main/Sub/Tx), RX EQ, TX EQ, line in/out, mic input/config, VOX, SSB BW, keying weight. Also wires RX-row button label state observers.
+- **PopupManager** — owns 14 popups: band, display, Fn, macro dialog, 3 button rows (Main/Sub/Tx), RX EQ, TX EQ, line in/out, mic input/config, VOX, SSB BW, keying weight, software list. Also wires RX-row button label state observers.
 - **ModePopupController** — mode selector popup
 - **FeatureMenuController** — ATTN/NB/NR/NOTCH feature popup
 - **AntennaConfigController** — three antenna-config popups
@@ -83,6 +90,9 @@ Grouped by concern:
 - **ButtonRowDispatcher** — Main RX / Sub RX / TX button-row click → CAT / popup / mode-aware
 - **MacroController** — Fn popup / PF1-4 / F1-F12 / KPOD macro dispatch
 - **BandNavigationController** — band-popup selection → BN CAT + band-stack logic
+- **SideControlScrollController** — SideControlPanel scroll-wheel handlers (WPM/pitch/mic/comp/power QRP-QRO/delay/BW/HI/LO/SHIFT/RF gain/squelch); shared HI/LO filter-edge math
+- **RightSideController** — RightSidePanel button click → CAT / FeatureMenu / ModePopup / Macro dispatch. B-SET-aware APF + RATE + KHZ routing.
+- **MemoryButtonsController** — M1-M4 / REC / STORE / RCL message-memory button dispatch. Primary left-click sends SW17/51/18/52/19/20/34; right-click on REC/STORE/RCL sends alt SW137/138/139 (BANK / AF REC / AF PLAY) via installed event filter.
 
 ### Display / indicator (RadioState → widget)
 - **StatusBarController** — top status bar (clock, readings, K4+KPA status)
@@ -90,9 +100,8 @@ Grouped by concern:
 - **VfoFrequencyController** — VFO A/B frequency display (RIT/XIT offset applied)
 - **AntennaDisplayController** — TX / RX Main / RX Sub antenna label text
 - **ProcessingDisplayController** — AGC/preamp/attenuator/NB/NR indicators on VFOs
-- **FilterIndicatorController** — FilterIndicatorWidget shape/position
 - **SideControlDisplayController** — side panel knob values (BW/SHFT/HI/LO, power, mic gain, etc.), CW↔voice display swap
-- **VfoRowIndicatorController** — SPLIT/VOX/QSK/TEST/ATU/MSG-bank labels
+- **VfoRowIndicatorController** — SPLIT/B-SET/VOX/QSK/TEST/ATU/MSG-bank labels (SPLIT and B-SET share the same screen slot — mutually exclusive visibility)
 - **SubDivIndicatorController** — SUB/DIV badges + VFO B dim state
 - **TxStateController** — TX triangles + indicator colors + VFO meter mode flip + PA current calc
 - **RitXitController** — RIT/XIT label state + wheel accumulator + click handlers + BSet-aware display routing

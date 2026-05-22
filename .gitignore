@@ -23,6 +23,7 @@ __pycache__/
 # Build artifacts
 /build/
 /build-san/
+/build-asan/
 *.o
 *.d
 *.a

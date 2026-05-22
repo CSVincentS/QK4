@@ -54,10 +54,17 @@ if(APPLE)
     set(HIDAPI_PREFIX "/opt/homebrew/opt/hidapi")
     set(HIDAPI_INCLUDE_DIRS "${HIDAPI_PREFIX}/include")
     set(HIDAPI_LIBRARIES "${HIDAPI_PREFIX}/lib/libhidapi.dylib")
+
+    set(LIBUSB_PREFIX "/opt/homebrew/opt/libusb")
+    set(LIBUSB_INCLUDE_DIRS "${LIBUSB_PREFIX}/include")
+    set(LIBUSB_LIBRARIES "${LIBUSB_PREFIX}/lib/libusb-1.0.dylib")
 elseif(WIN32)
     # Windows with vcpkg
     find_package(Opus CONFIG REQUIRED)
     find_package(hidapi CONFIG REQUIRED)
+    # libusb doesn't provide CMake config files; use find_path/find_library
+    find_path(LIBUSB_INCLUDE_DIRS NAMES libusb-1.0/libusb.h REQUIRED)
+    find_library(LIBUSB_LIBRARIES NAMES usb-1.0 libusb-1.0 REQUIRED)
     set(OPUS_INCLUDE_DIRS "")
     set(HIDAPI_INCLUDE_DIRS "")
     set(OPUS_LIBRARIES Opus::opus)
@@ -68,6 +75,7 @@ else()
     pkg_check_modules(OPUS REQUIRED opus)
     pkg_check_modules(HIDAPI REQUIRED hidapi-libusb)
     pkg_check_modules(LIBUDEV REQUIRED libudev)
+    pkg_check_modules(LIBUSB REQUIRED libusb-1.0>=1.0.21)
 endif()
 set(SOURCES
     src/main.cpp
@@ -98,7 +106,10 @@ set(SOURCES
     src/controllers/subdivindicatorcontroller.cpp
     src/controllers/txstatecontroller.cpp
     src/controllers/sidecontroldisplaycontroller.cpp
-    src/controllers/filterindicatorcontroller.cpp
+    src/controllers/sidecontrolscrollcontroller.cpp
+    src/controllers/rightsidecontroller.cpp
+    src/controllers/memorybuttonscontroller.cpp
+    src/controllers/cwcontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -167,17 +178,21 @@ set(SOURCES
     src/ui/popups/voxpopup.cpp
     src/ui/popups/ssbbwpopup.cpp
     src/ui/popups/keyingweightpopup.cpp
+    src/ui/popups/softwarelistpopup.cpp
     src/ui/dialogs/textdecodewindow.cpp
     src/ui/dialogs/macrodialog.cpp
     src/ui/widgets/notificationwidget.cpp
     src/ui/styling/k4styles.cpp
-    src/ui/styling/k4popupbase.cpp
+    src/ui/popups/k4popupbase.cpp
     src/ui/widgets/kpa1500minipanel.cpp
     src/ui/overlays/sidecontroloverlay.cpp
     src/ui/overlays/monoverlay.cpp
     src/ui/overlays/baloverlay.cpp
-    src/ui/widgets/wheelaccumulator.cpp
+    src/utils/wheelaccumulator.cpp
     src/hardware/kpoddevice.cpp
+    src/hardware/kpodhidworker.cpp
+    src/hardware/kpodplusdevice.cpp
+    src/hardware/kpodplususbworker.cpp
     src/hardware/halikeydevice.cpp
     src/hardware/halikeyworkerbase.cpp
     src/hardware/halikeyv14worker.cpp
@@ -218,7 +233,10 @@ set(HEADERS
     src/controllers/subdivindicatorcontroller.h
     src/controllers/txstatecontroller.h
     src/controllers/sidecontroldisplaycontroller.h
-    src/controllers/filterindicatorcontroller.h
+    src/controllers/sidecontrolscrollcontroller.h
+    src/controllers/rightsidecontroller.h
+    src/controllers/memorybuttonscontroller.h
+    src/controllers/cwcontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h
@@ -243,7 +261,7 @@ set(HEADERS
     src/models/radiostate/qskcontrolstate.h
     src/models/radiostate/textdecodestate.h
     src/models/menumodel.h
-    src/models/macroids.h
+    src/utils/macroids.h
     src/ui/dialogs/radiomanagerdialog.h
     src/ui/widgets/dualcontrolbutton.h
     src/ui/widgets/sidecontrolpanel.h
@@ -285,17 +303,22 @@ set(HEADERS
     src/ui/popups/voxpopup.h
     src/ui/popups/ssbbwpopup.h
     src/ui/popups/keyingweightpopup.h
+    src/ui/popups/softwarelistpopup.h
     src/ui/dialogs/textdecodewindow.h
     src/ui/dialogs/macrodialog.h
     src/ui/widgets/notificationwidget.h
     src/ui/styling/k4styles.h
-    src/ui/styling/k4popupbase.h
+    src/ui/styling/k4constants.h
+    src/ui/popups/k4popupbase.h
     src/ui/widgets/kpa1500minipanel.h
     src/ui/overlays/sidecontroloverlay.h
     src/ui/overlays/monoverlay.h
     src/ui/overlays/baloverlay.h
-    src/ui/widgets/wheelaccumulator.h
+    src/utils/wheelaccumulator.h
     src/hardware/kpoddevice.h
+    src/hardware/kpodhidworker.h
+    src/hardware/kpodplusdevice.h
+    src/hardware/kpodplususbworker.h
     src/hardware/halikeydevice.h
     src/hardware/halikeyworkerbase.h
     src/hardware/halikeyv14worker.h
@@ -344,6 +367,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/rtmidi
     ${OPUS_INCLUDE_DIRS}
     ${HIDAPI_INCLUDE_DIRS}
+    ${LIBUSB_INCLUDE_DIRS}
 )
 
 if(UNIX AND NOT APPLE)
@@ -373,6 +397,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::SerialPort
     ${OPUS_LIBRARIES}
     ${HIDAPI_LIBRARIES}
+    ${LIBUSB_LIBRARIES}
 )
 
 # Link GuiPrivate if found via CMake, otherwise private headers are included manually
@@ -502,6 +527,10 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${HIDAPI_LIBRARIES}"
             "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/"
+        # Copy libusb library
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${LIBUSB_LIBRARIES}"
+            "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/"
         # Fix OpenSSL library paths - use real Cellar path for -change
         COMMAND install_name_tool -id "@executable_path/../Frameworks/libssl.3.dylib"
             "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/libssl.3.dylib"
@@ -518,6 +547,9 @@ if(APPLE)
         # Fix HIDAPI library path
         COMMAND install_name_tool -id "@executable_path/../Frameworks/libhidapi.dylib"
             "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/libhidapi.dylib" || true
+        # Fix libusb library path
+        COMMAND install_name_tool -id "@executable_path/../Frameworks/libusb-1.0.dylib"
+            "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.app/Contents/Frameworks/libusb-1.0.dylib" || true
         # Re-sign the app bundle (required after modifying libraries)
         # Uses ad-hoc signing by default; set CODESIGN_IDENTITY for Developer ID
         COMMAND codesign --force --deep --sign "$ENV{CODESIGN_IDENTITY}"

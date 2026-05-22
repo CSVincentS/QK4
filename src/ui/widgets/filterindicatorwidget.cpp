@@ -1,11 +1,32 @@
 #include "ui/widgets/filterindicatorwidget.h"
-#include "ui/styling/k4styles.h"
+#include "models/radiostate.h"
+#include "ui/styling/k4constants.h"
 #include <QPainter>
 #include <QPolygonF>
 #include <algorithm>
 
 FilterIndicatorWidget::FilterIndicatorWidget(QWidget *parent) : QWidget(parent) {
     setFixedSize(62, 62); // 50 * 1.25 = 62
+}
+
+void FilterIndicatorWidget::observe(RadioState *state, Vfo vfo) {
+    if (!state)
+        return;
+    if (vfo == Vfo::A) {
+        connect(state, &RadioState::filterPositionChanged, this, &FilterIndicatorWidget::setFilterPosition);
+        connect(state, &RadioState::filterBandwidthChanged, this, &FilterIndicatorWidget::setBandwidth);
+        connect(state, &RadioState::ifShiftChanged, this, &FilterIndicatorWidget::setShift);
+        connect(state, &RadioState::modeChanged, this,
+                [this](RadioState::Mode mode) { setMode(RadioState::modeToString(mode)); });
+        connect(state, &RadioState::dataSubModeChanged, this, &FilterIndicatorWidget::setDataSubMode);
+    } else {
+        connect(state, &RadioState::filterPositionBChanged, this, &FilterIndicatorWidget::setFilterPosition);
+        connect(state, &RadioState::filterBandwidthBChanged, this, &FilterIndicatorWidget::setBandwidth);
+        connect(state, &RadioState::ifShiftBChanged, this, &FilterIndicatorWidget::setShift);
+        connect(state, &RadioState::modeBChanged, this,
+                [this](RadioState::Mode mode) { setMode(RadioState::modeToString(mode)); });
+        connect(state, &RadioState::dataSubModeBChanged, this, &FilterIndicatorWidget::setDataSubMode);
+    }
 }
 
 void FilterIndicatorWidget::setFilterPosition(int position) {

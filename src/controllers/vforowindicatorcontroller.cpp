@@ -2,7 +2,7 @@
 
 #include "controllers/spectrumcontroller.h"
 #include "models/radiostate.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "ui/widgets/vforowwidget.h"
 
 #include <QLabel>
@@ -22,6 +22,7 @@ VfoRowIndicatorController::VfoRowIndicatorController(RadioState *radioState, Spe
                                                      VfoRowWidget *vfoRow, const Labels &labels, QObject *parent)
     : QObject(parent), m_radioState(radioState), m_spectrum(spectrum), m_vfoRow(vfoRow), m_labels(labels) {
     connect(m_radioState, &RadioState::splitChanged, this, &VfoRowIndicatorController::onSplitChanged);
+    connect(m_radioState, &RadioState::bSetChanged, this, &VfoRowIndicatorController::onBSetChanged);
     connect(m_radioState, &RadioState::voxChanged, this, &VfoRowIndicatorController::onVoxChanged);
     // WHY: VOX state is per-mode-class (VXC/VXV/VXD). When the mode flips,
     // the displayed VOX color needs to re-resolve from the new mode's VOX
@@ -54,6 +55,16 @@ void VfoRowIndicatorController::onSplitChanged(bool enabled) {
     }
     // Split flip moves the TX VFO — refresh TX marker position.
     m_spectrum->updateTxMarkers();
+}
+
+void VfoRowIndicatorController::onBSetChanged(bool enabled) {
+    // B-SET and SPLIT labels share the same screen position. When B-SET
+    // engages, SPLIT hides; when B-SET releases, SPLIT visibility reverts
+    // to whatever its style sheet says — the SPLIT ON/OFF text persists,
+    // and we simply re-show the widget so its current text shows again.
+    if (m_labels.bSetLabel)
+        m_labels.bSetLabel->setVisible(enabled);
+    m_labels.splitLabel->setVisible(!enabled);
 }
 
 void VfoRowIndicatorController::onVoxChanged() {
@@ -90,6 +101,8 @@ void VfoRowIndicatorController::reset() {
                                     .arg(K4Styles::Dimensions::FontSizeButton);
     m_labels.splitLabel->setText("SPLIT OFF");
     m_labels.splitLabel->setStyleSheet(amberButton);
+    if (m_labels.bSetLabel)
+        m_labels.bSetLabel->setVisible(false);
     m_labels.msgBankLabel->setText("MSG: I");
     m_labels.msgBankLabel->setStyleSheet(amberButton);
     m_labels.atuLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextGray));

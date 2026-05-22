@@ -2,7 +2,7 @@
 #define SIDECONTROLOVERLAY_H
 
 #include <QWidget>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * @brief Base class for overlay panels in SideControlPanel.

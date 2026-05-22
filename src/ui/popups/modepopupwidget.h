@@ -1,7 +1,7 @@
 #ifndef MODEPOPUPWIDGET_H
 #define MODEPOPUPWIDGET_H
 
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include <QMap>
 #include <QPushButton>
 

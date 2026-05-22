@@ -34,7 +34,7 @@ apt-get install -y \
 
 # System arm64 libraries
 apt-get install -y \
-  libopus-dev:arm64 libhidapi-dev:arm64 libssl-dev:arm64 \
+  libopus-dev:arm64 libhidapi-dev:arm64 libusb-1.0-0-dev:arm64 libssl-dev:arm64 \
   libasound2-dev:arm64 libpulse-dev:arm64
 
 # Build with cross-compilation toolchain
@@ -138,6 +138,7 @@ for lib in \
   libopus.so.0 \
   libhidapi-hidraw.so.0 \
   libhidapi-libusb.so.0 \
+  libusb-1.0.so.0 \
   libssl.so.3 \
   libcrypto.so.3; do
   require_lib "$ARM_LIB/$lib" "$DIST/lib/"

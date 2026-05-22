@@ -4,8 +4,8 @@
 #include "hardware/halikeydevice.h"
 #include "hardware/iambickeyer.h"
 #include "hardware/kpoddevice.h"
+#include "hardware/kpodplusdevice.h"
 #include "models/radiostate.h"
-#include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 #include <QLoggingCategory>
@@ -51,9 +51,76 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     });
 
     // =========================================================================
-    // HaliKey CW paddle device
+    // KPOD+ USB keyer device (vendor-specific class, libusb)
     // =========================================================================
-    m_halikeyDevice = new HalikeyDevice(this);
+    m_kpodPlusDevice = new KpodPlusDevice(this);
+
+    // Encoder/button/rocker signals — KPOD+ encoder reads its own rocker position
+    connect(m_kpodPlusDevice, &KpodPlusDevice::encoderRotated, this, [this](int ticks) {
+        if (!m_connectionController->isConnected())
+            return;
+        // Use KPOD+ rocker position (same encoding as KPOD)
+        int rocker = static_cast<int>(m_kpodPlusDevice->rockerPosition());
+        onKpodEncoderRotatedWithRocker(ticks, rocker);
+    });
+    connect(m_kpodPlusDevice, &KpodPlusDevice::pollError, this, &HardwareController::onKpodPollError);
+    connect(m_kpodPlusDevice, &KpodPlusDevice::buttonTapped, this,
+            [this](int buttonNum) { emit macroRequested(QString("K-pod.%1T").arg(buttonNum)); });
+    connect(m_kpodPlusDevice, &KpodPlusDevice::buttonHeld, this,
+            [this](int buttonNum) { emit macroRequested(QString("K-pod.%1H").arg(buttonNum)); });
+
+    // At KPOD+ plug-in, push the user's saved KPOD+ settings (from
+    // RadioSettings) down to the device. KPOD+ keyer state is intentionally
+    // independent of the K4/QK4 keyer state — RadioState is not consulted
+    // and the K4 is not informed of the KPOD+'s settings. User-driven
+    // changes on the KPOD+ settings page push to the device directly
+    // (see KpodPage handlers).
+    auto applyKpodPlusConfig = [this]() {
+        auto *settings = RadioSettings::instance();
+        m_kpodPlusDevice->setKeyerSpeed(settings->kpodPlusKeyerSpeed());
+        m_kpodPlusDevice->setCwPitch(settings->kpodPlusCwPitch());
+        m_kpodPlusDevice->setKeyerParams(settings->kpodPlusIambicMode(), settings->kpodPlusPaddleReversed());
+        m_kpodPlusDevice->setEncodeMode(settings->kpodPlusEncodeMode());
+        m_kpodPlusDevice->setStuckTimeout(settings->kpodPlusStuckTimeout());
+    };
+
+    // Auto-start polling on device arrival. The KPOD+ keyer-active gate +
+    // EP02 keyer-data routing are wired by CwController, which observes the
+    // same deviceConnected / deviceInfoReady signals independently.
+    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceConnected, this, [this, applyKpodPlusConfig]() {
+        if (RadioSettings::instance()->kpodEnabled() && !m_kpodPlusDevice->isPolling()) {
+            m_kpodPlusDevice->startPolling();
+            applyKpodPlusConfig();
+        }
+    });
+
+    // Auto-start on detection at startup
+    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceInfoReady, this, [this, applyKpodPlusConfig]() {
+        if (RadioSettings::instance()->kpodEnabled() && m_kpodPlusDevice->isDetected() &&
+            !m_kpodPlusDevice->isPolling()) {
+            m_kpodPlusDevice->startPolling();
+            applyKpodPlusConfig();
+        }
+    });
+
+    // KPOD enable/disable also controls KPOD+
+    connect(RadioSettings::instance(), &RadioSettings::kpodEnabledChanged, this, [this](bool enabled) {
+        if (enabled) {
+            if (m_kpodPlusDevice->isDetected() && !m_kpodPlusDevice->isPolling()) {
+                m_kpodPlusDevice->startPolling();
+            }
+        } else {
+            m_kpodPlusDevice->stopPolling();
+        }
+    });
+
+    // =========================================================================
+    // HaliKey CW paddle device — device type injected here so HalikeyDevice
+    // itself doesn't reach into RadioSettings (Phase 3 layering cleanup).
+    // =========================================================================
+    m_halikeyDevice = new HalikeyDevice(RadioSettings::instance()->halikeyDeviceType(), this);
+    connect(RadioSettings::instance(), &RadioSettings::halikeyDeviceTypeChanged, m_halikeyDevice,
+            &HalikeyDevice::setDeviceType);
 
     // =========================================================================
     // Sidetone generator (dedicated thread for low-latency audio feedback)
@@ -79,17 +146,6 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
                                   Q_ARG(QString, deviceId));
     });
 
-    // Set initial sidetone frequency from radio state if available
-    if (m_radioState->cwPitch() > 0) {
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "setFrequency", Qt::QueuedConnection,
-                                  Q_ARG(int, m_radioState->cwPitch()));
-    }
-
-    // Update sidetone frequency when CW pitch changes
-    connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitchHz) {
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "setFrequency", Qt::QueuedConnection, Q_ARG(int, pitchHz));
-    });
-
     // Set initial sidetone volume from RadioSettings (independent of K4's MON level)
     QMetaObject::invokeMethod(m_sidetoneGenerator, "setVolume", Qt::QueuedConnection,
                               Q_ARG(float, RadioSettings::instance()->sidetoneVolume() / 100.0f));
@@ -99,14 +155,11 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         QMetaObject::invokeMethod(m_sidetoneGenerator, "setVolume", Qt::QueuedConnection, Q_ARG(float, value / 100.0f));
     });
 
-    // Set initial keyer speed from radio state if available
-    if (m_radioState->keyerSpeed() > 0) {
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "setKeyerSpeed", Qt::QueuedConnection,
-                                  Q_ARG(int, m_radioState->keyerSpeed()));
-    }
+    // Sidetone CW frequency + keyer-speed wiring lives on CwController.
 
     // =========================================================================
-    // Iambic keyer state machine (HighPriority thread for CW element timing)
+    // Iambic keyer state machine (HighPriority thread for CW element timing).
+    // Constructed + thread-managed here; all CW signal wiring is on CwController.
     // =========================================================================
     m_iambicKeyer = new IambicKeyer(nullptr);
     m_keyerThread = new QThread(this);
@@ -114,124 +167,16 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     m_iambicKeyer->moveToThread(m_keyerThread);
     m_keyerThread->start(QThread::HighPriority);
 
-    // Initialize keyer from RadioState KP settings
-    int initWpm = m_radioState->keyerSpeed();
-    if (initWpm <= 0)
-        initWpm = 20;
-    QMetaObject::invokeMethod(m_iambicKeyer, "setSpeed", Qt::QueuedConnection, Q_ARG(int, initWpm));
-    QMetaObject::invokeMethod(
-        m_iambicKeyer, "setMode", Qt::QueuedConnection,
-        Q_ARG(IambicKeyer::Mode, m_radioState->iambicMode() == 'B' ? IambicKeyer::IambicB : IambicKeyer::IambicA));
-    QMetaObject::invokeMethod(m_iambicKeyer, "setReversed", Qt::QueuedConnection,
-                              Q_ARG(bool, m_radioState->paddleOrientation() == 'R'));
+    // All CW signal wiring — keyer init, RadioState observers, IambicKeyer →
+    // CAT/sidetone, HaliKey paddle/PTT demux, keyer enable/disable on
+    // connect/disconnect — lives on CwController (constructed by MainWindow
+    // immediately after this controller). See cwcontroller.h.
 
-    // Update sidetone and keyer speed when WPM changes
-    connect(m_radioState, &RadioState::keyerSpeedChanged, this, [this](int wpm) {
-        // WHY use invokeMethod instead of a direct call: SidetoneGenerator lives on
-        // m_sidetoneThread. setKeyerSpeed only writes a std::atomic<int> today (safe direct),
-        // but the matching invokeMethod for m_iambicKeyer on the next line establishes the
-        // cross-thread pattern — future changes to setKeyerSpeed that touch non-atomic
-        // members would otherwise introduce a silent race with no call-site warning.
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "setKeyerSpeed", Qt::QueuedConnection, Q_ARG(int, wpm));
-        QMetaObject::invokeMethod(m_iambicKeyer, "setSpeed", Qt::QueuedConnection, Q_ARG(int, wpm));
-        // Sync element length with K4 server
-        int ditMs = 1200 / wpm;
-        m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
-    });
-
-    // Update keyer mode/reversal when KP settings change
-    connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int /*weight*/) {
-        QMetaObject::invokeMethod(
-            m_iambicKeyer, "setMode", Qt::QueuedConnection,
-            Q_ARG(IambicKeyer::Mode, iambic == 'B' ? IambicKeyer::IambicB : IambicKeyer::IambicA));
-        QMetaObject::invokeMethod(m_iambicKeyer, "setReversed", Qt::QueuedConnection, Q_ARG(bool, paddle == 'R'));
-    });
-
-    // =========================================================================
-    // Keyer → CAT commands + sidetone audio
-    // =========================================================================
-
-    // Keyer element started — send KZ command to I/O thread + sidetone to sidetone thread
-    connect(m_iambicKeyer, &IambicKeyer::elementStarted, this,
-            [this](bool isDit) { m_connectionController->sendCAT(isDit ? "KZ.;" : "KZ-;"); });
-    connect(m_iambicKeyer, &IambicKeyer::elementStarted, m_sidetoneGenerator,
-            [sg = m_sidetoneGenerator](bool isDit) { isDit ? sg->playSingleDit() : sg->playSingleDah(); });
-
-    // Keyer finished — stop local sidetone (K4 unkeys itself after each KZ element)
-    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, m_sidetoneGenerator,
-            [sg = m_sidetoneGenerator]() { sg->stopElement(); });
-
-    // Character boundary — keyer went idle between elements
-    connect(m_iambicKeyer, &IambicKeyer::characterSpace, this, [this]() { m_connectionController->sendCAT("KZ ;"); });
-
-    // Restart after pause — send KZP with elapsed ms before next element
-    connect(m_iambicKeyer, &IambicKeyer::restartAfterPause, this,
-            [this](int ms) { m_connectionController->sendCAT(QString("KZP%1;").arg(ms, 4, 10, QChar('0'))); });
-
-    // =========================================================================
-    // HaliKey paddle → keyer (ZERO-LATENCY DirectConnection)
-    // =========================================================================
-    // HaliKey MIDI sends note 20 (dit) + note 31 (PTT) together on every Tip-to-Sleeve closure.
-    // In CW mode: forward dit to keyer, ignore PTT (TX handled by KZ commands).
-    // In voice mode: forward PTT to MainWindow, suppress dit (no keying in SSB/AM/FM).
-    //
-    // WHY read m_cachedMode instead of m_radioState->mode(): this lambda runs on the HaliKey
-    // worker thread (DirectConnection from halikeydevice.cpp). m_radioState->mode() reads a
-    // non-atomic subsystem field concurrently with parseCATCommand()'s writes on the main
-    // thread — data race. The atomic cache below is updated from a queued modeChanged.
-    m_cachedMode.store(static_cast<int>(m_radioState->mode()), std::memory_order_relaxed);
-    connect(m_radioState, &RadioState::modeChanged, this,
-            [this](RadioState::Mode mode) { m_cachedMode.store(static_cast<int>(mode), std::memory_order_relaxed); });
-
-    connect(
-        m_halikeyDevice, &HalikeyDevice::ditStateChanged, this,
-        [this](bool pressed) {
-            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
-            if (mode == RadioState::CW || mode == RadioState::CW_R) {
-                m_iambicKeyer->setDitPaddle(pressed);
-            }
-            // In voice/data modes, dit is suppressed — PTT signal handles TX
-        },
-        Qt::DirectConnection);
-    connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, m_iambicKeyer, &IambicKeyer::setDahPaddle,
-            Qt::DirectConnection);
-
-    // HaliKey PTT → MainWindow (voice/data modes) or paddle dit (CW mode, V1.4 only).
-    // WHY: V1.4 serial firmware can't distinguish foot pedal from paddle dit lever — both
-    // drive CTS. We demux by mode here: in CW the CTS edge is treated as the dit-paddle
-    // press, in voice it's the foot pedal → PTT. The MIDI variant has a distinct note for
-    // the pedal so its CW behavior stays mode-gated to silence (no spurious dit injection).
-    connect(
-        m_halikeyDevice, &HalikeyDevice::pttStateChanged, this,
-        [this](bool active) {
-            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_relaxed));
-            const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
-            const bool isV14 = (RadioSettings::instance()->halikeyDeviceType() != 1);
-            if (inCw && isV14) {
-                m_iambicKeyer->setDitPaddle(active);
-            } else if (!inCw) {
-                emit pttRequested(active);
-            }
-        },
-        Qt::DirectConnection);
-
-    // Enable keyer when radio connects, disable on disconnect
-    connect(m_connectionController, &ConnectionController::radioReady, this, [this]() {
-        QMetaObject::invokeMethod(m_iambicKeyer, "setEnabled", Qt::QueuedConnection, Q_ARG(bool, true));
-    });
-    connect(m_connectionController, &ConnectionController::connectionStateChanged, this,
-            [this](TcpClient::ConnectionState state) {
-                if (state == TcpClient::Disconnected) {
-                    QMetaObject::invokeMethod(m_iambicKeyer, "setEnabled", Qt::QueuedConnection, Q_ARG(bool, false));
-                }
-            });
-
-    // Stop keyer when HaliKey disconnects (prevents runaway keying
-    // if paddle was held when disconnected — Note Off never arrives)
-    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, [this]() {
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
-        QMetaObject::invokeMethod(m_iambicKeyer, "stop", Qt::QueuedConnection);
-    });
+    // Surface HaliKey port-open failures to the user via NotificationWidget. Without
+    // this connect, openPort() failures (nonexistent serial port, busy MIDI device,
+    // permission denied) were silently swallowed.
+    connect(m_halikeyDevice, &HalikeyDevice::connectionError, this,
+            [this](const QString &error) { emit hardwareError(QStringLiteral("HaliKey: %1").arg(error)); });
 }
 
 void HardwareController::shutdownSidetone() {
@@ -245,7 +190,7 @@ void HardwareController::shutdownSidetone() {
 
 HardwareController::~HardwareController() {
     disconnect(this);
-    // Shutdown order: HaliKey → Keyer → Sidetone → KPOD
+    // Shutdown order: HaliKey → Keyer → Sidetone → KPOD/KPOD+
     // HaliKey stops paddle events first, then keyer (producer of KZ commands) stops
     // before sidetone (the audio consumer) is torn down.
 
@@ -267,6 +212,10 @@ HardwareController::~HardwareController() {
     }
     delete m_sidetoneGenerator; // No parent, must delete manually
 
+    if (m_kpodPlusDevice) {
+        m_kpodPlusDevice->stopPolling();
+    }
+
     if (m_kpodDevice) {
         m_kpodDevice->stopPolling();
     }
@@ -280,10 +229,13 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
     if (!m_connectionController->isConnected()) {
         return;
     }
+    onKpodEncoderRotatedWithRocker(ticks, static_cast<int>(m_kpodDevice->rockerPosition()));
+}
 
-    // Action depends on rocker position
-    switch (m_kpodDevice->rockerPosition()) {
-    case KpodDevice::RockerLeft: // VFO A
+void HardwareController::onKpodEncoderRotatedWithRocker(int ticks, int rockerPos) {
+    // Action depends on rocker position (shared by KPOD and KPOD+)
+    switch (rockerPos) {
+    case 2: // RockerLeft — VFO A
     {
         if (m_radioState->lockA())
             break;
@@ -297,7 +249,7 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
         }
     } break;
 
-    case KpodDevice::RockerCenter: // VFO B
+    case 0: // RockerCenter — VFO B
     {
         if (m_radioState->lockB())
             break;
@@ -311,7 +263,7 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
         }
     } break;
 
-    case KpodDevice::RockerRight: // RIT/XIT
+    case 1: // RockerRight — RIT/XIT
         // K4 routes RU;/RD; based on active mode: RIT → RO (VFO A), XIT → RO$ (VFO B)
         // BSET + RIT: use RU$/RD$ to force VFO B's RIT offset
         {

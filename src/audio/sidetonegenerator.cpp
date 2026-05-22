@@ -1,10 +1,11 @@
 #include "sidetonegenerator.h"
 #include "audio/audiologging.h"
 #include <QAudioFormat>
-#include <QMediaDevices>
 #include <QDebug>
+#include <QMediaDevices>
 #include <QTimer>
 #include <QtMath>
+#include <algorithm>
 
 SidetoneGenerator::SidetoneGenerator(QObject *parent) : QObject(parent) {
     // Repeat timer created here (moves with parent via moveToThread)
@@ -142,8 +143,17 @@ void SidetoneGenerator::playElement(int durationMs) {
     const int riseTimeSamples = (sampleRate * 3) / 1000;
     const int fallTimeSamples = riseTimeSamples;
 
-    QByteArray buffer(totalSamples * sizeof(qint16), 0);
-    qint16 *samples = reinterpret_cast<qint16 *>(buffer.data());
+    // Reserve once on first call, then reuse for every subsequent element.
+    // resize() to a smaller value preserves capacity in Qt 6, so per-element
+    // allocations only happen if a slower keyer speed than ever-seen drives a
+    // larger buffer.
+    const int bufferBytes = totalSamples * static_cast<int>(sizeof(qint16));
+    if (m_elementBuffer.capacity() < bufferBytes)
+        m_elementBuffer.reserve(bufferBytes);
+    m_elementBuffer.resize(bufferBytes);
+    qint16 *samples = reinterpret_cast<qint16 *>(m_elementBuffer.data());
+    // Clear inter-element silence tail (resize doesn't zero on grow).
+    std::fill_n(samples + toneSamples, spaceSamples, qint16{0});
 
     int freq = m_frequency.load(std::memory_order_relaxed);
     float vol = m_volume.load(std::memory_order_relaxed);
@@ -167,7 +177,7 @@ void SidetoneGenerator::playElement(int durationMs) {
         }
     }
 
-    // Silence samples are already zero from QByteArray initialization
+    // Inter-element silence was zeroed above before tone generation.
 
-    m_pushDevice->write(buffer);
+    m_pushDevice->write(m_elementBuffer);
 }
