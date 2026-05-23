@@ -473,7 +473,7 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: flatpak/io.github.mikeg_dal.QK4.json
-          bundle: io.github.mikeg_dal.QK4.flatpak
+          bundle: QK4-${{ steps.version.outputs.version }}-flatpak-x86_64.flatpak
           upload-artifact: false
           cache-key: flatpak-builder-${{ github.sha }}
 
