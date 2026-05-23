@@ -56,6 +56,12 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 # Install the QK4 Flatpak
 flatpak install QK4-{version}-flatpak-x86_64.flatpak
 
+# Install the udev rules
+sudo curl -o /etc/udev/rules.d/99-kpod.rules https://raw.githubusercontent.com/mikeg-dal/QK4/main/resources/99-kpod.rules
+sudo chmod 644 /etc/udev/rules.d/99-kpod.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
 # Run QK4
 flatpak run io.github.mikeg_dal.QK4
 ```
@@ -145,7 +151,7 @@ flatpak install org.kde.Sdk//6.10
 
 # Clone and build
 git clone https://github.com/mikeg-dal/QK4.git
-cd QK4
+cd QK4/flatpak
 flatpak-builder --user --install build-dir flatpak/io.github.mikeg_dal.QK4.json
 
 ```
