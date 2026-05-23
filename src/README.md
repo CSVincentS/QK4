@@ -9,7 +9,7 @@ QK4 source tree. Qt 6 C++ desktop app for remote control of an Elecraft K4 ham r
 | `audio/` | RX/TX audio pipeline. AudioEngine (QAudio I/O), Opus encode/decode, CW sidetone. |
 | `controllers/` | 26 controllers. Each owns a cohesive UI slice + signal wiring + CAT dispatch. See `docs/controllers.md` for the symptom → controller map. |
 | `dsp/` | GPU-accelerated spectrum + waterfall (Qt RHI). Shader pipelines. |
-| `hardware/` | USB / serial / MIDI device wrappers (KPOD, HaliKey variants, iambic keyer). |
+| `hardware/` | USB / serial / MIDI device wrappers (KPOD, KPOD+, HaliKey variants, iambic keyer). |
 | `models/` | `RadioState` façade + 9+ plain-struct subsystems. Single QObject in the model layer. |
 | `network/` | TCP/TLS/PSK transport, K4 binary protocol, CAT server, DX cluster, KPA1500 client, K4 mDNS discovery. |
 | `settings/` | `QSettings`-backed persistence for radio profiles, DX clusters, audio preferences. |

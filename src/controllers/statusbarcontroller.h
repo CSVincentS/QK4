@@ -36,9 +36,6 @@ public:
 
     // Task-level API.
     void setTitle(const QString &text);
-    // Used only by error-transition callers (connection-error text, auth failed).
-    // Normal connect/disconnect transitions use the show* state methods below.
-    void setConnectionStatus(const QString &text, const QString &styleSheet);
     void setForwardPower(double watts);
     void clearReadings();
     void setKpa1500Visible(bool visible);
@@ -48,8 +45,10 @@ public:
     // text and style appropriate for that state. Disconnected also resets
     // the title to its default. Used by MainWindow::updateConnectionState.
     void showDisconnected();
-    void showConnecting(); // amber bold — same style for Connecting + Authenticating
-    void showConnected();  // green bold
+    void showConnecting();                       // amber bold — same style for Connecting + Authenticating
+    void showConnected();                        // green bold
+    void showError(const QString &errorMessage); // red bold — "Error: <message>"
+    void showAuthFailed();                       // red bold — "Auth Failed"
 
 private:
     RadioState *m_radioState; // injected, not owned

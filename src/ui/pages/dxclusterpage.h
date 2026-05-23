@@ -8,6 +8,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSlider>
+#include <QSpinBox>
 #include <QWidget>
 
 class DxClusterController;
@@ -61,6 +62,7 @@ private:
     QLineEdit *m_callsignEdit = nullptr;
     QSlider *m_ageSlider = nullptr;
     QLabel *m_ageValueLabel = nullptr;
+    QSpinBox *m_spotFontSizeSpin = nullptr;
 
     // Console
     QPlainTextEdit *m_consoleOutput = nullptr;

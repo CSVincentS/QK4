@@ -1,7 +1,6 @@
 #include "popupmanager.h"
 
 #include "connectioncontroller.h"
-#include "dsp/panadapter_rhi.h"
 #include "models/radiostate.h"
 #include "spectrumcontroller.h"
 #include "ui/popups/bandpopupwidget.h"
@@ -20,9 +19,10 @@
 #include "ui/popups/micconfigpopup.h"
 #include "ui/popups/micinputpopup.h"
 #include "ui/popups/rxeqpopupwidget.h"
+#include "ui/popups/softwarelistpopup.h"
 #include "ui/popups/ssbbwpopup.h"
 #include "ui/popups/voxpopup.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QTimer>
@@ -44,7 +44,8 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
       m_lineOutPopup(new LineOutPopupWidget(parentWidget)), m_lineInPopup(new LineInPopupWidget(parentWidget)),
       m_micInputPopup(new MicInputPopupWidget(parentWidget)), m_micConfigPopup(new MicConfigPopupWidget(parentWidget)),
       m_voxPopup(new VoxPopupWidget(parentWidget)), m_ssbBwPopup(new SsbBwPopupWidget(parentWidget)),
-      m_keyingWeightPopup(new KeyingWeightPopupWidget(parentWidget)) {
+      m_keyingWeightPopup(new KeyingWeightPopupWidget(parentWidget)),
+      m_softwareListPopup(new SoftwareListPopupWidget(parentWidget)) {
 
     m_macroDialog->hide();
 
@@ -168,7 +169,7 @@ void PopupManager::setVfos(VFOWidget *vfoA, VFOWidget *vfoB) {
 void PopupManager::toggleBand() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_bandPopup->isVisible();
+    const bool wasVisible = m_bandPopup->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_bandPopup->showAboveButton(m_bottomMenuBar->bandButton());
@@ -179,7 +180,7 @@ void PopupManager::toggleBand() {
 void PopupManager::toggleDisplay() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_displayPopup->isVisible();
+    const bool wasVisible = m_displayPopup->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_displayPopup->showAboveButton(m_bottomMenuBar->displayButton());
@@ -190,7 +191,7 @@ void PopupManager::toggleDisplay() {
 void PopupManager::toggleFn() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_fnPopup->isVisible();
+    const bool wasVisible = m_fnPopup->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_fnPopup->showAboveButton(m_bottomMenuBar->fnButton());
@@ -211,6 +212,13 @@ void PopupManager::openMacroDialog() {
     m_macroDialog->show();
     m_macroDialog->raise();
     m_macroDialog->setFocus();
+}
+
+void PopupManager::openSoftwareList() {
+    if (!m_bottomMenuBar)
+        return;
+    m_softwareListPopup->setVersions(m_radioState->firmwareVersions());
+    m_softwareListPopup->showAboveButton(m_bottomMenuBar->fnButton());
 }
 
 void PopupManager::closeOwnedPopups() {
@@ -262,12 +270,14 @@ void PopupManager::closeOwnedPopups() {
         m_ssbBwPopup->hidePopup();
     if (m_keyingWeightPopup->isVisible())
         m_keyingWeightPopup->hidePopup();
+    if (m_softwareListPopup->isVisible())
+        m_softwareListPopup->hidePopup();
 }
 
 void PopupManager::toggleMainRx() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_mainRxRow->isVisible();
+    const bool wasVisible = m_mainRxRow->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_mainRxRow->showAboveButton(m_bottomMenuBar->mainRxButton());
@@ -278,7 +288,7 @@ void PopupManager::toggleMainRx() {
 void PopupManager::toggleSubRx() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_subRxRow->isVisible();
+    const bool wasVisible = m_subRxRow->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_subRxRow->showAboveButton(m_bottomMenuBar->subRxButton());
@@ -289,7 +299,7 @@ void PopupManager::toggleSubRx() {
 void PopupManager::toggleTx() {
     if (!m_bottomMenuBar)
         return;
-    const bool wasVisible = m_txRow->isVisible();
+    const bool wasVisible = m_txRow->isVisibleOrJustHidden();
     closeOwnedPopups();
     if (!wasVisible) {
         m_txRow->showAboveButton(m_bottomMenuBar->txButton());
@@ -297,16 +307,16 @@ void PopupManager::toggleTx() {
     }
 }
 
-QWidget *PopupManager::mainRxPopupAnchor() const {
-    return m_mainRxRow;
-}
-
-QWidget *PopupManager::subRxPopupAnchor() const {
-    return m_subRxRow;
-}
-
-QWidget *PopupManager::txPopupAnchor() const {
-    return m_txRow;
+QWidget *PopupManager::anchorForLane(ButtonRowLane lane) const {
+    switch (lane) {
+    case ButtonRowLane::MainRx:
+        return m_mainRxRow;
+    case ButtonRowLane::SubRx:
+        return m_subRxRow;
+    case ButtonRowLane::Tx:
+        return m_txRow;
+    }
+    return nullptr;
 }
 
 void PopupManager::setMainRxButtonLabel(int index, const QString &primary, const QString &alternate,
@@ -393,8 +403,7 @@ void PopupManager::wireDisplayPopup() {
         // Optimistic updates — K4 may not echo this command.
         if (!isExt) {
             m_radioState->setWaterfallHeight(next);
-            m_spectrum->panadapterA()->setWaterfallHeight(next);
-            m_spectrum->panadapterB()->setWaterfallHeight(next);
+            m_spectrum->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
             m_vfoA->setMiniPanWaterfallHeight(next);
             m_vfoB->setMiniPanWaterfallHeight(next);
@@ -898,19 +907,22 @@ void PopupManager::wireKeyingWeightPopup() {
     });
 }
 
-void PopupManager::showRxEqAbove(QWidget *anchor) {
+void PopupManager::showRxEqAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_rxEqPopup->setAllBands(m_radioState->rxEqBands());
     if (anchor)
         m_rxEqPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showTxEqAbove(QWidget *anchor) {
+void PopupManager::showTxEqAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_txEqPopup->setAllBands(m_radioState->txEqBands());
     if (anchor)
         m_txEqPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showLineOutAbove(QWidget *anchor) {
+void PopupManager::showLineOutAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
     m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
     m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
@@ -918,7 +930,8 @@ void PopupManager::showLineOutAbove(QWidget *anchor) {
         m_lineOutPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showLineInAbove(QWidget *anchor) {
+void PopupManager::showLineInAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
     m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
     m_lineInPopup->setSource(m_radioState->lineInSource());
@@ -926,13 +939,15 @@ void PopupManager::showLineInAbove(QWidget *anchor) {
         m_lineInPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showMicInputAbove(QWidget *anchor) {
+void PopupManager::showMicInputAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_micInputPopup->setCurrentInput(m_radioState->micInput());
     if (anchor)
         m_micInputPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showMicConfigAbove(QWidget *anchor) {
+void PopupManager::showMicConfigAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     const int input = m_radioState->micInput();
     if (input == 2) // LINE IN only — no mic config
         return;
@@ -950,7 +965,8 @@ void PopupManager::showMicConfigAbove(QWidget *anchor) {
         m_micConfigPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showVoxGainAbove(QWidget *anchor) {
+void PopupManager::showVoxGainAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     const bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
     m_voxPopup->setPopupMode(VoxPopupWidget::VoxGain);
     m_voxPopup->setDataMode(isDataMode);
@@ -960,7 +976,8 @@ void PopupManager::showVoxGainAbove(QWidget *anchor) {
         m_voxPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showAntiVoxAbove(QWidget *anchor) {
+void PopupManager::showAntiVoxAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_voxPopup->setPopupMode(VoxPopupWidget::AntiVox);
     m_voxPopup->setValue(m_radioState->antiVox());
     m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
@@ -968,7 +985,8 @@ void PopupManager::showAntiVoxAbove(QWidget *anchor) {
         m_voxPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showSsbBwAbove(QWidget *anchor) {
+void PopupManager::showSsbBwAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     m_ssbBwPopup->setEssbEnabled(m_radioState->essbEnabled());
     const int bw = m_radioState->ssbTxBw();
     if (bw >= 24 && bw <= 45)
@@ -977,7 +995,8 @@ void PopupManager::showSsbBwAbove(QWidget *anchor) {
         m_ssbBwPopup->showAboveWidget(anchor);
 }
 
-void PopupManager::showKeyingWeightAbove(QWidget *anchor) {
+void PopupManager::showKeyingWeightAbove(ButtonRowLane lane) {
+    QWidget *anchor = anchorForLane(lane);
     const int weight = m_radioState->keyingWeight();
     if (weight >= 90 && weight <= 125)
         m_keyingWeightPopup->setWeight(weight);

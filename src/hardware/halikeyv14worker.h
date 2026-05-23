@@ -36,6 +36,16 @@ private:
 #else
     int m_fd = -1;
 #endif
+
+#ifdef Q_OS_LINUX
+    // POSIX thread handle for the monitor loop. Captured in start() so that
+    // prepareShutdown() can pthread_kill the worker with SIGUSR1 to interrupt
+    // an in-flight TIOCMIWAIT ioctl. close(fd) alone is unreliable for waking
+    // TIOCMIWAIT on Linux — the kernel can hold the wait for hundreds of ms.
+    // SIGUSR1 returns the ioctl with EINTR; the loop then checks m_running
+    // and exits cleanly within a few ms.
+    unsigned long m_linuxThreadHandle = 0; // pthread_t opaqued to avoid pulling pthread.h here
+#endif
 };
 
 #endif // HALIKEYV14WORKER_H

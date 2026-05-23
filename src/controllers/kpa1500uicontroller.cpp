@@ -3,16 +3,24 @@
 #include "controllers/statusbarcontroller.h"
 #include "network/kpa1500client.h"
 #include "settings/radiosettings.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "ui/widgets/kpa1500minipanel.h"
+#include "ui/widgets/rightsidepanel.h"
 
 #include <QLoggingCategory>
 #include <QString>
 
 Q_LOGGING_CATEGORY(qk4Kpa, "qk4.kpa1500")
 
-KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, Kpa1500MiniPanel *miniPanel, QObject *parent)
-    : QObject(parent), m_statusBar(statusBar), m_miniPanel(miniPanel), m_client(new KPA1500Client(this)) {
+KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, RightSidePanel *rightSidePanel,
+                                         QObject *parent)
+    : QObject(parent), m_statusBar(statusBar), m_miniPanel(new Kpa1500MiniPanel(rightSidePanel)),
+      m_client(new KPA1500Client(this)) {
+
+    // Hand the mini panel to RightSidePanel for layout placement —
+    // RightSidePanel takes Qt parent ownership.
+    m_miniPanel->setVisible(false);
+    rightSidePanel->embedKpa1500Panel(m_miniPanel);
 
     // === Connection lifecycle signals ===
     connect(m_client, &KPA1500Client::connected, this, &KPA1500UiController::onConnected);

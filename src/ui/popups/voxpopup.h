@@ -1,15 +1,14 @@
 #ifndef VOXPOPUP_H
 #define VOXPOPUP_H
 
-#include <QWidget>
+#include "ui/popups/k4popupbase.h"
+#include "utils/wheelaccumulator.h"
 #include <QPushButton>
-#include "ui/widgets/wheelaccumulator.h"
 
-/**
- * @brief Floating popup for VOX gain / Anti-VOX (mode selected via `PopupMode`). Value range
- *        0-60; title text adapts to voice vs data mode. Emits valueChanged / voxToggled.
- */
-class VoxPopupWidget : public QWidget {
+// Floating popup for VOX gain / Anti-VOX (mode selected via PopupMode).
+// Value range 0-60; title text + popup width adapt to voice vs data
+// mode and VoxGain vs AntiVox. Emits valueChanged / voxToggled.
+class VoxPopupWidget : public K4PopupBase {
     Q_OBJECT
 public:
     enum PopupMode { VoxGain, AntiVox };
@@ -26,16 +25,13 @@ public:
     int value() const { return m_value; }
     bool voxEnabled() const { return m_voxEnabled; }
 
-    void showAboveWidget(QWidget *widget);
-    void hidePopup();
-
 signals:
     void valueChanged(int value);
     void voxToggled(bool enabled);
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
+    QSize contentSize() const override;
+    void paintContent(QPainter &painter, const QRect &contentRect) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:
@@ -51,8 +47,6 @@ private:
     QPushButton *m_decrementBtn;
     QPushButton *m_incrementBtn;
     QPushButton *m_closeBtn;
-
-    QWidget *m_referenceWidget = nullptr;
 
     PopupMode m_popupMode = VoxGain;
     bool m_isDataMode = false;

@@ -12,7 +12,7 @@
 #include <QList>
 #include <QWheelEvent>
 #include "models/menumodel.h"
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * @brief Single row inside MenuOverlayWidget — name, current value, optional lock icon. Paints

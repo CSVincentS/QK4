@@ -1,16 +1,14 @@
 #ifndef SSBBWPOPUP_H
 #define SSBBWPOPUP_H
 
-#include <QWidget>
+#include "ui/popups/k4popupbase.h"
+#include "utils/wheelaccumulator.h"
 #include <QPushButton>
-#include "ui/widgets/wheelaccumulator.h"
 
-/**
- * @brief Floating popup for SSB / ESSB TX bandwidth. The valid range and title switch based on
- *        ESSB enabled (24-28 → 2.4-2.8 kHz in SSB, 30-45 → 3.0-4.5 kHz in ESSB). Emits raw
- *        bandwidth value for CAT translation.
- */
-class SsbBwPopupWidget : public QWidget {
+// Floating popup for SSB / ESSB TX bandwidth. The valid range and title
+// switch based on ESSB enabled (24-28 -> 2.4-2.8 kHz in SSB, 30-45 ->
+// 3.0-4.5 kHz in ESSB). Emits raw bandwidth value for CAT translation.
+class SsbBwPopupWidget : public K4PopupBase {
     Q_OBJECT
 public:
     explicit SsbBwPopupWidget(QWidget *parent = nullptr);
@@ -21,15 +19,12 @@ public:
     bool essbEnabled() const { return m_essbEnabled; }
     int bandwidth() const { return m_bandwidth; }
 
-    void showAboveWidget(QWidget *widget);
-    void hidePopup();
-
 signals:
     void bandwidthChanged(int bw);
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
+    QSize contentSize() const override;
+    void paintContent(QPainter &painter, const QRect &contentRect) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:
@@ -43,8 +38,6 @@ private:
     QPushButton *m_decrementBtn;
     QPushButton *m_incrementBtn;
     QPushButton *m_closeBtn;
-
-    QWidget *m_referenceWidget = nullptr;
 
     bool m_essbEnabled = false;
     int m_bandwidth = 28; // SSB default: 2.8 kHz

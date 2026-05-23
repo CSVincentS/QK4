@@ -1,14 +1,13 @@
 #ifndef MICCONFIGPOPUP_H
 #define MICCONFIGPOPUP_H
 
-#include <QWidget>
+#include "ui/popups/k4popupbase.h"
 #include <QPushButton>
 
-/**
- * @brief Floating popup for per-mic (Front/Rear) bias, pre-amp, and extra buttons configuration.
- *        Layout adapts to mic type: Front exposes an extra "Buttons" control that Rear does not.
- */
-class MicConfigPopupWidget : public QWidget {
+// Floating popup for per-mic (Front/Rear) bias, pre-amp, and extra
+// buttons configuration. Layout adapts to mic type: Front exposes an
+// extra "Buttons" control that Rear does not.
+class MicConfigPopupWidget : public K4PopupBase {
     Q_OBJECT
 public:
     enum MicType { Front = 0, Rear = 1 };
@@ -27,17 +26,14 @@ public:
     int preamp() const { return m_preamp; }
     int buttons() const { return m_buttons; }
 
-    void showAboveWidget(QWidget *widget);
-    void hidePopup();
-
 signals:
     void biasChanged(int bias);
     void preampChanged(int preamp);
     void buttonsChanged(int buttons);
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
+    QSize contentSize() const override;
+    void paintContent(QPainter &painter, const QRect &contentRect) override;
 
 private:
     void setupUi();
@@ -50,7 +46,6 @@ private:
     QPushButton *m_buttonsBtn; // Only visible for Front mic
     QPushButton *m_closeBtn;
 
-    QWidget *m_referenceWidget = nullptr;
     MicType m_micType = Front;
     int m_bias = 0;
     int m_preamp = 0;

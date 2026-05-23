@@ -1,7 +1,6 @@
 #include "menucontroller.h"
 
 #include "connectioncontroller.h"
-#include "dsp/panadapter_rhi.h"
 #include "models/menumodel.h"
 #include "spectrumcontroller.h"
 #include "ui/overlays/menuoverlay.h"
@@ -33,8 +32,19 @@ MenuController::~MenuController() {
     disconnect(this);
 }
 
-MenuModel *MenuController::menuModel() const {
-    return m_menuModel;
+void MenuController::ingestMedf(const QString &cmd) {
+    if (m_menuModel)
+        m_menuModel->parseMEDF(cmd);
+}
+
+void MenuController::ingestMe(const QString &cmd) {
+    if (m_menuModel)
+        m_menuModel->parseME(cmd);
+}
+
+void MenuController::clearModel() {
+    if (m_menuModel)
+        m_menuModel->clear();
 }
 
 bool MenuController::isOverlayVisible() const {
@@ -131,10 +141,7 @@ void MenuController::onMenuModelValueChanged(int menuId, int newValue) {
     if (item && item->name == "Spectrum Amplitude Units") {
         const bool useSUnits = (newValue == 1);
         qCDebug(qk4Menu) << "Spectrum amplitude units changed:" << (useSUnits ? "S-UNITS" : "dBm");
-        if (m_spectrum->panadapterA())
-            m_spectrum->panadapterA()->setAmplitudeUnits(useSUnits);
-        if (m_spectrum->panadapterB())
-            m_spectrum->panadapterB()->setAmplitudeUnits(useSUnits);
+        m_spectrum->setAmplitudeUnits(useSUnits);
     }
 
     // "Mouse L/R Button QSY" — track the ID and forward changes to spectrum.
@@ -150,10 +157,7 @@ void MenuController::onMenuModelValueChanged(int menuId, int newValue) {
         if (mi && newValue >= 0 && newValue < mi->options.size()) {
             const int toneHz = mi->options[newValue].toInt();
             qCDebug(qk4Menu) << "FSK Mark-Tone changed to:" << toneHz << "Hz";
-            if (m_spectrum->panadapterA())
-                m_spectrum->panadapterA()->setFskMarkTone(toneHz);
-            if (m_spectrum->panadapterB())
-                m_spectrum->panadapterB()->setFskMarkTone(toneHz);
+            m_spectrum->setFskMarkTone(toneHz);
         }
     }
 }
@@ -166,10 +170,7 @@ void MenuController::onMenuItemAdded(int menuId) {
     if (item->name == "Spectrum Amplitude Units") {
         const bool useSUnits = (item->currentValue == 1);
         qCDebug(qk4Menu) << "Initial spectrum amplitude units:" << (useSUnits ? "S-UNITS" : "dBm");
-        if (m_spectrum->panadapterA())
-            m_spectrum->panadapterA()->setAmplitudeUnits(useSUnits);
-        if (m_spectrum->panadapterB())
-            m_spectrum->panadapterB()->setAmplitudeUnits(useSUnits);
+        m_spectrum->setAmplitudeUnits(useSUnits);
     }
     if (item->name == "Mouse L/R Button QSY") {
         m_mouseQsyMenuId = item->id;
@@ -181,9 +182,6 @@ void MenuController::onMenuItemAdded(int menuId) {
         m_fskMarkToneMenuId = item->id;
         const int toneHz = item->options[item->currentValue].toInt();
         qCDebug(qk4Menu) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
-        if (m_spectrum->panadapterA())
-            m_spectrum->panadapterA()->setFskMarkTone(toneHz);
-        if (m_spectrum->panadapterB())
-            m_spectrum->panadapterB()->setFskMarkTone(toneHz);
+        m_spectrum->setFskMarkTone(toneHz);
     }
 }

@@ -27,11 +27,13 @@ void IambicKeyer::setSpeed(int wpm) {
 }
 
 void IambicKeyer::setDitPaddle(bool pressed) {
-    // Write atomic immediately (called from HaliKey thread via DirectConnection).
-    // onTimerFired() reads this with zero delay — no cross-thread queue latency.
-    m_physDit.store(pressed, std::memory_order_relaxed);
+    // Write atomic immediately (called from HaliKey worker thread via DirectConnection).
+    // Release ordering pairs with the acquire loads in ditDown()/handlePaddleChange so the
+    // keyer thread sees any side effects in this stack (none today, but documents intent
+    // and is correct under weak memory models like Apple Silicon).
+    m_physDit.store(pressed, std::memory_order_release);
     if (pressed)
-        m_ditLatch.store(true, std::memory_order_relaxed);
+        m_ditLatch.store(true, std::memory_order_release);
 
     // Post handlePaddleChange to keyer thread to wake from idle.
     // If keyer is already running, the timer will read the atomic directly.
@@ -39,21 +41,21 @@ void IambicKeyer::setDitPaddle(bool pressed) {
 }
 
 void IambicKeyer::setDahPaddle(bool pressed) {
-    m_physDah.store(pressed, std::memory_order_relaxed);
+    m_physDah.store(pressed, std::memory_order_release);
     if (pressed)
-        m_dahLatch.store(true, std::memory_order_relaxed);
+        m_dahLatch.store(true, std::memory_order_release);
     QMetaObject::invokeMethod(this, &IambicKeyer::handlePaddleChange, Qt::QueuedConnection);
 }
 
 bool IambicKeyer::ditDown() const {
-    bool dit = m_physDit.load(std::memory_order_relaxed);
-    bool dah = m_physDah.load(std::memory_order_relaxed);
+    bool dit = m_physDit.load(std::memory_order_acquire);
+    bool dah = m_physDah.load(std::memory_order_acquire);
     return m_reversed ? dah : dit;
 }
 
 bool IambicKeyer::dahDown() const {
-    bool dit = m_physDit.load(std::memory_order_relaxed);
-    bool dah = m_physDah.load(std::memory_order_relaxed);
+    bool dit = m_physDit.load(std::memory_order_acquire);
+    bool dah = m_physDah.load(std::memory_order_acquire);
     return m_reversed ? dit : dah;
 }
 
@@ -62,9 +64,9 @@ void IambicKeyer::handlePaddleChange() {
         return;
 
     bool dit = ditDown() ||
-               (m_reversed ? m_dahLatch.load(std::memory_order_relaxed) : m_ditLatch.load(std::memory_order_relaxed));
+               (m_reversed ? m_dahLatch.load(std::memory_order_acquire) : m_ditLatch.load(std::memory_order_acquire));
     bool dah = dahDown() ||
-               (m_reversed ? m_ditLatch.load(std::memory_order_relaxed) : m_dahLatch.load(std::memory_order_relaxed));
+               (m_reversed ? m_ditLatch.load(std::memory_order_acquire) : m_dahLatch.load(std::memory_order_acquire));
 
     // Track squeeze state during active element
     if (m_state != Idle && dit && dah)
@@ -117,11 +119,16 @@ void IambicKeyer::onTimerFired() {
     bool liveDit = ditDown();
     bool liveDah = dahDown();
 
-    // Check both live paddle state AND latch (paddle was pressed during this element)
+    // Check both live paddle state AND latch (paddle was pressed during this element).
+    // Acquire ordering pairs with setDitPaddle/setDahPaddle's release stores from the
+    // HaliKey worker thread. Reads of latches stored on this same (keyer) thread don't
+    // need a barrier — but the keyer can't distinguish at the load site, so the stricter
+    // acquire is used uniformly. Trivially compiles to the same code as relaxed on x86
+    // and a one-instruction barrier on ARM.
     bool dit = liveDit ||
-               (m_reversed ? m_dahLatch.load(std::memory_order_relaxed) : m_ditLatch.load(std::memory_order_relaxed));
+               (m_reversed ? m_dahLatch.load(std::memory_order_acquire) : m_ditLatch.load(std::memory_order_acquire));
     bool dah = liveDah ||
-               (m_reversed ? m_ditLatch.load(std::memory_order_relaxed) : m_dahLatch.load(std::memory_order_relaxed));
+               (m_reversed ? m_ditLatch.load(std::memory_order_acquire) : m_dahLatch.load(std::memory_order_acquire));
     bool wasDit = (m_state == PlayingDit);
 
     // Squeeze release: both paddles physically released while squeeze was active.

@@ -1,4 +1,4 @@
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 WheelAccumulator::WheelAccumulator(int threshold) : m_threshold(threshold) {}
 

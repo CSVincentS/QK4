@@ -661,8 +661,10 @@ const QString &sectionHeader() {
 }
 
 const QString &statusLabel(const QString &color) {
-    // Not cached — color is dynamic
-    static thread_local QString s;
+    // Not cached — color is dynamic. All callers are settings-page UI on the
+    // main thread (verified by grep across ui/pages/*.cpp); the static scratch
+    // buffer doesn't need thread_local.
+    static QString s;
     s = QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(Dimensions::FontSizePopup);
     return s;
 }

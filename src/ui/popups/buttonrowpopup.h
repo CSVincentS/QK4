@@ -1,7 +1,7 @@
 #ifndef BUTTONROWPOPUP_H
 #define BUTTONROWPOPUP_H
 
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include <QList>
 
 /**

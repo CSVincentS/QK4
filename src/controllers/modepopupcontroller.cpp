@@ -78,21 +78,21 @@ ModePopupController::~ModePopupController() {
 }
 
 void ModePopupController::toggleForVfoA(QWidget *anchor) {
-    if (m_popup->isVisible())
+    if (m_popup->isVisibleOrJustHidden())
         m_popup->hidePopup();
     else
         showForVfoA(anchor);
 }
 
 void ModePopupController::toggleForVfoB(QWidget *anchor) {
-    if (m_popup->isVisible())
+    if (m_popup->isVisibleOrJustHidden())
         m_popup->hidePopup();
     else
         showForVfoB(anchor);
 }
 
 void ModePopupController::toggleForBSet(QWidget *anchor) {
-    if (m_popup->isVisible())
+    if (m_popup->isVisibleOrJustHidden())
         m_popup->hidePopup();
     else if (m_radioState->bSetEnabled())
         showForVfoB(anchor);

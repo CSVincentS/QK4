@@ -1,5 +1,5 @@
 #include "ui/popups/displaypopupwidget.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QHideEvent>

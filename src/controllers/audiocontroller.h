@@ -6,12 +6,11 @@
 
 class AudioEngine;
 class OpusDecoder;
-class OpusEncoder;
 class ConnectionController;
 class RadioState;
 
 /**
- * @brief Owns the audio thread + AudioEngine + Opus codecs. Task-level API over the RX/TX paths:
+ * @brief Owns the audio thread + AudioEngine + Opus decoder. Task-level API over the RX/TX paths:
  *        startAudio/stopAudio, PTT toggle, atomic volume/mix/balance setters. Connects to
  *        RadioState.streamingLatencyChanged to resize TX Opus frames in step with the K4's SL tier.
  *
@@ -19,8 +18,9 @@ class RadioState;
  *   - AudioEngine is moved to `m_audioThread` (single moveToThread at construction).
  *   - OpusDecoder keeps main-thread affinity but is only called from the IO-thread lambda
  *     wired to Protocol::audioDataReady — effectively single-threaded on the IO thread.
- *   - OpusEncoder keeps main-thread affinity and is called from the audio thread via queued
- *     signals (Qt auto-connect resolves to QueuedConnection).
+ *   - The TX encode pipeline (OpusEncoder + packet framing) lives on AudioEngine and runs
+ *     fully on the audio thread (PR 12). AudioController only forwards PTT toggles and SL
+ *     tier changes; the audio thread emits txPacketReady straight to TcpClient::sendRaw.
  *   Public AudioController methods are safe to call from the main thread (they dispatch via
  *   QMetaObject::invokeMethod / atomics).
  */
@@ -36,9 +36,9 @@ public:
     void stopAudio();
     void shutdown();
 
-    // PTT control
+    // PTT control — forwards to AudioEngine (runs on the audio thread).
     void setPttActive(bool active);
-    bool isPttActive() const { return m_pttActive; }
+    bool isPttActive() const;
 
     // Volume/mix controls (atomic — safe from any thread)
     void setMainVolume(float vol);
@@ -55,11 +55,7 @@ public:
     void setOutputDevice(const QString &deviceId);
     void setMicGain(float gain); // 0.0 to 1.0
 
-signals:
-    void pttStateChanged(bool active);
-
 private slots:
-    void onMicrophoneFrame(const QByteArray &s16leData);
     void onStreamingLatencyChanged(int tier);
 
 private:
@@ -69,11 +65,6 @@ private:
     AudioEngine *m_audioEngine;
     QThread *m_audioThread = nullptr;
     OpusDecoder *m_opusDecoder;
-    OpusEncoder *m_opusEncoder;
-
-    bool m_pttActive = false;
-    quint8 m_txSequence = 0;
-    int m_txFrameSamples = 240; // Current TX frame size, matches SL tier
 };
 
 #endif // AUDIOCONTROLLER_H

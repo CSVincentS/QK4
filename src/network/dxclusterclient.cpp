@@ -74,6 +74,10 @@ void DxClusterClient::disconnectFromHost() {
 }
 
 void DxClusterClient::onSocketConnected() {
+    // WHY: cluster spot bursts arrive as many small line writes from the server; KeepAlive
+    // detects half-open sockets across NAT keepalive expirations on long-running connections.
+    m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
     qCDebug(netDxCluster) << "TCP socket connected, waiting for login prompt...";
 }
 

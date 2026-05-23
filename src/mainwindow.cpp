@@ -18,9 +18,10 @@
 #include "controllers/subdivindicatorcontroller.h"
 #include "controllers/txstatecontroller.h"
 #include "controllers/sidecontroldisplaycontroller.h"
-#include "controllers/filterindicatorcontroller.h"
+#include "controllers/sidecontrolscrollcontroller.h"
+#include "controllers/rightsidecontroller.h"
+#include "controllers/memorybuttonscontroller.h"
 #include "controllers/popupmanager.h"
-#include "models/macroids.h"
 #include "ui/dialogs/optionsdialog.h"
 #include "ui/widgets/notificationwidget.h"
 #include "ui/widgets/vforowwidget.h"
@@ -36,6 +37,7 @@
 #include "dsp/minipan_rhi.h"
 #include "ui/widgets/frequencydisplaywidget.h"
 #include "controllers/audiocontroller.h"
+#include "controllers/cwcontroller.h"
 #include "controllers/hardwarecontroller.h"
 #include "controllers/kpa1500uicontroller.h"
 #include "network/catserver.h"
@@ -82,10 +84,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_bandNavController = new BandNavigationController(m_radioState, m_connectionController, m_popupManager, this);
     // Mode label refresh on ESSB toggle is observed directly by
     // ModeLabelController via RadioState::essbChanged.
-    m_macroController = new MacroController(m_connectionController, m_popupManager, this);
+    m_macroController = new MacroController(m_connectionController, m_popupManager, /*dialogParent=*/this, this);
     connect(m_macroController, &MacroController::macroDialogRequested, this, [this]() {
         closeAllPopups();
         m_popupManager->openMacroDialog();
+    });
+    connect(m_macroController, &MacroController::softwareListRequested, this, [this]() {
+        closeAllPopups();
+        m_popupManager->openSoftwareList();
     });
     m_antennaCfgController = new AntennaConfigController(m_radioState, m_connectionController, this, this);
     m_textDecodeController = new TextDecodeController(m_radioState, m_connectionController, this, this);
@@ -120,15 +126,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     setupHardwareController();
 
-    m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel->kpa1500Mini(), this);
+    m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel, this);
 
     m_processingDisplayController = new ProcessingDisplayController(m_radioState, m_vfoA, m_vfoB, this);
 
     m_antennaDisplayController =
         new AntennaDisplayController(m_radioState, m_txAntennaLabel, m_rxAntALabel, m_rxAntBLabel, this);
 
-    const VfoRowIndicatorController::Labels rowLabels{m_splitLabel, m_txTriangle, m_txTriangleB, m_voxLabel,
-                                                      m_qskLabel,   m_atuLabel,   m_msgBankLabel};
+    const VfoRowIndicatorController::Labels rowLabels{
+        m_splitLabel, m_vfoRow->bSetLabel(), m_txTriangle, m_txTriangleB, m_voxLabel, m_qskLabel,
+        m_atuLabel,   m_msgBankLabel};
     m_vfoRowIndicatorController =
         new VfoRowIndicatorController(m_radioState, m_spectrumController, m_vfoRow, rowLabels, this);
 
@@ -145,7 +152,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     m_sideControlDisplayController = new SideControlDisplayController(m_radioState, m_sideControlPanel, this);
 
-    m_filterIndicatorController = new FilterIndicatorController(m_radioState, m_filterAWidget, m_filterBWidget, this);
+    // SideControlScrollController owns all of SideControlPanel's scroll-handler
+    // protocol logic (WPM, pitch, mic, comp, power QRP/QRO, delay, BW/HI/LO/SHIFT,
+    // RF gain, squelch). Extracted from MainWindow's setupUi in PR 10.
+    m_sideControlScrollController =
+        new SideControlScrollController(m_radioState, m_connectionController, m_sideControlPanel, this);
+
+    // Filter indicator widgets observe RadioState directly (PATTERNS.md
+    // Direct Observation). The former FilterIndicatorController was a
+    // pure-forwarding thin shell and has been deleted.
+    m_filterAWidget->observe(m_radioState, FilterIndicatorWidget::Vfo::A);
+    m_filterBWidget->observe(m_radioState, FilterIndicatorWidget::Vfo::B);
 
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);
@@ -202,7 +219,7 @@ void MainWindow::setupControllers() {
     m_spectrumController = new SpectrumController(m_connectionController, m_radioState, this);
 
     // DX Cluster controller owns the cluster TCP client and spot cache
-    m_dxClusterController = new DxClusterController(m_radioState, this);
+    m_dxClusterController = new DxClusterController(this);
     m_spectrumController->setDxClusterController(m_dxClusterController);
 }
 
@@ -289,7 +306,8 @@ void MainWindow::setupRadioStateWiring() {
     // RIT/XIT label state + wheel/click handling owned by RitXitController.
 
     // Filter position indicators
-    // Filter indicator widgets (VFO A/B) driven by FilterIndicatorController.
+    // Filter indicator widgets (VFO A/B) observe RadioState directly via
+    // FilterIndicatorWidget::observe() — see setupControllers().
     // AFX / AGC / APF button labels + APF VFO indicator driven by PopupManager's
     // wireRxRowButtonLabels() — logical home since PopupManager owns those buttons.
 
@@ -312,17 +330,27 @@ void MainWindow::setupHardwareController() {
     // Hardware controller owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads
     m_hardwareController = new HardwareController(m_radioState, m_connectionController, this);
 
+    // CW controller wires the CW signal graph across the HardwareController-owned
+    // devices. Constructed immediately after so the devices exist; takes them by
+    // injected pointer. See cwcontroller.h.
+    m_cwController = new CwController(m_radioState, m_connectionController, m_hardwareController->iambicKeyer(),
+                                      m_hardwareController->sidetoneGenerator(), m_hardwareController->halikeyDevice(),
+                                      m_hardwareController->kpodPlusDevice(), this);
+
     // KPOD button presses → macro execution
     connect(m_hardwareController, &HardwareController::macroRequested, m_macroController,
             &MacroController::executeMacro);
 
     // HaliKey footswitch PTT → TX audio + UI indicator
-    connect(m_hardwareController, &HardwareController::pttRequested, this, [this](bool active) {
+    connect(m_cwController, &CwController::pttRequested, this, [this](bool active) {
         if (m_connectionController->isConnected()) {
             m_audioController->setPttActive(active);
             m_bottomMenuBar->setPttActive(active);
         }
     });
+
+    // Hardware-side errors (HaliKey port-open failures today) → notification overlay
+    connect(m_hardwareController, &HardwareController::hardwareError, this, &MainWindow::onHardwareError);
 }
 
 void MainWindow::setupCatServer() {
@@ -487,18 +515,10 @@ void MainWindow::setupUi() {
     // DT updates + RadioState → popup sync. See controllers/modepopupcontroller.h.
     m_modePopupController = new ModePopupController(m_radioState, m_connectionController, this, this);
 
-    // B SET indicator visibility and side panel indicator color
-    connect(m_radioState, &RadioState::bSetChanged, this, [this](bool enabled) {
-        qCDebug(qk4Main) << "B SET changed:" << enabled;
-        // Show/hide B SET indicator (hide SPLIT when B SET active)
-        m_bSetLabel->setVisible(enabled);
-        m_splitLabel->setVisible(!enabled);
-
-        // Change side panel BW/SHFT indicator color (cyan=MainRx, green=SubRx)
-        m_sideControlPanel->setActiveReceiver(enabled);
-
-        // RIT/XIT display refresh on BSET toggle is handled inside RitXitController.
-    });
+    // B-SET handling (SPLIT/B-SET label swap + side panel active-receiver
+    // color) is split across VfoRowIndicatorController and
+    // SideControlDisplayController. RIT/XIT redraw on BSET toggle lives in
+    // RitXitController.
 
     // Bottom Menu Bar
     m_bottomMenuBar = new BottomMenuBar(centralWidget);
@@ -533,279 +553,9 @@ void MainWindow::setupUi() {
         RadioSettings::instance()->setSubVolume(value); // Persist setting
     });
 
-    // Connect side control panel scroll signals to CAT commands
-    // After sending CAT, update RadioState optimistically (radio doesn't echo these commands)
-    // Group 1: WPM/PTCH (CW mode) and MIC/CMP (Voice mode)
-    connect(m_sideControlPanel, &SideControlPanel::wpmChanged, this, [this](int delta) {
-        int newWpm = qBound(8, m_radioState->keyerSpeed() + delta, 50);
-        m_connectionController->sendCAT(QString("KS%1;").arg(newWpm, 3, 10, QChar('0')));
-        m_radioState->setKeyerSpeed(newWpm);
-    });
-    connect(m_sideControlPanel, &SideControlPanel::pitchChanged, this, [this](int delta) {
-        int currentPitch = m_radioState->cwPitch(); // In Hz
-        int newPitch = qBound(300, currentPitch + (delta * 10), 990);
-        m_connectionController->sendCAT(QString("CW%1;").arg(newPitch / 10, 2, 10, QChar('0')));
-        m_radioState->setCwPitch(newPitch);
-    });
-    connect(m_sideControlPanel, &SideControlPanel::micGainChanged, this, [this](int delta) {
-        int newGain = qBound(0, m_radioState->micGain() + delta, 80);
-        m_connectionController->sendCAT(QString("MG%1;").arg(newGain, 3, 10, QChar('0')));
-        m_radioState->setMicGain(newGain);
-    });
-    connect(m_sideControlPanel, &SideControlPanel::compressionChanged, this, [this](int delta) {
-        int newComp = qBound(0, m_radioState->compression() + delta, 30);
-        m_connectionController->sendCAT(QString("CP%1;").arg(newComp, 3, 10, QChar('0')));
-        m_radioState->setCompression(newComp);
-    });
-    // Group 1: PWR/DLY
-    // PC command uses PCnnnr; format: L=QRP (0.1-10W), H=QRO (11-110W)
-    // QRP (≤10W): 0.1W increments, e.g., 10.0, 9.9, 9.8, ... 0.1
-    // QRO (>10W): 1W increments, e.g., 11, 12, 13, ... 110
-    connect(m_sideControlPanel, &SideControlPanel::powerChanged, this, [this](int delta) {
-        double currentPower = m_radioState->rfPower();
-        double newPower;
-
-        if (currentPower <= 10.0) {
-            // Currently in QRP range: 0.1W increments
-            newPower = currentPower + (delta * 0.1);
-            if (newPower > 10.0) {
-                // Transition to QRO at 11W
-                newPower = 11.0;
-                int powerVal = static_cast<int>(newPower);
-                m_connectionController->sendCAT(QString("PC%1H;").arg(powerVal, 3, 10, QChar('0')));
-            } else {
-                newPower = qBound(0.1, newPower, 10.0);
-                int powerVal = static_cast<int>(qRound(newPower * 10)); // 9.9W = 099
-                m_connectionController->sendCAT(QString("PC%1L;").arg(powerVal, 3, 10, QChar('0')));
-            }
-        } else {
-            // Currently in QRO range: 1W increments
-            newPower = currentPower + delta;
-            if (newPower <= 10.0) {
-                // Transition to QRP at 10.0W
-                newPower = 10.0;
-                int powerVal = static_cast<int>(qRound(newPower * 10)); // 10.0W = 100
-                m_connectionController->sendCAT(QString("PC%1L;").arg(powerVal, 3, 10, QChar('0')));
-            } else {
-                newPower = qBound(11.0, newPower, 110.0);
-                int powerVal = static_cast<int>(newPower);
-                m_connectionController->sendCAT(QString("PC%1H;").arg(powerVal, 3, 10, QChar('0')));
-            }
-        }
-        m_radioState->setRfPower(newPower);
-    });
-    connect(m_sideControlPanel, &SideControlPanel::delayChanged, this, [this](int delta) {
-        int currentDelay = m_radioState->delayForCurrentMode();
-        if (currentDelay < 0)
-            currentDelay = 0;                                // Handle uninitialized
-        int newDelay = qBound(0, currentDelay + delta, 255); // 0-255 = 0.00 to 2.55 seconds
-
-        // Optimistic update - update local state immediately
-        m_radioState->setDelayForCurrentMode(newDelay);
-
-        // SD command format: SDxyzzz where x=QSK flag, y=mode (C/V/D), zzz=delay in 10ms
-        // Determine mode character based on current operating mode
-        QChar modeChar = 'V'; // Default to Voice
-        RadioState::Mode mode = m_radioState->mode();
-        if (mode == RadioState::CW || mode == RadioState::CW_R) {
-            modeChar = 'C';
-        } else if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
-            modeChar = 'D';
-        }
-        // x=0 means use specified delay (not full QSK)
-        m_connectionController->sendCAT(QString("SD0%1%2;").arg(modeChar).arg(newDelay, 3, 10, QChar('0')));
-    });
-    // Group 2: BW/HI and SHFT/LO
-    // BW command uses 10Hz units (divide by 10)
-    connect(m_sideControlPanel, &SideControlPanel::bandwidthChanged, this, [this](int delta) {
-        bool bSet = m_radioState->bSetEnabled();
-        int currentBw = bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth();
-
-        // Mode-specific BW limits (Hz)
-        int bwMin = 50, bwMax = 5000;
-        RadioState::Mode mode = m_radioState->mode();
-        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
-            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 2) { // FSK-D
-                bwMin = 150;
-                bwMax = 800;
-            } else if (subMode == 3) { // PSK-D
-                bwMax = 200;
-            }
-        }
-
-        int newBw = qBound(bwMin, currentBw + (delta * 50), bwMax);
-        QString cmd = bSet ? "BW$" : "BW";
-        m_connectionController->sendCAT(QString("%1%2;").arg(cmd).arg(newBw / 10, 4, 10, QChar('0')));
-        if (bSet) {
-            m_radioState->setFilterBandwidthB(newBw);
-        } else {
-            m_radioState->setFilterBandwidth(newBw);
-        }
-    });
-    connect(m_sideControlPanel, &SideControlPanel::highCutChanged, this, [this](int delta) {
-        // HI adjusts upper filter edge while keeping LO fixed.
-        // Both BW and IS must change. Work in decahertz (dah) to avoid rounding drift.
-        // Step is 2 dah (20Hz) per scroll tick — even so IS stays on-grid.
-        bool bSet = m_radioState->bSetEnabled();
-        RadioState::Mode mode = m_radioState->mode();
-        int bwDah = (bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth()) / 10;
-        int isDah = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
-
-        // Mode-specific BW limits (dah) and IS-locked flag
-        int bwMinDah = 5, bwMaxDah = 500;
-        bool isLocked = false;
-        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
-            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 2) { // FSK-D: BW 150-800Hz, IS locked
-                bwMinDah = 15;
-                bwMaxDah = 80;
-                isLocked = true;
-            } else if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
-                bwMaxDah = 20;
-                isLocked = true;
-            }
-        }
-
-        // Compute displayed (clamped) HI/LO
-        int loDah = qMax(0, isDah - bwDah / 2);
-        int hiDah = loDah + bwDah;
-
-        int newHiDah = hiDah + (delta * 2);
-        if (newHiDah <= loDah)
-            return;
-
-        int newBwDah = qBound(bwMinDah, newHiDah - loDah, bwMaxDah);
-
-        QString bwCmd = bSet ? "BW$" : "BW";
-        m_connectionController->sendCAT(QString("%1%2;").arg(bwCmd).arg(newBwDah, 4, 10, QChar('0')));
-
-        if (isLocked) {
-            // IS stays fixed — only BW changes
-            if (bSet)
-                m_radioState->setFilterBandwidthB(newBwDah * 10);
-            else
-                m_radioState->setFilterBandwidth(newBwDah * 10);
-        } else {
-            int newIsDah =
-                qBound(30, (newHiDah + loDah) / 2, (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300);
-            QString isPrefix = bSet ? "IS$" : "IS";
-            m_connectionController->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
-
-            if (bSet) {
-                m_radioState->setFilterBandwidthB(newBwDah * 10);
-                m_radioState->setIfShiftB(newIsDah);
-            } else {
-                m_radioState->setFilterBandwidth(newBwDah * 10);
-                m_radioState->setIfShift(newIsDah);
-            }
-        }
-    });
-    connect(m_sideControlPanel, &SideControlPanel::shiftChanged, this, [this](int delta) {
-        bool bSet = m_radioState->bSetEnabled();
-        RadioState::Mode mode = m_radioState->mode();
-
-        // IS is locked in certain modes — ignore scroll
-        if (mode == RadioState::AM || mode == RadioState::FM)
-            return;
-        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
-            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 2 || subMode == 3)
-                return; // FSK-D, PSK-D: IS locked
-        }
-
-        int currentShift = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
-        int isMax = (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300;
-        int newShift = qBound(30, currentShift + delta, isMax);
-        QString prefix = bSet ? "IS$" : "IS";
-        m_connectionController->sendCAT(QString("%1+%2;").arg(prefix).arg(newShift, 4, 10, QChar('0')));
-        if (bSet) {
-            m_radioState->setIfShiftB(newShift);
-        } else {
-            m_radioState->setIfShift(newShift);
-        }
-    });
-    connect(m_sideControlPanel, &SideControlPanel::lowCutChanged, this, [this](int delta) {
-        // LO adjusts lower filter edge while keeping HI fixed.
-        // Both BW and IS must change. Work in decahertz (dah) to avoid rounding drift.
-        // Step is 2 dah (20Hz) per scroll tick — even so IS stays on-grid.
-        bool bSet = m_radioState->bSetEnabled();
-        RadioState::Mode mode = m_radioState->mode();
-        int bwDah = (bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth()) / 10;
-        int isDah = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
-
-        // Mode-specific BW limits (dah) and IS-locked flag
-        int bwMinDah = 5, bwMaxDah = 500;
-        bool isLocked = false;
-        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
-            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 2) { // FSK-D: BW 150-800Hz, IS locked
-                bwMinDah = 15;
-                bwMaxDah = 80;
-                isLocked = true;
-            } else if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
-                bwMaxDah = 20;
-                isLocked = true;
-            }
-        }
-
-        // Compute displayed (clamped) HI/LO
-        int loDah = qMax(0, isDah - bwDah / 2);
-        int hiDah = loDah + bwDah;
-
-        int newLoDah = loDah + (delta * 2);
-        if (newLoDah >= hiDah)
-            return;
-
-        int newBwDah = qBound(bwMinDah, hiDah - newLoDah, bwMaxDah);
-
-        QString bwCmd = bSet ? "BW$" : "BW";
-        m_connectionController->sendCAT(QString("%1%2;").arg(bwCmd).arg(newBwDah, 4, 10, QChar('0')));
-
-        if (isLocked) {
-            // IS stays fixed — only BW changes
-            if (bSet)
-                m_radioState->setFilterBandwidthB(newBwDah * 10);
-            else
-                m_radioState->setFilterBandwidth(newBwDah * 10);
-        } else {
-            int newIsDah =
-                qBound(30, (hiDah + newLoDah) / 2, (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300);
-            QString isPrefix = bSet ? "IS$" : "IS";
-            m_connectionController->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
-
-            if (bSet) {
-                m_radioState->setFilterBandwidthB(newBwDah * 10);
-                m_radioState->setIfShiftB(newIsDah);
-            } else {
-                m_radioState->setFilterBandwidth(newBwDah * 10);
-                m_radioState->setIfShift(newIsDah);
-            }
-        }
-    });
-    // Group 3: M.RF/M.SQL and S.RF/S.SQL
-    // RF Gain uses RG-nn; format where nn is 00-60 (representing -0 to -60 dB attenuation)
-    // Scroll up = less attenuation = decrease value, scroll down = more attenuation = increase value
-    connect(m_sideControlPanel, &SideControlPanel::mainRfGainChanged, this, [this](int delta) {
-        int newGain = qBound(0, m_radioState->rfGain() - delta, 60);
-        m_connectionController->sendCAT(QString("RG-%1;").arg(newGain, 2, 10, QChar('0')));
-        m_radioState->setRfGain(newGain);
-    });
-    connect(m_sideControlPanel, &SideControlPanel::mainSquelchChanged, this, [this](int delta) {
-        int newSql = qBound(0, m_radioState->squelchLevel() + delta, 29);
-        m_connectionController->sendCAT(QString("SQ%1;").arg(newSql, 3, 10, QChar('0')));
-        m_radioState->setSquelchLevel(newSql);
-    });
-    connect(m_sideControlPanel, &SideControlPanel::subRfGainChanged, this, [this](int delta) {
-        int newGain = qBound(0, m_radioState->rfGainB() - delta, 60);
-        m_connectionController->sendCAT(QString("RG$-%1;").arg(newGain, 2, 10, QChar('0')));
-        m_radioState->setRfGainB(newGain);
-    });
-    connect(m_sideControlPanel, &SideControlPanel::subSquelchChanged, this, [this](int delta) {
-        int newSql = qBound(0, m_radioState->squelchLevelB() + delta, 29);
-        m_connectionController->sendCAT(QString("SQ$%1;").arg(newSql, 3, 10, QChar('0')));
-        m_radioState->setSquelchLevelB(newSql);
-    });
+    // SideControlPanel scroll signals are owned by SideControlScrollController
+    // (constructed in setupControllers). 14 handlers + the shared HI/LO filter
+    // edge math live there now.
 
     // Connect TX function button signals to CAT commands
     connect(m_sideControlPanel, &SideControlPanel::tuneClicked, this,
@@ -871,146 +621,20 @@ void MainWindow::setupUi() {
     // Update BAL overlay and button when RadioState changes
     connect(m_radioState, &RadioState::balanceChanged, m_sideControlPanel, &SideControlPanel::updateBalance);
 
-    // Connect right side panel button signals to CAT commands
-    // Primary (left-click) signals
-    connect(m_rightSidePanel, &RightSidePanel::preClicked, this,
-            [this]() { m_connectionController->sendCAT("SW61;"); });
-    connect(m_rightSidePanel, &RightSidePanel::nbClicked, this, [this]() { m_connectionController->sendCAT("SW32;"); });
-    connect(m_rightSidePanel, &RightSidePanel::nrClicked, this, [this]() { m_connectionController->sendCAT("SW62;"); });
-    connect(m_rightSidePanel, &RightSidePanel::ntchClicked, this,
-            [this]() { m_connectionController->sendCAT("SW31;"); });
-    connect(m_rightSidePanel, &RightSidePanel::filClicked, this,
-            [this]() { m_connectionController->sendCAT("SW33;"); });
-    connect(m_rightSidePanel, &RightSidePanel::abClicked, this, [this]() { m_connectionController->sendCAT("SW41;"); });
-    connect(m_rightSidePanel, &RightSidePanel::revPressed, this,
-            [this]() { m_connectionController->sendCAT("SW160;"); });
-    connect(m_rightSidePanel, &RightSidePanel::revReleased, this,
-            [this]() { m_connectionController->sendCAT("SW161;"); });
-    connect(m_rightSidePanel, &RightSidePanel::atobClicked, this,
-            [this]() { m_connectionController->sendCAT("SW72;"); });
-    connect(m_rightSidePanel, &RightSidePanel::spotClicked, this,
-            [this]() { m_connectionController->sendCAT("SW42;"); });
-    connect(m_rightSidePanel, &RightSidePanel::modeClicked, this,
-            [this]() { m_modePopupController->toggleForBSet(m_bottomMenuBar); });
+    // RightSidePanel signal-to-CAT wiring lives on RightSideController.
+    // Extracted from MainWindow as part of the Phase 6 → Phase A pass; mirror
+    // of SideControlScrollController. Constructed here because all six of its
+    // dependencies (RadioState, ConnectionController, RightSidePanel,
+    // ModePopupController, FeatureMenuController, MacroController, and the
+    // BottomMenuBar anchor) exist at this point in setupUi().
+    m_rightSideController =
+        new RightSideController(m_radioState, m_connectionController, m_rightSidePanel, m_modePopupController,
+                                m_featureMenuController, m_macroController, m_bottomMenuBar, this);
 
-    // Secondary (right-click) signals - these show feature menus with toggle behavior
-    // If same menu is open, close it; otherwise switch to the new menu
-    auto toggleFeatureMenu = [this](FeatureMenuBar::Feature feature) {
-        m_featureMenuController->toggleFeature(feature, m_bottomMenuBar);
-    };
-    connect(m_rightSidePanel, &RightSidePanel::attnClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::Attenuator); });
-    connect(m_rightSidePanel, &RightSidePanel::levelClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::NbLevel); });
-    connect(m_rightSidePanel, &RightSidePanel::adjClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::NrAdjust); });
-    connect(m_rightSidePanel, &RightSidePanel::manualClicked, this,
-            [=]() { toggleFeatureMenu(FeatureMenuBar::ManualNotch); });
-    connect(m_rightSidePanel, &RightSidePanel::apfClicked, this, [this]() {
-        // Toggle APF on/off for Main RX or Sub RX based on B SET state
-        if (m_radioState->bSetEnabled()) {
-            m_connectionController->sendCAT("AP$/;"); // Sub RX toggle
-        } else {
-            m_connectionController->sendCAT("AP/;"); // Main RX toggle
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::splitClicked, this,
-            [this]() { m_connectionController->sendCAT("SW145;"); });
-    connect(m_rightSidePanel, &RightSidePanel::btoaClicked, this,
-            [this]() { m_connectionController->sendCAT("SW147;"); });
-    connect(m_rightSidePanel, &RightSidePanel::autoClicked, this,
-            [this]() { m_connectionController->sendCAT("SW146;"); });
-    // altClicked (MODE/ALT right-click) - send SW148 for ALT function
-    connect(m_rightSidePanel, &RightSidePanel::altClicked, this,
-            [this]() { m_connectionController->sendCAT("SW148;"); });
-
-    // PF row primary (left-click) signals
-    connect(m_rightSidePanel, &RightSidePanel::bsetClicked, this,
-            [this]() { m_connectionController->sendCAT("SW44;"); });
-    connect(m_rightSidePanel, &RightSidePanel::clrClicked, this,
-            [this]() { m_connectionController->sendCAT("SW64;"); });
-    connect(m_rightSidePanel, &RightSidePanel::ritClicked, this,
-            [this]() { m_connectionController->sendCAT("SW54;"); });
-    connect(m_rightSidePanel, &RightSidePanel::xitClicked, this,
-            [this]() { m_connectionController->sendCAT("SW74;"); });
-
-    // PF row secondary (right-click) signals
-    // PF1-PF4 execute user-configured macros (or default K4 PF functions if no macro set)
-    connect(m_rightSidePanel, &RightSidePanel::pf1Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF1);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF1);
-        } else {
-            m_connectionController->sendCAT("SW153;"); // Default: K4 PF1
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::pf2Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF2);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF2);
-        } else {
-            m_connectionController->sendCAT("SW154;"); // Default: K4 PF2
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::pf3Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF3);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF3);
-        } else {
-            m_connectionController->sendCAT("SW155;"); // Default: K4 PF3
-        }
-    });
-    connect(m_rightSidePanel, &RightSidePanel::pf4Clicked, this, [this]() {
-        MacroEntry macro = RadioSettings::instance()->macro(MacroIds::PF4);
-        if (!macro.command.isEmpty()) {
-            m_macroController->executeMacro(MacroIds::PF4);
-        } else {
-            m_connectionController->sendCAT("SW156;"); // Default: K4 PF4
-        }
-    });
-
-    // Bottom row signals (SUB, DIVERSITY, RATE, LOCK)
-    connect(m_rightSidePanel, &RightSidePanel::subClicked, this,
-            [this]() { m_connectionController->sendCAT("SW83;"); });
-    connect(m_rightSidePanel, &RightSidePanel::diversityClicked, this,
-            [this]() { m_connectionController->sendCAT("SW152;"); });
-    connect(m_rightSidePanel, &RightSidePanel::rateClicked, this, [this]() {
-        // Cycle fine rates: 1 Hz → 10 Hz → 100 Hz → 1 Hz
-        // B-SET aware: targets VFO B (VT$) when B SET is engaged
-        bool bSet = m_radioState->bSetEnabled();
-        int current = bSet ? m_radioState->tuningStepB() : m_radioState->tuningStep();
-        int next = (current >= 0 && current < 2) ? current + 1 : 0;
-        QString cmd = QString("%1%2;").arg(bSet ? "VT$" : "VT").arg(next);
-        m_connectionController->sendCAT(cmd);
-        m_radioState->parseCATCommand(cmd);
-    });
-    connect(m_rightSidePanel, &RightSidePanel::khzClicked, this, [this]() {
-        // Set tuning step to 1 kHz (VT3)
-        // B-SET aware: targets VFO B (VT$) when B SET is engaged
-        bool bSet = m_radioState->bSetEnabled();
-        QString cmd = bSet ? QStringLiteral("VT$3;") : QStringLiteral("VT3;");
-        m_connectionController->sendCAT(cmd);
-        m_radioState->parseCATCommand(cmd);
-    });
-    connect(m_rightSidePanel, &RightSidePanel::lockAClicked, this,
-            [this]() { m_connectionController->sendCAT("SW63;"); }); // Toggle Lock A
-    connect(m_rightSidePanel, &RightSidePanel::lockBClicked, this,
-            [this]() { m_connectionController->sendCAT("SW151;"); }); // Toggle Lock B
-
-    // Connect memory buttons (M1-M4, REC, STORE, RCL)
-    // Primary actions (left click)
-    connect(m_m1Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW17;"); });
-    connect(m_m2Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW51;"); });
-    connect(m_m3Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW18;"); });
-    connect(m_m4Btn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW52;"); });
-    connect(m_recBtn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW19;"); });
-    connect(m_storeBtn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW20;"); });
-    connect(m_rclBtn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("SW34;"); });
-
-    // Install event filters for right-click (alternate actions)
-    m_recBtn->installEventFilter(this);
-    m_storeBtn->installEventFilter(this);
-    m_rclBtn->installEventFilter(this);
+    // Memory buttons (M1-M4, REC, STORE, RCL) and their right-click event
+    // filter live on MemoryButtonsController. The buttons themselves are
+    // created in setupVfoSection() for layout placement; the controller is
+    // constructed there too because that's where the button pointers exist.
 
     // Connect bottom menu bar signals
     connect(m_bottomMenuBar, &BottomMenuBar::menuClicked, m_menuController, &MenuController::toggleOverlay);
@@ -1129,9 +753,11 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_modeALabel->installEventFilter(this);
     m_modeBLabel->installEventFilter(this);
 
-    // SPLIT, B SET, and MSG Bank labels live in VfoRowWidget (positioned under TX)
+    // SPLIT and MSG Bank labels live in VfoRowWidget (positioned under TX).
+    // B-SET label is also a VfoRowWidget child but is accessed directly via
+    // m_vfoRow->bSetLabel() at VfoRowIndicatorController construction — no
+    // MainWindow member needed.
     m_splitLabel = m_vfoRow->splitLabel();
-    m_bSetLabel = m_vfoRow->bSetLabel();
     m_msgBankLabel = m_vfoRow->msgBankLabel();
 
     // RIT/XIT Box with border - constrained size
@@ -1309,17 +935,17 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         return btn;
     };
 
-    m_m1Btn = createSimpleButton("M1");
-    m1m4Row->addWidget(m_m1Btn);
+    QPushButton *m1Btn = createSimpleButton("M1");
+    m1m4Row->addWidget(m1Btn);
 
-    m_m2Btn = createSimpleButton("M2");
-    m1m4Row->addWidget(m_m2Btn);
+    QPushButton *m2Btn = createSimpleButton("M2");
+    m1m4Row->addWidget(m2Btn);
 
-    m_m3Btn = createSimpleButton("M3");
-    m1m4Row->addWidget(m_m3Btn);
+    QPushButton *m3Btn = createSimpleButton("M3");
+    m1m4Row->addWidget(m3Btn);
 
-    m_m4Btn = createSimpleButton("M4");
-    m1m4Row->addWidget(m_m4Btn);
+    QPushButton *m4Btn = createSimpleButton("M4");
+    m1m4Row->addWidget(m4Btn);
 
     messageGroupLayout->addLayout(m1m4Row);
 
@@ -1354,21 +980,25 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     // REC (dark grey like M keys, BANK sub-label)
     auto *recContainer = createMemoryButton("REC", "BANK", false);
-    m_recBtn = recContainer->findChild<QPushButton *>();
+    QPushButton *recBtn = recContainer->findChild<QPushButton *>();
     memoryRow->addWidget(recContainer);
 
     // STORE (lighter grey, AF REC sub-label)
     auto *storeContainer = createMemoryButton("STORE", "AF REC", true);
-    m_storeBtn = storeContainer->findChild<QPushButton *>();
+    QPushButton *storeBtn = storeContainer->findChild<QPushButton *>();
     memoryRow->addWidget(storeContainer);
 
     // RCL (lighter grey, AF PLAY sub-label)
     auto *rclContainer = createMemoryButton("RCL", "AF PLAY", true);
-    m_rclBtn = rclContainer->findChild<QPushButton *>();
+    QPushButton *rclBtn = rclContainer->findChild<QPushButton *>();
     memoryRow->addWidget(rclContainer);
 
     memoryRow->addStretch();
     centerLayout->addLayout(memoryRow);
+
+    // Owns left+right click wiring for the M1-M4 / REC / STORE / RCL buttons.
+    m_memoryButtonsController =
+        new MemoryButtonsController(m_connectionController, m1Btn, m2Btn, m3Btn, m4Btn, recBtn, storeBtn, rclBtn, this);
 
     centerLayout->addStretch(); // Balance below
     layout->addWidget(centerWidget);
@@ -1498,10 +1128,13 @@ void MainWindow::onConnectionStateChanged(TcpClient::ConnectionState state) {
 }
 
 void MainWindow::onConnectionError(const QString &error) {
-    m_statusBarController->setConnectionStatus("Error: " + error,
-                                               QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                   .arg(K4Styles::Colors::TxRed)
-                                                   .arg(K4Styles::Dimensions::FontSizeButton));
+    m_statusBarController->showError(error);
+}
+
+void MainWindow::onHardwareError(const QString &error) {
+    if (m_notificationWidget) {
+        m_notificationWidget->showMessage(error, 5000);
+    }
 }
 
 void MainWindow::onRadioReady() {
@@ -1563,9 +1196,7 @@ void MainWindow::onRadioReady() {
 
 void MainWindow::onAuthFailed() {
     qCDebug(qk4Main) << "Authentication failed";
-    m_statusBarController->setConnectionStatus("Auth Failed", QString("color: %1; font-size: %2px; font-weight: bold;")
-                                                                  .arg(K4Styles::Colors::TxRed)
-                                                                  .arg(K4Styles::Dimensions::FontSizeButton));
+    m_statusBarController->showAuthFailed();
 }
 
 void MainWindow::onCatResponse(const QString &response) {
@@ -1579,29 +1210,13 @@ void MainWindow::onCatResponse(const QString &response) {
 
         m_radioState->parseCATCommand(cmd + ";");
 
-        // Parse MEDF (menu definitions) from RDY response
+        // Menu system routing — MenuController encapsulates the MenuModel.
+        // BN / BN$ are parsed by BandNavigationController which subscribes
+        // to catResponseReceived directly; not handled here.
         if (cmd.startsWith("MEDF")) {
-            m_menuController->menuModel()->parseMEDF(cmd + ";");
-        }
-        // Route ME (menu value) commands to MenuModel for real-time updates
-        else if (cmd.startsWith("ME")) {
-            m_menuController->menuModel()->parseME(cmd + ";");
-        }
-        // Parse BN$ (Band Number) response for VFO B (Sub RX)
-        else if (cmd.startsWith("BN$")) {
-            // VFO B band number: BN$nn where nn is 00-10 or 16-25
-            bool ok;
-            int bandNum = cmd.mid(3, 2).toInt(&ok);
-            if (ok)
-                m_bandNavController->setCurrentBand(bandNum, true);
-        }
-        // Parse BN (Band Number) response for VFO A
-        else if (cmd.startsWith("BN")) {
-            // VFO A band number: BNnn where nn is 00-10 or 16-25
-            bool ok;
-            int bandNum = cmd.mid(2, 2).toInt(&ok);
-            if (ok)
-                m_bandNavController->setCurrentBand(bandNum, false);
+            m_menuController->ingestMedf(cmd + ";");
+        } else if (cmd.startsWith("ME")) {
+            m_menuController->ingestMe(cmd + ";");
         }
     }
 }
@@ -1635,7 +1250,7 @@ void MainWindow::resetUiForDisconnect() {
     m_filterAWidget->resetToDefaults();
     m_filterBWidget->resetToDefaults();
     m_statusBarController->clearReadings();
-    m_menuController->menuModel()->clear();
+    m_menuController->clearModel();
     m_kpa1500UiController->disconnectFromHost();
 
     m_modeLabelController->reset();
@@ -1644,9 +1259,6 @@ void MainWindow::resetUiForDisconnect() {
     m_vfoRowIndicatorController->reset();
     m_subDivIndicatorController->reset();
     m_ritXitController->reset();
-
-    // Residual MainWindow-only label (no owning controller for B SET).
-    m_bSetLabel->setVisible(false);
 
     m_radioState->reset();
 }
@@ -1664,24 +1276,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         return true;
     }
 
-    // Panadapter resize events handled by SpectrumController's eventFilter
-
-    // Handle right-click on memory buttons (alternate actions)
-    if (event->type() == QEvent::MouseButtonPress) {
-        auto *mouseEvent = static_cast<QMouseEvent *>(event);
-        if (mouseEvent->button() == Qt::RightButton) {
-            if (watched == m_recBtn) {
-                m_connectionController->sendCAT("SW137;"); // BANK
-                return true;
-            } else if (watched == m_storeBtn) {
-                m_connectionController->sendCAT("SW138;"); // AF REC
-                return true;
-            } else if (watched == m_rclBtn) {
-                m_connectionController->sendCAT("SW139;"); // AF PLAY
-                return true;
-            }
-        }
-    }
+    // Panadapter resize events handled by SpectrumController's eventFilter.
+    // Memory button right-clicks (REC/STORE/RCL) handled by
+    // MemoryButtonsController's own eventFilter.
 
     // RIT / XIT label clicks + wheel routed to RitXitController.
     if (watched == m_ritLabel && event->type() == QEvent::MouseButtonPress)

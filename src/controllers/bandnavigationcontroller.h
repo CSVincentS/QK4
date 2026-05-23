@@ -13,8 +13,10 @@ class PopupManager;
 // selected band invokes the K4 band stack (BN^ / BN$^) rather than a
 // redundant band change.
 //
-// BN / BN$ CAT echoes are parsed in MainWindow::onCatResponse and
-// forwarded here via setCurrentBand().
+// Owns BN / BN$ CAT echo parsing — subscribes to
+// ConnectionController::catResponseReceived in the constructor and
+// updates its own band-tracking state. MainWindow does not route BN
+// echoes here anymore.
 class BandNavigationController : public QObject {
     Q_OBJECT
 
@@ -23,14 +25,19 @@ public:
                                       PopupManager *popupManager, QObject *parent = nullptr);
     ~BandNavigationController() override;
 
+private slots:
+    // Connected to PopupManager::bandSelected in constructor.
+    void onBandSelected(const QString &bandName);
+
+    // Connected to ConnectionController::catResponseReceived. Parses BN
+    // and BN$ echoes; ignores everything else.
+    void onCatResponse(const QString &response);
+
+private:
     // Record the current band for a VFO, updating the band popup's
     // selected-band indicator if the selection targets the visible VFO
     // (A when !BSet, B when BSet).
     void setCurrentBand(int bandNum, bool forVfoB);
-
-private slots:
-    // Connected to PopupManager::bandSelected in constructor.
-    void onBandSelected(const QString &bandName);
 
 private:
     RadioState *m_radioState;           // injected, not owned

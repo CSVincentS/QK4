@@ -10,8 +10,7 @@ namespace {
 constexpr int kSpotAgingIntervalMs = 30000;
 } // namespace
 
-DxClusterController::DxClusterController(RadioState *radioState, QObject *parent)
-    : QObject(parent), m_radioState(radioState) {
+DxClusterController::DxClusterController(QObject *parent) : QObject(parent) {
     // Aging timer runs on UI thread — prunes expired spots every 30s. Started on demand
     // when the first cluster instance is added and stopped when the last one goes away,
     // so an idle app with no clusters connected does no periodic work here.

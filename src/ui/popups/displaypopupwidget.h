@@ -3,7 +3,7 @@
 
 #include "ui/widgets/controlgroupwidget.h"
 #include "ui/widgets/displaymenubutton.h"
-#include "ui/styling/k4popupbase.h"
+#include "ui/popups/k4popupbase.h"
 #include "ui/widgets/togglegroupwidget.h"
 #include <QList>
 #include <QStackedWidget>

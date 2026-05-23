@@ -547,9 +547,14 @@ void RadioState::registerCommandHandlers() {
                                   handleIntPair(c, 3, m_modeFilterState.filterPositionB, 1, 3,
                                                 &RadioState::filterPositionBChanged);
                               }});
-    // RG$ — strips leading dash before parsing
+    // RG$ — strips leading dash before parsing.
     // WHY: K4 reports RF gain as an attenuation in the range -0..-60 dB
     // ("RG-030;" = -30 dB). Throughout the codebase (SideControlPanel UI,
+    // MainWindow scroll handler, RadioState::setRfGain setter) RF gain is
+    // carried as a positive magnitude 0..60; the minus sign is re-added only
+    // at the display / CAT dispatch boundary. The handler uses qAbs() to
+    // make that convention explicit. See levelsstate.cpp:80 for the canonical
+    // version of this WHY and test_radiostate.cpp:1702 for the regression test.
     m_commandHandlers.append(
         {"RG$", [this](const QString &c) { LevelsHandlers::handleRGSub(m_levelsState, *this, c); }});
     m_commandHandlers.append(

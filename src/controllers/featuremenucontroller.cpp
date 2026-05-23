@@ -79,7 +79,7 @@ FeatureMenuController::FeatureMenuController(RadioState *radioState, ConnectionC
             const int curLevel =
                 ssnr ? (bSet ? m_radioState->ssnrLevelB() : m_radioState->ssnrLevel())
                      : (bSet ? m_radioState->noiseReductionLevelB() : m_radioState->noiseReductionLevel());
-            const int newLevel = qMin(curLevel + 1, 10);
+            const int newLevel = qMin(curLevel + 1, ssnr ? 20 : 10);
             const int enabled =
                 ssnr ? (bSet ? (m_radioState->ssnrEnabledB() ? 1 : 0) : (m_radioState->ssnrEnabled() ? 1 : 0))
                      : (bSet ? (m_radioState->noiseReductionEnabledB() ? 1 : 0)

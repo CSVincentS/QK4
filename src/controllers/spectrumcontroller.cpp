@@ -2,9 +2,10 @@
 #include "connectioncontroller.h"
 #include "dsp/panadapter_rhi.h"
 #include "models/radiostate.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "ui/widgets/vfowidget.h"
 #include "dxclustercontroller.h"
+#include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 
 #include "ui/overlays/dxspotoverlay.h"
@@ -42,6 +43,27 @@ void SpectrumController::clearDisplays() {
         m_panadapterA->clear();
     if (m_panadapterB)
         m_panadapterB->clear();
+}
+
+void SpectrumController::setAmplitudeUnits(bool useSUnits) {
+    if (m_panadapterA)
+        m_panadapterA->setAmplitudeUnits(useSUnits);
+    if (m_panadapterB)
+        m_panadapterB->setAmplitudeUnits(useSUnits);
+}
+
+void SpectrumController::setFskMarkTone(int toneHz) {
+    if (m_panadapterA)
+        m_panadapterA->setFskMarkTone(toneHz);
+    if (m_panadapterB)
+        m_panadapterB->setFskMarkTone(toneHz);
+}
+
+void SpectrumController::setWaterfallHeight(int percent) {
+    if (m_panadapterA)
+        m_panadapterA->setWaterfallHeight(percent);
+    if (m_panadapterB)
+        m_panadapterB->setWaterfallHeight(percent);
 }
 
 void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA, VFOWidget *vfoB) {
@@ -226,6 +248,19 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_spotOverlayB = new DxSpotOverlay(m_panadapterB);
     m_spotOverlayB->show();
 
+    // Apply persisted spot label font size, and live-update both overlays when the user
+    // changes it in Options. Reuse the existing dxClusterSettingsChanged() signal —
+    // setFontPixelSize() is a no-op when the value hasn't moved, so callsign/age changes
+    // that also fire this signal don't cause unnecessary repaints.
+    const int spotFontSize = RadioSettings::instance()->dxClusterSpotFontSize();
+    m_spotOverlayA->setFontPixelSize(spotFontSize);
+    m_spotOverlayB->setFontPixelSize(spotFontSize);
+    connect(RadioSettings::instance(), &RadioSettings::dxClusterSettingsChanged, this, [this]() {
+        const int fs = RadioSettings::instance()->dxClusterSpotFontSize();
+        m_spotOverlayA->setFontPixelSize(fs);
+        m_spotOverlayB->setFontPixelSize(fs);
+    });
+
     // WHY: wire click-to-tune here (where overlays are created), not in setDxClusterController.
     // mainwindow calls setDxClusterController BEFORE setupSpectrumUI, so the overlays don't yet
     // exist at that point and the if (m_spotOverlayA) guard there silently skips the connect.
@@ -292,10 +327,22 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         m_vfoA->setMiniPanAveraging(level);
         m_vfoB->setMiniPanAveraging(level);
     });
-    connect(m_radioState, &RadioState::vfoACursorChanged, this,
-            [this](int mode) { m_panadapterA->setCursorVisible(mode == 1 || mode == 2); });
-    connect(m_radioState, &RadioState::vfoBCursorChanged, this,
-            [this](int mode) { m_panadapterB->setCursorVisible(mode == 1 || mode == 2); });
+    // VFO A/B cursor visibility drives BOTH panadapters: each pad shows the
+    // owning VFO's cursor as its primary and the other VFO's as a secondary
+    // overlay. CURS A must therefore toggle pad A's primary AND pad B's
+    // secondary; CURS B the reverse. Without the secondary wiring, a CURS
+    // toggle has no visible effect whenever the owning pad is hidden (e.g.
+    // CURS B in DISPLAY-A-only mode used to toggle only the hidden pad B).
+    connect(m_radioState, &RadioState::vfoACursorChanged, this, [this](int mode) {
+        const bool visible = (mode == 1 || mode == 2);
+        m_panadapterA->setCursorVisible(visible);
+        m_panadapterB->setSecondaryVisible(visible);
+    });
+    connect(m_radioState, &RadioState::vfoBCursorChanged, this, [this](int mode) {
+        const bool visible = (mode == 1 || mode == 2);
+        m_panadapterB->setCursorVisible(visible);
+        m_panadapterA->setSecondaryVisible(visible);
+    });
     connect(m_radioState, &RadioState::dualPanModeLcdChanged, this, [this](int mode) {
         switch (mode) {
         case 0:

@@ -1,5 +1,8 @@
 #include "audioengine.h"
 #include "audio/audiologging.h"
+#include "audio/opusdecoder.h" // NORMALIZE_16BIT constant
+#include "audio/opusencoder.h"
+#include "network/protocol.h" // buildAudioPacket
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QDebug>
@@ -7,7 +10,14 @@
 
 AudioEngine::AudioEngine(QObject *parent)
     : QObject(parent), m_audioSink(nullptr), m_audioSinkDevice(nullptr), m_audioSource(nullptr),
-      m_audioSourceDevice(nullptr), m_micPollTimer(nullptr) {
+      m_audioSourceDevice(nullptr), m_opusEncoder(new OpusEncoder(nullptr)), m_micPollTimer(nullptr) {
+
+    // Opus encoder for TX. 12kHz mono — K4 expects mono frames (mono → stereo
+    // duplication for EM0/EM1 happens inline below; Opus encoder handles its
+    // own mono-to-stereo encoding internally for EM2/EM3). Initialized here so
+    // the audio thread (where encode runs) has it ready before the first
+    // setPttActive(true) call.
+    m_opusEncoder->initialize(12000, 1);
 
     // Output format: K4 uses 12kHz stereo Float32 PCM (L=Main RX, R=Sub RX)
     m_outputFormat.setSampleRate(12000);
@@ -29,6 +39,16 @@ AudioEngine::AudioEngine(QObject *parent)
     m_feedTimer->setInterval(FEED_INTERVAL_MS);
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
+    // Pre-size hot-path buffers so the per-poll / per-frame paths reuse capacity.
+    // m_micBuffer holds 12kHz S16LE samples queued up to one max frame (SL7 = 1440
+    // samples = 2880 bytes); 2× that gives headroom for partial frames + the next
+    // poll's data before we compact. m_resampleBuf12k holds 48kHz→12kHz output
+    // for one poll cycle (INPUT_BUFFER_SIZE = 19200 bytes of 48kHz Float32 → 4800
+    // bytes of 12kHz Float32). m_feedBatch is dimensioned for ~4 packets per cycle.
+    m_micBuffer.reserve(2 * 1440 * sizeof(qint16));
+    m_resampleBuf12k.reserve(INPUT_BUFFER_SIZE / 4);
+    m_feedBatch.reserve(4);
+
     // WHY setupAudioInput() is deferred until the first openMic() call:
     // Qt's mic-permission callback on macOS runs on the main-thread runloop. During connection
     // startup, AudioController calls into the AudioEngine from the IO thread via
@@ -42,6 +62,8 @@ AudioEngine::AudioEngine(QObject *parent)
 
 AudioEngine::~AudioEngine() {
     stop();
+    delete m_opusEncoder;
+    m_opusEncoder = nullptr;
 }
 
 bool AudioEngine::start() {
@@ -91,6 +113,7 @@ void AudioEngine::stop() {
     }
 
     m_micBuffer.clear();
+    m_micReadOffset = 0;
 }
 
 bool AudioEngine::setupAudioOutput() {
@@ -218,8 +241,9 @@ void AudioEngine::feedAudioDevice() {
     // Query sink capacity (audio-thread-only, no mutex needed)
     int bytesFree = m_audioSink->bytesFree();
 
-    // Drain queue under a short lock, then write outside the lock
-    QList<QByteArray> localPackets;
+    // Drain queue under a short lock, then write outside the lock. m_feedBatch
+    // is a member to avoid constructing a fresh QList on every 10 ms tick.
+    m_feedBatch.clear();
     int preDrainQueueBytes;
     bool snapshotPrebuffering;
     {
@@ -248,14 +272,14 @@ void AudioEngine::feedAudioDevice() {
             QByteArray pkt = m_audioQueue.dequeue();
             m_queueBytes -= pkt.size();
             bytesFree -= headSize;
-            localPackets.append(std::move(pkt));
+            m_feedBatch.append(std::move(pkt));
         }
     }
 
     emit bufferStatus(preDrainQueueBytes, MAX_QUEUE_BYTES, snapshotPrebuffering);
 
     // Apply mix/volume and write to audio sink without holding the lock
-    for (QByteArray &packet : localPackets) {
+    for (QByteArray &packet : m_feedBatch) {
         applyMixAndVolume(packet);
         qint64 written = m_audioSinkDevice->write(packet.constData(), packet.size());
         if (written < packet.size()) {
@@ -380,21 +404,25 @@ void AudioEngine::closeMic() {
     }
     m_audioSourceDevice = nullptr;
     m_micBuffer.clear();
+    m_micReadOffset = 0;
 }
 
 void AudioEngine::flushMicBuffer() {
     m_micBuffer.clear();
+    m_micReadOffset = 0;
 }
 
-QByteArray AudioEngine::resample48kTo12k(const QByteArray &input48k) {
-    // Simple 4:1 decimation with averaging filter
-    // 48kHz / 4 = 12kHz
+const QByteArray &AudioEngine::resample48kTo12k(const QByteArray &input48k) {
+    // Simple 4:1 decimation with averaging filter (48kHz / 4 = 12kHz).
+    // Writes into the pre-allocated m_resampleBuf12k member; resize() at the
+    // pre-reserved capacity is alloc-free.
     const float *inputSamples = reinterpret_cast<const float *>(input48k.constData());
     int inputCount = input48k.size() / sizeof(float);
     int outputCount = inputCount / 4;
+    const int outputBytes = outputCount * static_cast<int>(sizeof(float));
 
-    QByteArray output12k;
-    output12k.reserve(outputCount * sizeof(float));
+    m_resampleBuf12k.resize(outputBytes);
+    float *output = reinterpret_cast<float *>(m_resampleBuf12k.data());
 
     for (int i = 0; i < outputCount; i++) {
         // Average 4 samples for simple low-pass filtering
@@ -405,11 +433,10 @@ QByteArray AudioEngine::resample48kTo12k(const QByteArray &input48k) {
             sum += inputSamples[srcIdx + j];
             count++;
         }
-        float avg = (count > 0) ? (sum / count) : 0.0f;
-        output12k.append(reinterpret_cast<const char *>(&avg), sizeof(float));
+        output[i] = (count > 0) ? (sum / count) : 0.0f;
     }
 
-    return output12k;
+    return m_resampleBuf12k;
 }
 
 void AudioEngine::onMicDataReady() {
@@ -422,8 +449,8 @@ void AudioEngine::onMicDataReady() {
         return;
     }
 
-    // Resample from 48kHz to 12kHz
-    QByteArray data12k = resample48kTo12k(data48k);
+    // Resample from 48kHz to 12kHz (writes into pre-allocated member buffer)
+    const QByteArray &data12k = resample48kTo12k(data48k);
 
     // Convert Float32 to S16LE, apply gain, and buffer for frame-based emission
     const float *floatData = reinterpret_cast<const float *>(data12k.constData());
@@ -438,18 +465,99 @@ void AudioEngine::onMicDataReady() {
         m_micBuffer.append(reinterpret_cast<const char *>(&s16Sample), sizeof(qint16));
     }
 
-    // Emit complete frames (size matches SL tier: 240/480/720/1440 samples)
-    // Use offset-based reading to avoid O(n) buffer shifts per frame
-    int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(qint16));
-    int offset = 0;
-    while (m_micBuffer.size() - offset >= frameBytes) {
-        QByteArray frame = m_micBuffer.mid(offset, frameBytes);
-        offset += frameBytes;
-        emit microphoneFrame(frame);
+    // Emit complete frames (size matches SL tier: 240/480/720/1440 samples).
+    // m_micReadOffset advances per emitted frame instead of remove(0, n)'s O(N)
+    // memmove on every poll. We compact only when the offset has grown past
+    // half the buffer's size — keeps amortized work O(1) per frame.
+    const int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(qint16));
+    const int frameSamples = m_frameSamples.load(std::memory_order_relaxed);
+    const bool pttActive = m_pttActive.load(std::memory_order_acquire);
+    const int encodeMode = m_encodeMode.load(std::memory_order_relaxed);
+
+    while (m_micBuffer.size() - m_micReadOffset >= frameBytes) {
+        if (pttActive) {
+            // Use fromRawData to avoid a copy; immediately consumed inside this
+            // tick on the audio thread — the underlying buffer doesn't move.
+            const QByteArray frame = QByteArray::fromRawData(m_micBuffer.constData() + m_micReadOffset, frameBytes);
+            encodeAndSendFrame(frame, frameSamples, encodeMode);
+        }
+        m_micReadOffset += frameBytes;
     }
-    if (offset > 0) {
-        m_micBuffer.remove(0, offset); // Single shift for all consumed frames
+    // Compact lazily: only when the consumed prefix is at least half the buffer.
+    if (m_micReadOffset > 0 && m_micReadOffset * 2 >= m_micBuffer.size()) {
+        m_micBuffer.remove(0, m_micReadOffset);
+        m_micReadOffset = 0;
     }
+}
+
+void AudioEngine::encodeAndSendFrame(const QByteArray &s16leMonoFrame, int frameSamples, int encodeMode) {
+    // Runs on the audio thread. Translates the captured S16LE mono frame into
+    // the K4 wire format and emits txPacketReady. PR 12 moved this logic out
+    // of AudioController::onMicrophoneFrame (which ran on the main thread)
+    // so a busy GUI event loop no longer stalls voice TX packet emission.
+    QByteArray audioData;
+
+    switch (encodeMode) {
+    case 0: // EM0 — RAW 32-bit float stereo
+    {
+        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leMonoFrame.constData());
+        const int sampleCount = s16leMonoFrame.size() / static_cast<int>(sizeof(qint16));
+        audioData.resize(sampleCount * 2 * static_cast<int>(sizeof(float))); // Stereo output
+        float *output = reinterpret_cast<float *>(audioData.data());
+        for (int i = 0; i < sampleCount; i++) {
+            const float normalized = static_cast<float>(samples[i]) * OpusDecoder::NORMALIZE_16BIT;
+            output[i * 2] = normalized;     // Left = Main
+            output[i * 2 + 1] = normalized; // Right = Sub (duplicate)
+        }
+        break;
+    }
+
+    case 1: // EM1 — RAW 16-bit S16LE stereo
+    {
+        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leMonoFrame.constData());
+        const int sampleCount = s16leMonoFrame.size() / static_cast<int>(sizeof(qint16));
+        audioData.resize(sampleCount * 2 * static_cast<int>(sizeof(qint16))); // Stereo output
+        qint16 *output = reinterpret_cast<qint16 *>(audioData.data());
+        for (int i = 0; i < sampleCount; i++) {
+            output[i * 2] = samples[i];     // Left = Main
+            output[i * 2 + 1] = samples[i]; // Right = Sub (duplicate)
+        }
+        break;
+    }
+
+    case 2: // EM2 — Opus int
+    case 3: // EM3 — Opus float
+    default:
+        if (m_opusEncoder)
+            audioData = m_opusEncoder->encode(s16leMonoFrame, frameSamples);
+        break;
+    }
+
+    if (audioData.isEmpty())
+        return;
+
+    QByteArray packet = Protocol::buildAudioPacket(audioData, m_txSequence++, encodeMode, frameSamples);
+    emit txPacketReady(packet);
+}
+
+void AudioEngine::setEncodeMode(int mode) {
+    m_encodeMode.store(mode, std::memory_order_relaxed);
+}
+
+void AudioEngine::setPttActive(bool active) {
+    // Q_INVOKABLE — invoked via QueuedConnection from AudioController on the
+    // main thread, so this method body runs on the audio thread.
+    m_pttActive.store(active, std::memory_order_release);
+    if (active) {
+        m_txSequence = 0; // Restart sequence counter for each transmission
+        openMic();        // Idempotent — see openMic() WHY comment
+        // Flush partial-frame tail from previous transmission so it can't leak
+        // into this one's first frame.
+        m_micBuffer.clear();
+        m_micReadOffset = 0;
+    }
+    // PTT release: leave mic open. Next frames will be dropped by the
+    // pttActive check at the top of onMicDataReady.
 }
 
 void AudioEngine::setMainVolume(float volume) {

@@ -7,7 +7,7 @@
 #include "ui/pages/kpodpage.h"
 #include "ui/pages/kpa1500page.h"
 #include "ui/pages/dxclusterpage.h"
-#include "ui/styling/k4styles.h"
+#include "ui/styling/k4constants.h"
 #include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
 #include <QHBoxLayout>
@@ -125,7 +125,7 @@ void OptionsDialog::ensurePageCreated(int index) {
         page = m_cwKeyerPage;
         break;
     case PageKpod:
-        m_kpodPage = new KpodPage(m_hardwareController->kpodDevice(), this);
+        m_kpodPage = new KpodPage(m_hardwareController->kpodDevice(), m_hardwareController->kpodPlusDevice(), this);
         page = m_kpodPage;
         break;
     case PageKpa1500:

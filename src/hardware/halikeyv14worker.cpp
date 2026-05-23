@@ -12,6 +12,18 @@
 #include <unistd.h>
 #endif
 
+#ifdef Q_OS_LINUX
+#include <pthread.h>
+#include <signal.h>
+
+namespace {
+// No-op signal handler. SIGUSR1 is used solely to interrupt a TIOCMIWAIT ioctl
+// blocked in the kernel — the handler doesn't need to do anything; the side
+// effect of receiving the signal is that the ioctl returns with EINTR.
+void halikeyV14SigUsr1Handler(int) {}
+} // namespace
+#endif
+
 HaliKeyV14Worker::HaliKeyV14Worker(const QString &portName, QObject *parent) : HaliKeyWorkerBase(portName, parent) {}
 
 HaliKeyV14Worker::~HaliKeyV14Worker() {
@@ -20,7 +32,16 @@ HaliKeyV14Worker::~HaliKeyV14Worker() {
 
 void HaliKeyV14Worker::prepareShutdown() {
 #ifdef Q_OS_LINUX
-    // Close fd to unblock TIOCMIWAIT
+    // Wake the TIOCMIWAIT ioctl with SIGUSR1 — close(fd) alone is unreliable on
+    // Linux because the kernel can hold the wait for hundreds of ms. Signal the
+    // captured pthread directly so other threads in the process aren't disturbed.
+    // The no-op handler returns EINTR from the ioctl; the loop then sees
+    // m_running=false and exits within a few ms.
+    if (m_linuxThreadHandle != 0) {
+        ::pthread_kill(static_cast<pthread_t>(m_linuxThreadHandle), SIGUSR1);
+    }
+    // Close fd as a belt-and-suspenders backup: if SIGUSR1 was masked or didn't
+    // arrive, close(fd) is the documented (if unreliable) wakeup mechanism.
     if (m_fd >= 0) {
         ::close(m_fd);
         m_fd = -1;
@@ -33,9 +54,31 @@ void HaliKeyV14Worker::start() {
         return;
     }
 
+#ifdef Q_OS_LINUX
+    // Install a no-op SIGUSR1 handler and make sure this thread won't block the
+    // signal — so prepareShutdown() can interrupt a TIOCMIWAIT ioctl by sending
+    // SIGUSR1 to this exact thread.
+    struct sigaction sa = {};
+    sa.sa_handler = &halikeyV14SigUsr1Handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    ::sigaction(SIGUSR1, &sa, nullptr);
+
+    sigset_t unblock;
+    sigemptyset(&unblock);
+    sigaddset(&unblock, SIGUSR1);
+    ::pthread_sigmask(SIG_UNBLOCK, &unblock, nullptr);
+
+    m_linuxThreadHandle = static_cast<unsigned long>(::pthread_self());
+#endif
+
     emit portOpened();
     m_running = true;
     monitorLoop();
+
+#ifdef Q_OS_LINUX
+    m_linuxThreadHandle = 0;
+#endif
 }
 
 bool HaliKeyV14Worker::openNativePort() {

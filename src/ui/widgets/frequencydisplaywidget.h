@@ -4,7 +4,7 @@
 #include <QWidget>
 #include <QColor>
 #include <QFont>
-#include "ui/widgets/wheelaccumulator.h"
+#include "utils/wheelaccumulator.h"
 
 /**
  * FrequencyDisplayWidget - Inline frequency display with segment-based editing.

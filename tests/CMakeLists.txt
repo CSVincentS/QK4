@@ -142,3 +142,15 @@ add_executable(test_dxcluster test_dxcluster.cpp
 target_include_directories(test_dxcluster PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_dxcluster Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME DxClusterTests COMMAND test_dxcluster)
+
+# KPOD+ USB worker — pure-logic tests (command builders, EP02 trim, response decoder)
+add_executable(test_kpodplususbworker test_kpodplususbworker.cpp
+    ${CMAKE_SOURCE_DIR}/src/hardware/kpodplususbworker.cpp
+    ${CMAKE_SOURCE_DIR}/src/hardware/kpodplusdevice.cpp
+)
+target_include_directories(test_kpodplususbworker PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${LIBUSB_INCLUDE_DIRS}
+)
+target_link_libraries(test_kpodplususbworker Qt6::Core Qt6::Test ${LIBUSB_LIBRARIES})
+add_test(NAME KpodPlusUsbWorkerTests COMMAND test_kpodplususbworker)

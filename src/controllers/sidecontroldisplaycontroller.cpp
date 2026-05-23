@@ -17,6 +17,10 @@ SideControlDisplayController::SideControlDisplayController(RadioState *radioStat
             &SideControlDisplayController::refreshFilterDisplay);
     connect(m_radioState, &RadioState::ifShiftBChanged, this, &SideControlDisplayController::refreshFilterDisplay);
     connect(m_radioState, &RadioState::bSetChanged, this, &SideControlDisplayController::refreshFilterDisplay);
+    // B-SET also flips the active-receiver indicator color on the BW/SHFT
+    // panel (cyan for Main RX, green for Sub RX) — match which VFO the
+    // filter knobs are currently driving.
+    connect(m_radioState, &RadioState::bSetChanged, m_panel, &SideControlPanel::setActiveReceiver);
 
     // === Knob values → side panel (direct observation where possible) ===
     connect(m_radioState, &RadioState::keyerSpeedChanged, m_panel, &SideControlPanel::setWpm);

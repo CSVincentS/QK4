@@ -251,11 +251,12 @@ void FrequencyDisplayWidget::paintEvent(QPaintEvent *) {
             // Dots always in normal color
             charColor = m_normalColor;
         } else {
-            // Normal mode: check if this digit should be grayed (tuning rate indicator)
-            // digitIdx is 0-7 from left, convert to position from right: 7 - digitIdx
+            // Normal mode: digits strictly BELOW the tuning rate position render in gray
+            // ("inactive trailing digits"). The digit AT the tuning rate position stays in
+            // m_normalColor and is marked by the underline below — that's the active
+            // rate indicator the user reads to know the current tuning step.
             int posFromRight = 7 - digitIdx;
-            if (m_tuningRateDigit >= 0 && posFromRight <= m_tuningRateDigit) {
-                // This digit is at or below tuning rate - show in gray
+            if (m_tuningRateDigit >= 0 && posFromRight < m_tuningRateDigit) {
                 charColor = QColor(K4Styles::Colors::TextGray);
             } else {
                 charColor = m_normalColor;
@@ -271,6 +272,13 @@ void FrequencyDisplayWidget::paintEvent(QPaintEvent *) {
         if (c != '.' && digitIdx == m_cursorPosition) {
             int underlineY = height() - 4;
             p.fillRect(x + 2, underlineY, charW - 4, 2, m_editColor);
+        }
+
+        // Tuning-rate indicator underline. Guarded by m_cursorPosition < 0 so the
+        // edit-mode cursor's underline takes precedence and we don't double-draw.
+        if (m_cursorPosition < 0 && c != '.' && m_tuningRateDigit >= 0 && (7 - digitIdx) == m_tuningRateDigit) {
+            int underlineY = height() - 4;
+            p.fillRect(x + 2, underlineY, charW - 4, 2, m_normalColor);
         }
 
         // Advance digit index (only for non-dot characters)
