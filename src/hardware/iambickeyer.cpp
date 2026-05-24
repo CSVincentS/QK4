@@ -1,5 +1,20 @@
 #include "hardware/iambickeyer.h"
 
+#include <QLoggingCategory>
+#include <QTime>
+
+// Trace category for the CW keyer state machine. Disabled by default; enable with
+// QT_LOGGING_RULES="cw.keyer.debug=true" to capture paddle edges, element-start decisions,
+// timer-expiry decisions, and idle transitions. Pair with cat.tx category to correlate
+// keyer state with on-wire KZ commands when diagnosing extra-dit reports.
+Q_LOGGING_CATEGORY(cwKeyer, "cw.keyer")
+
+namespace {
+QString nowMs() {
+    return QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"));
+}
+} // namespace
+
 IambicKeyer::IambicKeyer(QObject *parent) : QObject(parent) {
     m_elementTimer = new QTimer(this);
     m_elementTimer->setSingleShot(true);
@@ -35,6 +50,13 @@ void IambicKeyer::setDitPaddle(bool pressed) {
     if (pressed)
         m_ditLatch.store(true, std::memory_order_release);
 
+    qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [DIT " << (pressed ? "down" : "up")
+                                         << "] state=" << m_state
+                                         << " physD=" << m_physDit.load(std::memory_order_acquire)
+                                         << " physA=" << m_physDah.load(std::memory_order_acquire)
+                                         << " latchD=" << m_ditLatch.load(std::memory_order_acquire)
+                                         << " latchA=" << m_dahLatch.load(std::memory_order_acquire);
+
     // Post handlePaddleChange to keyer thread to wake from idle.
     // If keyer is already running, the timer will read the atomic directly.
     QMetaObject::invokeMethod(this, &IambicKeyer::handlePaddleChange, Qt::QueuedConnection);
@@ -44,6 +66,14 @@ void IambicKeyer::setDahPaddle(bool pressed) {
     m_physDah.store(pressed, std::memory_order_release);
     if (pressed)
         m_dahLatch.store(true, std::memory_order_release);
+
+    qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [DAH " << (pressed ? "down" : "up")
+                                         << "] state=" << m_state
+                                         << " physD=" << m_physDit.load(std::memory_order_acquire)
+                                         << " physA=" << m_physDah.load(std::memory_order_acquire)
+                                         << " latchD=" << m_ditLatch.load(std::memory_order_acquire)
+                                         << " latchA=" << m_dahLatch.load(std::memory_order_acquire);
+
     QMetaObject::invokeMethod(this, &IambicKeyer::handlePaddleChange, Qt::QueuedConnection);
 }
 
@@ -87,9 +117,13 @@ void IambicKeyer::enterElement(bool isDit) {
     // Transitioning from idle — emit pause duration before the element
     if (m_state == Idle && m_idleSince.isValid()) {
         int elapsed = static_cast<int>(m_idleSince.elapsed());
-        if (elapsed <= 2000)
+        if (elapsed <= 2000) {
+            qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [PAUSE emit] elapsed=" << elapsed << "ms";
             emit restartAfterPause(elapsed);
-        // else: skip KZP entirely — pause too long to be meaningful CW spacing
+        } else {
+            qCDebug(cwKeyer).noquote().nospace()
+                << "KEYER@" << nowMs() << " [PAUSE skip] elapsed=" << elapsed << "ms (>2000)";
+        }
     }
 
     m_state = isDit ? PlayingDit : PlayingDah;
@@ -112,6 +146,15 @@ void IambicKeyer::enterElement(bool isDit) {
     // Dit = 1 unit on + 1 unit off = 2 ditMs; Dah = 3 units on + 1 unit off = 4 ditMs
     int interval = isDit ? m_ditMs * 2 : m_ditMs * 4;
     m_elementTimer->start(interval);
+
+    qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [ELEM start " << (isDit ? "DIT" : "DAH")
+                                         << "] interval=" << interval
+                                         << "ms physD=" << m_physDit.load(std::memory_order_acquire)
+                                         << " physA=" << m_physDah.load(std::memory_order_acquire)
+                                         << " latchD=" << m_ditLatch.load(std::memory_order_acquire)
+                                         << " latchA=" << m_dahLatch.load(std::memory_order_acquire)
+                                         << " squeezed=" << m_squeezed;
+
     emit elementStarted(isDit);
 }
 
@@ -125,44 +168,56 @@ void IambicKeyer::onTimerFired() {
     // need a barrier — but the keyer can't distinguish at the load site, so the stricter
     // acquire is used uniformly. Trivially compiles to the same code as relaxed on x86
     // and a one-instruction barrier on ARM.
-    bool dit = liveDit ||
-               (m_reversed ? m_dahLatch.load(std::memory_order_acquire) : m_ditLatch.load(std::memory_order_acquire));
-    bool dah = liveDah ||
-               (m_reversed ? m_ditLatch.load(std::memory_order_acquire) : m_dahLatch.load(std::memory_order_acquire));
+    bool latchDit =
+        m_reversed ? m_dahLatch.load(std::memory_order_acquire) : m_ditLatch.load(std::memory_order_acquire);
+    bool latchDah =
+        m_reversed ? m_ditLatch.load(std::memory_order_acquire) : m_dahLatch.load(std::memory_order_acquire);
+    bool dit = liveDit || latchDit;
+    bool dah = liveDah || latchDah;
     bool wasDit = (m_state == PlayingDit);
+
+    auto traceDecision = [&](const char *branch) {
+        qCDebug(cwKeyer).noquote().nospace()
+            << "KEYER@" << nowMs() << " [TIMER fired wasDit=" << wasDit << "] liveD=" << liveDit << " liveA=" << liveDah
+            << " latchD=" << latchDit << " latchA=" << latchDah << " squeezed=" << m_squeezed
+            << " mode=" << (m_mode == IambicB ? "B" : "A") << " → " << branch;
+    };
 
     // Squeeze release: both paddles physically released while squeeze was active.
     // Bypass latches — use Iambic A/B mode rules instead.  Without this guard,
     // a stale opposite-paddle latch would produce an unwanted extra element in
     // Iambic A mode.
     if (m_squeezed && !liveDit && !liveDah) {
-        if (m_mode == IambicB)
+        if (m_mode == IambicB) {
+            traceDecision("squeeze-release IambicB → opposite element");
             enterElement(!wasDit);
-        else
+        } else {
+            traceDecision("squeeze-release IambicA → idle");
             goIdle();
+        }
         return;
     }
 
     if (dit && dah) {
-        // Both held — squeeze alternation
+        traceDecision("both held → alternate");
         enterElement(!wasDit);
     } else if (wasDit && dah) {
-        // Opposite paddle held — cross-paddle
+        traceDecision("cross-paddle dit→dah");
         enterElement(false);
     } else if (!wasDit && dit) {
-        // Opposite paddle held — cross-paddle
+        traceDecision("cross-paddle dah→dit");
         enterElement(true);
     } else if (wasDit && dit) {
-        // Same paddle held — repeat
+        traceDecision("same-paddle repeat dit");
         enterElement(true);
     } else if (!wasDit && dah) {
-        // Same paddle held — repeat
+        traceDecision("same-paddle repeat dah");
         enterElement(false);
     } else if (m_squeezed && m_mode == IambicB) {
-        // Iambic B: one extra opposite element after squeeze release
+        traceDecision("IambicB squeeze-memory → extra opposite");
         enterElement(!wasDit);
     } else {
-        // Nothing held, no squeeze memory — done
+        traceDecision("nothing held → idle");
         goIdle();
     }
 }
@@ -174,6 +229,9 @@ void IambicKeyer::goIdle() {
     m_ditLatch.store(false, std::memory_order_relaxed);
     m_dahLatch.store(false, std::memory_order_relaxed);
     m_idleSince.start();
+
+    qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [IDLE]";
+
     emit characterSpace();
     emit keyingFinished();
 }
