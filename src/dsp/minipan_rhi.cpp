@@ -614,6 +614,11 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
                 // AFSK-A / FSK-D: LSB — passband centered half-shift below dial
                 float offsetPixels = (PanadapterConstants::RttyHalfShiftHz * w) / m_bandwidthHz;
                 passbandX = centerX - offsetPixels - bwPixels / 2;
+            } else if (m_mode == "AM" || m_mode == "FM") {
+                // WHY: AM/FM are carrier-centered (both sidebands); the K4 reports a leftover
+                // SSB-style IS value but does not apply it to the filter. Matches the main
+                // panadapter (panadapter_rhi.cpp AM/FM branch) and FilterIndicatorWidget.
+                passbandX = centerX - bwPixels / 2;
             } else if (m_mode == "LSB") {
                 // LSB: passband center is shiftHz below carrier
                 passbandX = centerX - shiftPixels - bwPixels / 2;
