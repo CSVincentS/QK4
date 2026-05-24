@@ -143,6 +143,12 @@ target_include_directories(test_dxcluster PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_dxcluster Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME DxClusterTests COMMAND test_dxcluster)
 
+# HalikeyDevice edge-dedupe tests — pure logic, no Qt/RtMidi/serial linkage needed.
+add_executable(test_halikeydevice test_halikeydevice.cpp)
+target_include_directories(test_halikeydevice PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_halikeydevice Qt6::Core Qt6::Test)
+add_test(NAME HalikeyDeviceTests COMMAND test_halikeydevice)
+
 # KPOD+ USB worker — pure-logic tests (command builders, EP02 trim, response decoder)
 add_executable(test_kpodplususbworker test_kpodplususbworker.cpp
     ${CMAKE_SOURCE_DIR}/src/hardware/kpodplususbworker.cpp

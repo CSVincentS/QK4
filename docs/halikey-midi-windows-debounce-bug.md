@@ -1,6 +1,6 @@
 # HaliKey MIDI — Windows "stuck paddles" bug
 
-**Status:** diagnosed, fix not yet applied (2026-05-22)
+**Status:** fixed (2026-05-23). Pending hardware verification on Windows + MIDI.
 **Affects:** HaliKey **MIDI** variant on **Windows** only. V1.4 serial variant and macOS are unaffected.
 **Symptom:** after Beta 2 (v0.6.0-beta.2), CW timing is better but the keyer
 intermittently "gets stuck sending both dots and dashes" — i.e. both paddle
@@ -56,7 +56,7 @@ variant — raw RS-232 control-line transitions genuinely bounce. A MIDI HaliKey
 sends already-debounced note-on/note-off from firmware; there is no electrical
 bounce in a MIDI message stream, so time-debouncing it is pure harm.
 
-## Recommended fix
+## Recommended fix (original write-up)
 
 Apply the time-window debounce to the **V1.4 serial worker only**. The MIDI
 path keeps just the redundant-state filter (`raw == confirmed` → drop), which
@@ -66,6 +66,33 @@ is safe and never discards a real transition. V1.4 stays fully protected.
 time-window check on device type (`m_deviceType == 1` is MIDI), or have the
 MIDI worker's `onRaw*` path bypass it. (Per-event timestamps from RtMidi's
 `deltaTime` would also work, but MIDI should simply not be time-debounced.)
+
+## Resolution
+
+We took the architectural rather than the patched-conditional route. The 3 ms
+time gate was **removed entirely** from `HalikeyDevice`; same-direction dedupe
+is the only thing that remains. Rationale:
+
+- Conditioning the time gate on `m_deviceType` would have worked but coupled
+  `HalikeyDevice` to worker-variant logic and left a magic number in a class
+  that should be a pure cross-thread fan-out.
+- The V1.4 serial worker already has its own count-based debounce
+  (`DEBOUNCE_COUNT=2` across ≥500 µs reads, in `halikeyv14worker.cpp`'s
+  `monitorLoop`). That confirms ≥1 ms of mechanical stability before emit —
+  more than enough for typical sub-millisecond contact bounce. The 3 ms
+  device-layer gate was redundant for serial and harmful for MIDI.
+- The MIDI variant doesn't need any debounce on our side — the HaliKey
+  firmware delivers logical Note On/Off events, not raw contact transitions.
+
+The dedupe helper (`acceptEdge`) was extracted into `src/hardware/halikey_edge.h`
+so it can be unit-tested in isolation without linking RtMidi or QSerialPort.
+Regression tests live in `tests/test_halikeydevice.cpp` — notably
+`backToBackPressReleaseBothAccepted`, which would have failed against the
+pre-fix code.
+
+V1.4 worker carries a `// WHY:` comment marking its count-based debounce as
+the sole bounce defense in the serial path. Do not relax it without restoring
+an equivalent gate elsewhere.
 
 ## Vetting of an earlier external analysis
 
