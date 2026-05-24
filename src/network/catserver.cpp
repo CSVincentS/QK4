@@ -49,6 +49,7 @@ bool CatServer::start(quint16 port) {
     }
 
     m_port = m_server->serverPort(); // use actual port (may differ from requested if 0)
+    qCInfo(netCat) << "CAT server listening on port" << m_port;
     emit started(port);
     return true;
 }
@@ -105,9 +106,13 @@ void CatServer::onNewConnection() {
                 offset = idx + 1;
 
                 if (!command.isEmpty()) {
+                    qCDebug(netCat) << "RX <-" << client->peerPort() << command;
                     QString response = handleCommand(command);
                     if (!response.isEmpty()) {
+                        qCDebug(netCat) << "TX ->" << client->peerPort() << response;
                         client->write(response.toUtf8());
+                    } else {
+                        qCDebug(netCat) << "   (no response)" << client->peerPort() << command;
                     }
                 }
             }
@@ -119,6 +124,7 @@ void CatServer::onNewConnection() {
 
         connect(client, &QTcpSocket::disconnected, this, [this, client]() {
             QString address = QString("%1:%2").arg(client->peerAddress().toString()).arg(client->peerPort());
+            qCInfo(netCat) << "CAT client disconnected:" << address;
             m_clients.removeOne(client);
             m_clientBuffers.remove(client);
             client->deleteLater();
@@ -127,6 +133,7 @@ void CatServer::onNewConnection() {
         });
 
         QString address = QString("%1:%2").arg(client->peerAddress().toString()).arg(client->peerPort());
+        qCInfo(netCat) << "CAT client connected:" << address;
         emit clientConnected(address);
     }
 }
@@ -376,22 +383,26 @@ QString CatServer::handleCommand(const QString &cmd) {
 
     // AI SET commands - silently ignore, don't let external apps change our AI4 mode
     if (prefix == "AI") {
+        qCDebug(netCat) << "   AI SET ignored (QK4 forces AI4 internally):" << cmd;
         return QString();
     }
 
     // TX/RX commands - control audio input gate for external app transmit
     // Don't forward to K4 - the audio stream itself triggers K4 TX
     if (prefix == "TX") {
+        qCDebug(netCat) << "   PTT request: ON";
         emit pttRequested(true);
         return QString();
     }
     if (prefix == "RX") {
+        qCDebug(netCat) << "   PTT request: OFF";
         emit pttRequested(false);
         return QString();
     }
 
     // SET commands (have args) - forward to real K4
     // Commands like FA14074000;, MD1;, etc.
+    qCDebug(netCat) << "   forwarding SET to K4:" << cmd;
     emit catCommandReceived(cmd);
 
     // Most SET commands echo the new value
