@@ -20,6 +20,7 @@ IambicKeyer::IambicKeyer(QObject *parent) : QObject(parent) {
     m_elementTimer->setSingleShot(true);
     m_elementTimer->setTimerType(Qt::PreciseTimer);
     connect(m_elementTimer, &QTimer::timeout, this, &IambicKeyer::onTimerFired);
+    m_pressClock.start();
 }
 
 void IambicKeyer::setEnabled(bool enabled) {
@@ -46,16 +47,37 @@ void IambicKeyer::setDitPaddle(bool pressed) {
     // Release ordering pairs with the acquire loads in ditDown()/handlePaddleChange so the
     // keyer thread sees any side effects in this stack (none today, but documents intent
     // and is correct under weak memory models like Apple Silicon).
+    const qint64 now = m_pressClock.nsecsElapsed();
     m_physDit.store(pressed, std::memory_order_release);
-    if (pressed)
-        m_ditLatch.store(true, std::memory_order_release);
+
+    qint64 holdNs = -1;
+    bool bounceFiltered = false;
+    if (pressed) {
+        // Only stamp the press timestamp on a fresh transition unset→set. A bounce-press
+        // arriving while the latch is already true must NOT overwrite the legitimate press time
+        // (that would let a quick subsequent release wrongly clear a real latch).
+        if (!m_ditLatch.exchange(true, std::memory_order_acq_rel))
+            m_ditPressNs.store(now, std::memory_order_release);
+    } else {
+        // Release: hold-duration gate. Anything shorter than kMinHoldNs is treated as bounce
+        // or accidental graze and the latch is cleared so the next element timer doesn't fire
+        // a phantom element. See docs/halikey-cw-trace.md for the captured signatures.
+        const qint64 pressNs = m_ditPressNs.load(std::memory_order_acquire);
+        holdNs = now - pressNs;
+        if (holdNs < kMinHoldNs) {
+            m_ditLatch.store(false, std::memory_order_release);
+            bounceFiltered = true;
+        }
+    }
 
     qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [DIT " << (pressed ? "down" : "up")
-                                         << "] state=" << m_state
+                                         << (bounceFiltered ? " bounce-filtered" : "") << "] state=" << m_state
                                          << " physD=" << m_physDit.load(std::memory_order_acquire)
                                          << " physA=" << m_physDah.load(std::memory_order_acquire)
                                          << " latchD=" << m_ditLatch.load(std::memory_order_acquire)
-                                         << " latchA=" << m_dahLatch.load(std::memory_order_acquire);
+                                         << " latchA=" << m_dahLatch.load(std::memory_order_acquire)
+                                         << (holdNs >= 0 ? QString(" hold=%1ms").arg(holdNs / 1'000'000.0, 0, 'f', 1)
+                                                         : QString());
 
     // Post handlePaddleChange to keyer thread to wake from idle.
     // If keyer is already running, the timer will read the atomic directly.
@@ -63,16 +85,31 @@ void IambicKeyer::setDitPaddle(bool pressed) {
 }
 
 void IambicKeyer::setDahPaddle(bool pressed) {
+    const qint64 now = m_pressClock.nsecsElapsed();
     m_physDah.store(pressed, std::memory_order_release);
-    if (pressed)
-        m_dahLatch.store(true, std::memory_order_release);
+
+    qint64 holdNs = -1;
+    bool bounceFiltered = false;
+    if (pressed) {
+        if (!m_dahLatch.exchange(true, std::memory_order_acq_rel))
+            m_dahPressNs.store(now, std::memory_order_release);
+    } else {
+        const qint64 pressNs = m_dahPressNs.load(std::memory_order_acquire);
+        holdNs = now - pressNs;
+        if (holdNs < kMinHoldNs) {
+            m_dahLatch.store(false, std::memory_order_release);
+            bounceFiltered = true;
+        }
+    }
 
     qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [DAH " << (pressed ? "down" : "up")
-                                         << "] state=" << m_state
+                                         << (bounceFiltered ? " bounce-filtered" : "") << "] state=" << m_state
                                          << " physD=" << m_physDit.load(std::memory_order_acquire)
                                          << " physA=" << m_physDah.load(std::memory_order_acquire)
                                          << " latchD=" << m_ditLatch.load(std::memory_order_acquire)
-                                         << " latchA=" << m_dahLatch.load(std::memory_order_acquire);
+                                         << " latchA=" << m_dahLatch.load(std::memory_order_acquire)
+                                         << (holdNs >= 0 ? QString(" hold=%1ms").arg(holdNs / 1'000'000.0, 0, 'f', 1)
+                                                         : QString());
 
     QMetaObject::invokeMethod(this, &IambicKeyer::handlePaddleChange, Qt::QueuedConnection);
 }
