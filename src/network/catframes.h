@@ -30,6 +30,8 @@ QByteArray diversity(bool on);
 QByteArray dataSubMode(int subMode);
 QByteArray aiMode(int level);
 
+QByteArray txMeter(int alc, int compression, double fwdPower, double swr, bool qrp);
+
 QByteArray ifFrame(const RadioState &state);
 
 } // namespace CatFrames

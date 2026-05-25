@@ -96,6 +96,20 @@ QByteArray aiMode(int level) {
     return QString("AI%1;").arg(level).toUtf8();
 }
 
+QByteArray txMeter(int alc, int compression, double fwdPower, double swr, bool qrp) {
+    // WHY: K4 TM format is TMaaabbbcccddd; — 4 fields × 3 digits.
+    // aaa=ALC, bbb=compression, ccc=forward power (×10 in QRP mode), ddd=SWR×10.
+    // Matches the inverse of handleTM() in rxtxmeterstate.cpp:69-93.
+    const int fwdField = qBound(0, static_cast<int>(qrp ? fwdPower * 10.0 : fwdPower), 999);
+    const int swrField = qBound(0, static_cast<int>(swr * 10.0 + 0.5), 999);
+    return QString("TM%1%2%3%4;")
+        .arg(qBound(0, alc, 999), 3, 10, QChar('0'))
+        .arg(qBound(0, compression, 999), 3, 10, QChar('0'))
+        .arg(fwdField, 3, 10, QChar('0'))
+        .arg(swrField, 3, 10, QChar('0'))
+        .toUtf8();
+}
+
 QByteArray ifFrame(const RadioState &state) {
     // WHY: IF command - K4 basic radio information (38 chars total).
     // Per K4 CAT spec (K3-compat, K31 extended) — byte-exact layout:

@@ -297,7 +297,9 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             return CatFrames::filterWidthExtended(m_radioState->filterBandwidth());
         }
         if (prefix == "TM") {
-            return QByteArray("TM0;");
+            return CatFrames::txMeter(m_radioState->alcMeter(), m_radioState->compressionDb(),
+                                      m_radioState->forwardPower(), m_radioState->swrMeter(),
+                                      m_radioState->isQrpMode());
         }
     }
 
