@@ -116,6 +116,8 @@ set(SOURCES
     src/network/kpa1500client.cpp
     src/network/dxclusterclient.cpp
     src/network/catserver.cpp
+    src/network/catframes.cpp
+    src/network/catpushbroadcaster.cpp
     src/network/k4discovery.cpp
     src/audio/audioengine.cpp
     src/audio/opusdecoder.cpp
@@ -243,6 +245,8 @@ set(HEADERS
     src/network/kpa1500client.h
     src/network/dxclusterclient.h
     src/network/catserver.h
+    src/network/catframes.h
+    src/network/catpushbroadcaster.h
     src/network/k4discovery.h
     src/audio/audioengine.h
     src/audio/opusdecoder.h

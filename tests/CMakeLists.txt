@@ -117,6 +117,8 @@ add_test(NAME ProtocolTests COMMAND test_protocol)
 # CatServer command handler tests
 add_executable(test_catserver test_catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/network/catserver.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catframes.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catpushbroadcaster.cpp
     ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
@@ -134,6 +136,27 @@ add_executable(test_catserver test_catserver.cpp
 target_include_directories(test_catserver PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_catserver Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME CatServerTests COMMAND test_catserver)
+
+# CatPushBroadcaster per-client AI subscription / push tests
+add_executable(test_catpushbroadcaster test_catpushbroadcaster.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catpushbroadcaster.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catframes.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+)
+target_include_directories(test_catpushbroadcaster PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_catpushbroadcaster Qt6::Core Qt6::Network Qt6::Test)
+add_test(NAME CatPushBroadcasterTests COMMAND test_catpushbroadcaster)
 
 # DX Cluster spot parsing tests
 add_executable(test_dxcluster test_dxcluster.cpp

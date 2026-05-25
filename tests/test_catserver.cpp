@@ -29,6 +29,26 @@ private:
         return response;
     }
 
+    QTcpSocket *connectAndKeepOpen(quint16 port) {
+        auto *sock = new QTcpSocket(this);
+        sock->connectToHost("127.0.0.1", port);
+        if (!sock->waitForConnected(1000)) {
+            delete sock;
+            return nullptr;
+        }
+        QCoreApplication::processEvents();
+        return sock;
+    }
+
+    QByteArray waitForBytes(QTcpSocket *sock, int minBytes, int timeoutMs = 500) {
+        int elapsed = 0;
+        while (sock->bytesAvailable() < minBytes && elapsed < timeoutMs) {
+            QTest::qWait(20);
+            elapsed += 20;
+        }
+        return sock->readAll();
+    }
+
 private slots:
     // =========================================================================
     // GET command responses (answered from RadioState cache)
@@ -154,7 +174,64 @@ private slots:
         CatServer server(&rs);
         QVERIFY(server.start(0));
 
-        QCOMPARE(sendCommand(server, "AI;"), QString("AI4;"));
+        QCOMPARE(sendCommand(server, "AI;"), QString("AI0;"));
+    }
+
+    void testAiSetUpdatesPerClient() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QTcpSocket *sock = connectAndKeepOpen(server.port());
+        QVERIFY(sock != nullptr);
+
+        sock->write("AI2;");
+        sock->flush();
+        QTest::qWait(50);
+
+        sock->write("AI;");
+        sock->flush();
+        QByteArray response = waitForBytes(sock, 4);
+        QCOMPARE(response, QByteArray("AI2;"));
+
+        sock->disconnectFromHost();
+        sock->deleteLater();
+    }
+
+    void testTwoClientsDifferentAiModes() {
+        RadioState rs;
+        rs.parseCATCommand("FA00007000000;"); // baseline so FA push has a delta to compare
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QTcpSocket *sockA = connectAndKeepOpen(server.port());
+        QVERIFY(sockA != nullptr);
+        QTcpSocket *sockB = connectAndKeepOpen(server.port());
+        QVERIFY(sockB != nullptr);
+
+        sockA->write("AI0;");
+        sockA->flush();
+        sockB->write("AI2;");
+        sockB->flush();
+        QTest::qWait(50);
+
+        // Drain any stray bytes from the AI SET round-trip (there shouldn't be any).
+        sockA->readAll();
+        sockB->readAll();
+
+        rs.parseCATCommand("FA00014074000;");
+
+        QByteArray bResp = waitForBytes(sockB, 14);
+        QCOMPARE(bResp, QByteArray("FA00014074000;"));
+
+        QTest::qWait(50);
+        QCOMPARE(sockA->bytesAvailable(), qint64(0));
+
+        sockA->disconnectFromHost();
+        sockB->disconnectFromHost();
+        sockA->deleteLater();
+        sockB->deleteLater();
     }
 
     void testRxVfo() {
