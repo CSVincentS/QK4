@@ -150,10 +150,6 @@ sudo apt install flatpak
 # Add the Flathub repository
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-# Clone
-git clone https://github.com/mikeg-dal/QK4.git
-cd QK4/flatpak
-
 # Install flatpak-builder and the KDE runtime
 flatpak install org.flatpak.Builder
 flatpak install org.kde.Platform//6.10
