@@ -58,14 +58,6 @@ void AntennaCfgPopupWidget::setupUi() {
 
     modeLayout->addStretch();
 
-    // Close button - smaller
-    m_closeBtn = new QPushButton("\u21A9", this); // ↩
-    m_closeBtn->setFixedSize(36, 24);
-    m_closeBtn->setStyleSheet(K4Styles::popupButtonNormal() +
-                              QString("QPushButton { font-size: %1px; }").arg(K4Styles::Dimensions::FontSizeButton));
-    connect(m_closeBtn, &QPushButton::clicked, this, &AntennaCfgPopupWidget::onCloseClicked);
-    modeLayout->addWidget(m_closeBtn);
-
     mainLayout->addLayout(modeLayout);
 
     // USE SUBSET row with checkboxes
@@ -205,10 +197,6 @@ void AntennaCfgPopupWidget::onUseSubsetClicked() {
 void AntennaCfgPopupWidget::onCheckboxToggled(int index) {
     Q_UNUSED(index)
     emitConfigChanged();
-}
-
-void AntennaCfgPopupWidget::onCloseClicked() {
-    hidePopup();
 }
 
 void AntennaCfgPopupWidget::updateCheckboxStates() {
