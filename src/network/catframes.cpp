@@ -96,6 +96,20 @@ QByteArray aiMode(int level) {
     return QString("AI%1;").arg(level).toUtf8();
 }
 
+QByteArray sMeterMain(double sMeter) {
+    // WHY: Inverse of handleSM() in rxtxmeterstate.cpp:32-46. K4 SM format is the
+    // raw bar count: 0..18 = S0..S9 (2 bars per S-unit), 19+ encodes dB-over-S9
+    // (each unit = 10 dB). The old "sMeter*3" math saturated at 21 for anything
+    // >= S7, causing MacLoggerDX's meter to read full-scale on normal noise floor.
+    int bars;
+    if (sMeter <= 9.0) {
+        bars = qBound(0, static_cast<int>(sMeter * 2.0 + 0.5), 18);
+    } else {
+        bars = qBound(18, static_cast<int>(18 + (sMeter - 9.0) + 0.5), 30);
+    }
+    return QString("SM%1;").arg(bars, 4, 10, QChar('0')).toUtf8();
+}
+
 QByteArray txMeter(int alc, int compression, double fwdPower, double swr, bool qrp) {
     // WHY: K4 TM format is TMaaabbbcccddd; — 4 fields × 3 digits.
     // aaa=ALC, bbb=compression, ccc=forward power (×10 in QRP mode), ddd=SWR×10.

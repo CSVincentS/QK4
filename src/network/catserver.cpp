@@ -280,9 +280,7 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             return CatFrames::diversity(m_radioState->diversityEnabled());
         }
         if (prefix == "SM") {
-            int smeter = static_cast<int>(m_radioState->sMeter());
-            int k4Value = qBound(0, smeter * 3, 21);
-            return QString("SM%1;").arg(k4Value, 4, 10, QChar('0')).toUtf8();
+            return CatFrames::sMeterMain(m_radioState->sMeter());
         }
         if (prefix == "PCX") {
             return CatFrames::rfPowerExtended(m_radioState->rfPower(), m_radioState->isQrpMode());
