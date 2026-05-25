@@ -144,6 +144,12 @@ cmake --build build -j$(nproc)
 
 ### Flatpak
 ```bash
+# Install Flatpak (if not already installed)
+sudo apt install flatpak
+
+# Add the Flathub repository
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
 # Install flatpak-builder and the KDE runtime
 flatpak install org.flatpak.Builder
 flatpak install org.kde.Platform//6.10
@@ -154,6 +160,11 @@ git clone https://github.com/mikeg-dal/QK4.git
 cd QK4/flatpak
 flatpak-builder --user --install build-dir flatpak/io.github.mikeg_dal.QK4.json
 
+# Install the udev rules
+sudo curl -o /etc/udev/rules.d/99-kpod.rules https://raw.githubusercontent.com/mikeg-dal/QK4/main/resources/99-kpod.rules
+sudo chmod 644 /etc/udev/rules.d/99-kpod.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
 ```
 **Note:** You do not need to install any of the required dependencies mentioned in [Requirements](#requirements) to build the Flatpak, as all build dependencies are included in the Flatpak build manifest and will be installed automatically.
 
