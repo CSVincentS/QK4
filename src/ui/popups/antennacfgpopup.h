@@ -87,6 +87,7 @@ signals:
 
 protected:
     QSize contentSize() const override;
+    void paintContent(QPainter &painter, const QRect &contentRect) override;
 
 private slots:
     void onDisplayAllClicked();
@@ -106,6 +107,7 @@ private:
     QPushButton *m_useSubsetBtn;
     QVector<QPushButton *> m_checkboxes;
     QVector<QLabel *> m_labels;
+    QLabel *m_noteLabel = nullptr; // RX variants only; drives the bracket-line paint
 
     // Default antenna labels
     static constexpr const char *RX_LABELS[7] = {"ANT1", "ANT2", "ANT3", "RX1", "RX2", "=TX\nANT", "=OPP\nTX ANT"};

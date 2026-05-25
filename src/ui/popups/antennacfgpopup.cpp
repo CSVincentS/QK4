@@ -1,6 +1,9 @@
 #include "ui/popups/antennacfgpopup.h"
 #include "ui/styling/k4styles.h"
+#include <QFontMetrics>
 #include <QHBoxLayout>
+#include <QPainter>
+#include <QPen>
 #include <QVBoxLayout>
 
 AntennaCfgPopupWidget::AntennaCfgPopupWidget(AntennaCfgVariant variant, QWidget *parent)
@@ -62,7 +65,7 @@ void AntennaCfgPopupWidget::setupUi() {
 
     // USE SUBSET row with checkboxes
     auto *subsetLayout = new QHBoxLayout();
-    subsetLayout->setSpacing(4);
+    subsetLayout->setSpacing(22);
 
     // USE SUBSET radio button - smaller
     m_useSubsetBtn = new QPushButton("USE SUBSET:", this);
@@ -75,7 +78,7 @@ void AntennaCfgPopupWidget::setupUi() {
     connect(m_useSubsetBtn, &QPushButton::clicked, this, &AntennaCfgPopupWidget::onUseSubsetClicked);
     subsetLayout->addWidget(m_useSubsetBtn);
 
-    subsetLayout->addSpacing(4);
+    subsetLayout->addSpacing(8);
 
     // Antenna checkboxes with labels - smaller
     const char *const *labels = (m_variant == AntennaCfgVariant::Tx) ? TX_LABELS : RX_LABELS;
@@ -110,15 +113,50 @@ void AntennaCfgPopupWidget::setupUi() {
     subsetLayout->addStretch();
     mainLayout->addLayout(subsetLayout);
 
-    // Note label (for RX variants only) - smaller
+    // Note label (for RX variants only) — right margin leaves room for the
+    // bracket-line paint that connects the text to the =OPP TX ANT checkbox.
     if (m_variant != AntennaCfgVariant::Tx) {
-        auto *noteLabel = new QLabel("Requires ATU: set TX>ANT CFG for 2-antenna subset", this);
-        noteLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
-                                     .arg(K4Styles::Colors::TextGray)
-                                     .arg(K4Styles::Dimensions::FontSizeTiny));
-        noteLabel->setAlignment(Qt::AlignRight);
-        mainLayout->addWidget(noteLabel);
+        m_noteLabel = new QLabel("Requires ATU: set TX>ANT CFG for 2-antenna subset", this);
+        m_noteLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
+                                       .arg(K4Styles::Colors::TextGray)
+                                       .arg(K4Styles::Dimensions::FontSizeSmall));
+        m_noteLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        m_noteLabel->setContentsMargins(0, 0, 0, 0);
+        mainLayout->addWidget(m_noteLabel);
     }
+}
+
+void AntennaCfgPopupWidget::paintContent(QPainter &painter, const QRect &contentRect) {
+    Q_UNUSED(contentRect)
+    if (!m_noteLabel || m_checkboxes.isEmpty()) {
+        return;
+    }
+
+    // Map child geometries to our coordinate space (paintContent uses widget coords).
+    const QRect noteRect = m_noteLabel->geometry();
+    const QRect lastBox = m_checkboxes.last()->geometry();
+
+    // Where the visible text ends: left-aligned, so right edge = left + text width.
+    const QFontMetrics fm(m_noteLabel->font());
+    const int textStartX = noteRect.left() + m_noteLabel->contentsMargins().left();
+    const int textRightX = textStartX + fm.horizontalAdvance(m_noteLabel->text());
+
+    // WHY: line sits at the text baseline so the italic descenders just kiss it —
+    // gives the visual effect that the bracket continues the text underline.
+    const int textBaselineY = noteRect.center().y() + fm.ascent() / 2;
+    const int horizY = textBaselineY;
+    const int vertX = lastBox.center().x();
+    const int topY = lastBox.bottom() + 2;
+    const int leftX = textRightX + 3;
+
+    QPen pen{QColor(K4Styles::Colors::TextGray)};
+    pen.setWidth(1);
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    painter.setPen(pen);
+    painter.drawLine(leftX, horizY, vertX, horizY); // horizontal (text → under checkbox)
+    painter.drawLine(vertX, horizY, vertX, topY);   // vertical (up to checkbox bottom)
+    painter.restore();
 }
 
 QSize AntennaCfgPopupWidget::contentSize() const {
@@ -126,13 +164,13 @@ QSize AntennaCfgPopupWidget::contentSize() const {
     int width, height;
 
     if (m_variant == AntennaCfgVariant::Tx) {
-        // TX: 3 antennas - compact
-        width = 260 + 2 * cm;
-        height = 90 + 2 * cm;
+        // TX: 3 antennas — 50% larger than the pre-bracket sizing
+        width = 390 + 2 * cm;
+        height = 135 + 2 * cm;
     } else {
-        // RX: 7 antennas - wider but still compact
-        width = 420 + 2 * cm;
-        height = 105 + 2 * cm;
+        // RX: 7 antennas — 50% larger to give the helper text and bracket room
+        width = 630 + 2 * cm;
+        height = 158 + 2 * cm;
     }
 
     return QSize(width, height);
