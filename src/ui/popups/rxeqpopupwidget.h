@@ -165,7 +165,6 @@ public slots:
 private slots:
     void onBandValueChanged(int bandIndex, int dB);
     void onFlatClicked();
-    void onCloseClicked();
     void onPresetLoadClicked(int index);
     void onPresetSaveClicked(int index);
     void onPresetClearClicked(int index);
@@ -175,7 +174,6 @@ private:
 
     QVector<EqBandWidget *> m_bands;
     QPushButton *m_flatBtn;
-    QPushButton *m_closeBtn;
     QVector<EqPresetRowWidget *> m_presetRows;
 
     // Frequency labels for the 8 bands
