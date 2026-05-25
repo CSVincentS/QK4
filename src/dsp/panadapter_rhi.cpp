@@ -853,30 +853,14 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             gridVerts << 0.0f << y << w << y;
         }
 
-        // Vertical lines at frequency-aligned positions (matching label intervals)
-        // Grid lines are placed at round dial-frequency boundaries, same as labels.
-        {
-            qint64 effectiveCenter = m_centerFreq;
-            qint64 cwOffset = 0;
-            if (m_mode == "CW") {
-                cwOffset = static_cast<qint64>(m_ifShift) * 10;
-                effectiveCenter = m_centerFreq + cwOffset;
-            } else if (m_mode == "CW-R") {
-                cwOffset = -static_cast<qint64>(m_ifShift) * 10;
-                effectiveCenter = m_centerFreq + cwOffset;
-            }
-            qint64 startFreq = effectiveCenter - m_spanHz / 2;
-            qint64 dialStart = startFreq - cwOffset;
-            qint64 dialEnd = dialStart + m_spanHz;
-            int interval = calculateGridInterval(m_spanHz);
-            qint64 firstDialLine = (dialStart / interval) * interval;
-            if (firstDialLine < dialStart)
-                firstDialLine += interval;
-            for (qint64 dialFreq = firstDialLine; dialFreq < dialEnd; dialFreq += interval) {
-                qint64 rfFreq = dialFreq + cwOffset;
-                float x = static_cast<float>(rfFreq - startFreq) / static_cast<float>(m_spanHz) * w;
-                gridVerts << x << 0.0f << x << spectrumHeight;
-            }
+        // WHY: Vertical grid lines are decoupled from frequency labels — the grid is a
+        // visual reference for amplitude/position, not a frequency readout. Labels still
+        // snap to round dial values via calculateGridInterval(); the grid stays evenly
+        // spaced so cell density is consistent across all spans and modes.
+        constexpr int kVerticalGridCells = 16;
+        for (int i = 1; i < kVerticalGridCells; ++i) {
+            float x = w * static_cast<float>(i) / static_cast<float>(kVerticalGridCells);
+            gridVerts << x << 0.0f << x << spectrumHeight;
         }
 
         QRhiResourceUpdateBatch *gridRub = m_rhi->nextResourceUpdateBatch();
