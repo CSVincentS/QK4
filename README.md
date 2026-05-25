@@ -157,7 +157,7 @@ flatpak install org.kde.Sdk//6.10
 
 # Clone and build
 git clone https://github.com/mikeg-dal/QK4.git
-cd QK4/flatpak
+cd QK4
 flatpak-builder --user --install build-dir flatpak/io.github.mikeg_dal.QK4.json
 
 # Install the udev rules
