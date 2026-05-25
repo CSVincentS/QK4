@@ -282,6 +282,12 @@ void SideControlPanel::setupUi() {
     iconRow->addStretch();
     layout->addLayout(iconRow);
 
+    auto *versionLabel = new QLabel(QString("QK4 V.%1").arg(QK4_VERSION), this);
+    versionLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                    .arg(K4Styles::Colors::InactiveGray)
+                                    .arg(K4Styles::Dimensions::FontSizeSmall));
+    layout->addWidget(versionLabel);
+
     // Connect icon button signals
     connect(m_helpBtn, &QPushButton::clicked, this, &SideControlPanel::helpClicked);
     connect(m_connectBtn, &QPushButton::clicked, this, &SideControlPanel::connectClicked);
