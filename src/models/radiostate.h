@@ -14,6 +14,7 @@
 #include "radiostate/frequencyvfostate.h"
 #include "radiostate/levelsstate.h"
 #include "radiostate/modefilterstate.h"
+#include "radiostate/powerstate.h"
 #include "radiostate/processingstate.h"
 #include "radiostate/qskcontrolstate.h"
 #include "radiostate/rxtxmeterstate.h"
@@ -237,6 +238,10 @@ public:
 
     // QSK (full break-in)
     bool qskEnabled() const { return m_qskControlState.qskEnabled; }
+
+    // K4 remote power state — std::nullopt until the first PS echo arrives,
+    // then true (PS1) / false (PS0). See radiostate/powerstate.h.
+    std::optional<bool> isPoweredOn() const { return m_powerState.isOn(); }
 
     // TEST mode (TX test)
     bool testMode() const { return m_rxTxMeterState.testMode; }
@@ -579,6 +584,7 @@ signals:
     void compressionChanged(int level);                              // Speech compression (0-30, SSB only)
     void voxChanged(bool enabled);                                   // VOX state (any mode)
     void qskEnabledChanged(bool enabled);                            // QSK (full break-in) state
+    void powerStateChanged(bool on);                                 // PS0/PS1 — K4 remote power state
     void testModeChanged(bool enabled);                              // TX test mode state
     void atuModeChanged(int mode);                                   // ATU mode (1=bypass, 2=auto)
     void bSetChanged(bool enabled);                                  // B SET (Target B) state
@@ -702,6 +708,9 @@ private:
     // QSK (full break-in) - extracted from SD command x flag
     // QSK (full break-in) state and per-mode delays — see radiostate/qskcontrolstate.h.
     QskControlState m_qskControlState;
+
+    // K4 remote power state — see radiostate/powerstate.h.
+    PowerState m_powerState;
 
     // TEST / B SET live on m_rxTxMeterState.
 

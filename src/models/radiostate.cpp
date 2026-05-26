@@ -42,6 +42,10 @@ void RadioState::reset() {
     // QSK (full break-in) + per-mode delays. (TEST/B SET live on m_rxTxMeterState.)
     m_qskControlState.reset();
 
+    // K4 remote power state — back to "unknown" so the indicator goes neutral
+    // until the next session sends a PS query.
+    m_powerState.reset();
+
     // VFO link + lock A/B reset via m_frequencyVfoState.reset() above.
 
     // Panadapter / display state (REF, SPN, SCL, MP, DPM, DSM, FPS, WFC, WFH,
@@ -629,6 +633,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"ML", [this](const QString &c) { handleML(c); }});
     m_commandHandlers.append({"CP", [this](const QString &c) { handleCP(c); }});
     m_commandHandlers.append({"PC", [this](const QString &c) { handlePC(c); }});
+    m_commandHandlers.append({"PS", [this](const QString &c) { PowerHandlers::handlePS(m_powerState, *this, c); }});
     m_commandHandlers.append({"KS", [this](const QString &c) { handleKS(c); }});
     m_commandHandlers.append({"KP", [this](const QString &c) { handleKP(c); }});
     m_commandHandlers.append({"SM", [this](const QString &c) { handleSM(c); }});

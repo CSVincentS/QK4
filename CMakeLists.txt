@@ -133,6 +133,7 @@ set(SOURCES
     src/models/radiostate/frequencyvfostate.cpp
     src/models/radiostate/levelsstate.cpp
     src/models/radiostate/modefilterstate.cpp
+    src/models/radiostate/powerstate.cpp
     src/models/radiostate/processingstate.cpp
     src/models/radiostate/qskcontrolstate.cpp
     src/models/radiostate/rxtxmeterstate.cpp
@@ -171,6 +172,8 @@ set(SOURCES
     src/ui/popups/modepopupwidget.cpp
     src/ui/widgets/txmeterwidget.cpp
     src/ui/widgets/nethealthwidget.cpp
+    src/ui/widgets/icontextlabel.cpp
+    src/ui/widgets/powerstatusbutton.cpp
     src/ui/popups/fnpopupwidget.cpp
     src/ui/popups/rxeqpopupwidget.cpp
     src/ui/popups/antennacfgpopup.cpp
@@ -181,6 +184,7 @@ set(SOURCES
     src/ui/popups/voxpopup.cpp
     src/ui/popups/ssbbwpopup.cpp
     src/ui/popups/keyingweightpopup.cpp
+    src/ui/popups/confirmpopup.cpp
     src/ui/popups/softwarelistpopup.cpp
     src/ui/dialogs/textdecodewindow.cpp
     src/ui/dialogs/macrodialog.cpp

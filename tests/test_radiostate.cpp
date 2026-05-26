@@ -2899,6 +2899,57 @@ private slots:
         }
     }
 
+    // K4 remote power state (PS command).
+    void testPowerStateInitiallyUnknown() {
+        RadioState rs;
+        QVERIFY(!rs.isPoweredOn().has_value());
+    }
+
+    void testPowerStateOn() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS1;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().at(0).toBool(), true);
+        QVERIFY(rs.isPoweredOn().has_value());
+        QCOMPARE(rs.isPoweredOn().value(), true);
+    }
+
+    void testPowerStateOff() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS0;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().at(0).toBool(), false);
+        QCOMPARE(rs.isPoweredOn().value(), false);
+    }
+
+    void testPowerStateNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("PS1;");
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS1;"); // same value
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testPowerStateMalformed() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS;");  // too short
+        rs.parseCATCommand("PS2;"); // invalid flag
+        rs.parseCATCommand("PSx;"); // non-digit
+        QCOMPARE(spy.count(), 0);
+        QVERIFY(!rs.isPoweredOn().has_value());
+    }
+
+    void testPowerStateResetClearsToUnknown() {
+        RadioState rs;
+        rs.parseCATCommand("PS1;");
+        QCOMPARE(rs.isPoweredOn().value(), true);
+        rs.reset();
+        QVERIFY(!rs.isPoweredOn().has_value());
+    }
+
     // Defaults-with-special-values check: a handful of fields use non-negative
     // sentinels (default 50, 30, 1000, etc.) that could collide with legal
     // values. Lock in the exact default so a regression changes it visibly.

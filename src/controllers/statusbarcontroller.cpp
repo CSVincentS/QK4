@@ -1,9 +1,13 @@
 #include "statusbarcontroller.h"
 
+#include "controllers/connectioncontroller.h"
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
-#include "ui/styling/k4constants.h"
+#include "ui/popups/confirmpopup.h"
+#include "ui/styling/k4styles.h"
+#include "ui/widgets/icontextlabel.h"
 #include "ui/widgets/nethealthwidget.h"
+#include "ui/widgets/powerstatusbutton.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
@@ -17,10 +21,10 @@ namespace {
 constexpr int kClockUpdateIntervalMs = 1000;
 } // namespace
 
-StatusBarController::StatusBarController(RadioState *radioState, NetworkMetrics *networkMetrics, QWidget *parentWidget,
-                                         QObject *parent)
-    : QObject(parent), m_radioState(radioState), m_container(new QWidget(parentWidget)),
-      m_clockTimer(new QTimer(this)) {
+StatusBarController::StatusBarController(RadioState *radioState, ConnectionController *connectionController,
+                                         NetworkMetrics *networkMetrics, QWidget *parentWidget, QObject *parent)
+    : QObject(parent), m_radioState(radioState), m_connectionController(connectionController),
+      m_container(new QWidget(parentWidget)), m_clockTimer(new QTimer(this)) {
     m_container->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
     m_container->setStyleSheet(QString("background-color: %1;").arg(K4Styles::Colors::DarkBackground));
 
@@ -44,33 +48,18 @@ StatusBarController::StatusBarController(RadioState *radioState, NetworkMetrics 
 
     layout->addStretch();
 
-    // Power (TX meter-driven — see setForwardPower())
-    m_powerLabel = new QLabel("--- W", m_container);
-    m_powerLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                    .arg(K4Styles::Colors::AccentAmber)
-                                    .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_powerLabel);
+    // Temperature slot — waits on user-supplied CAT command + icon. Renders "--"
+    // until then; populating it later is one setValue() call from a new RadioState
+    // signal handler.
+    m_temperatureField = new IconTextLabel(m_container);
+    m_temperatureField->setUnit("°F");
+    layout->addWidget(m_temperatureField);
 
-    // SWR
-    m_swrLabel = new QLabel("-.-:1", m_container);
-    m_swrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                  .arg(K4Styles::Colors::AccentAmber)
-                                  .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_swrLabel);
-
-    // Voltage
-    m_voltageLabel = new QLabel("--.- V", m_container);
-    m_voltageLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                      .arg(K4Styles::Colors::AccentAmber)
-                                      .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_voltageLabel);
-
-    // Current
-    m_currentLabel = new QLabel("-.- A", m_container);
-    m_currentLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                      .arg(K4Styles::Colors::AccentAmber)
-                                      .arg(K4Styles::Dimensions::FontSizeButton));
-    layout->addWidget(m_currentLabel);
+    // Voltage slot (was a flat label — now styled via IconTextLabel to match
+    // the new bar language; icon arrives in a follow-up).
+    m_voltageField = new IconTextLabel(m_container);
+    m_voltageField->setUnit("V");
+    layout->addWidget(m_voltageField);
 
     layout->addStretch();
 
@@ -93,28 +82,33 @@ StatusBarController::StatusBarController(RadioState *radioState, NetworkMetrics 
     m_netHealthWidget = new NetHealthWidget(networkMetrics, m_container);
     layout->addWidget(m_netHealthWidget);
 
-    // Observe RadioState for supply voltage/current and SWR. These used to
-    // live in MainWindow::onSupplyVoltageChanged / onSupplyCurrentChanged /
-    // onSwrChanged. MainWindow keeps those slots only for the side-panel
-    // companion updates; label updates happen here directly.
+    // Remote power button — rightmost item.
+    m_powerButton = new PowerStatusButton(m_container);
+    layout->addWidget(m_powerButton);
+    connect(m_powerButton, &QToolButton::clicked, this, &StatusBarController::onPowerButtonClicked);
+
+    // Voltage updates → value field.
     connect(m_radioState, &RadioState::supplyVoltageChanged, this,
-            [this](double volts) { m_voltageLabel->setText(QString("%1 V").arg(volts, 0, 'f', 1)); });
-    // Mirror the K4 front-panel meter: at idle show supply current (SIFP IS); during TX
-    // show PA drain current (SIRF PM/768). The drain threshold (0.1 A) keeps us on the
-    // supply value during the ~100–200 ms gap between TX-edge and the first TX-time SIRF
-    // frame — without it the display would briefly read 0 A because paDrainCurrent is
-    // still the last RX-time value (PM:0 → 0 A) until the K4 emits a fresh SIRF.
-    auto updateAmps = [this]() {
-        const double drain = m_radioState->paDrainCurrent();
-        const bool useDrain = m_radioState->isTransmitting() && drain > 0.1;
-        const double amps = useDrain ? drain : m_radioState->supplyCurrent();
-        m_currentLabel->setText(QString("%1 A").arg(amps, 0, 'f', 1));
-    };
-    connect(m_radioState, &RadioState::supplyCurrentChanged, this, updateAmps);
-    connect(m_radioState, &RadioState::paDrainCurrentChanged, this, updateAmps);
-    connect(m_radioState, &RadioState::transmitStateChanged, this, updateAmps);
-    connect(m_radioState, &RadioState::swrChanged, this,
-            [this](double swr) { m_swrLabel->setText(QString("%1:1").arg(swr, 0, 'f', 1)); });
+            [this](double volts) { m_voltageField->setValue(QString("%1").arg(volts, 0, 'f', 1)); });
+
+    // PS0/PS1 → power button state.
+    connect(m_radioState, &RadioState::powerStateChanged, this, [this](bool on) {
+        m_powerButton->setState(on ? PowerStatusButton::State::On : PowerStatusButton::State::Off);
+    });
+
+    // On disconnect, blank metric fields and force the power button to "Off"
+    // (it will go back to Unknown → On as soon as the next connect's PS query
+    // response lands).
+    connect(m_connectionController, &ConnectionController::connectionStateChanged, this,
+            [this](TcpClient::ConnectionState state) {
+                if (state == TcpClient::Disconnected) {
+                    m_temperatureField->clear();
+                    m_voltageField->clear();
+                    m_powerButton->setState(PowerStatusButton::State::Off);
+                } else if (state == TcpClient::Connecting || state == TcpClient::Authenticating) {
+                    m_powerButton->setState(PowerStatusButton::State::Unknown);
+                }
+            });
 
     // Clock tick.
     connect(m_clockTimer, &QTimer::timeout, this, &StatusBarController::updateDateTime);
@@ -177,21 +171,9 @@ void StatusBarController::showAuthFailed() {
                                                .arg(K4Styles::Dimensions::FontSizeButton));
 }
 
-void StatusBarController::setForwardPower(double watts) {
-    QString powerStr;
-    if (watts < 10.0) {
-        powerStr = QString("%1 W").arg(watts, 0, 'f', 1);
-    } else {
-        powerStr = QString("%1 W").arg(static_cast<int>(watts));
-    }
-    m_powerLabel->setText(powerStr);
-}
-
 void StatusBarController::clearReadings() {
-    m_powerLabel->setText("--- W");
-    m_swrLabel->setText("-.-:1");
-    m_voltageLabel->setText("--.- V");
-    m_currentLabel->setText("-.- A");
+    m_temperatureField->clear();
+    m_voltageField->clear();
 }
 
 void StatusBarController::setKpa1500Visible(bool visible) {
@@ -202,4 +184,25 @@ void StatusBarController::setKpa1500Status(const QString &text, const QString &s
     m_kpa1500StatusLabel->setText(text);
     if (!styleSheet.isEmpty())
         m_kpa1500StatusLabel->setStyleSheet(styleSheet);
+}
+
+void StatusBarController::onPowerButtonClicked() {
+    if (m_confirmPopup && m_confirmPopup->isVisibleOrJustHidden())
+        return;
+
+    if (!m_confirmPopup) {
+        m_confirmPopup = new ConfirmPopup(
+            QStringLiteral("Power off K4?"),
+            QStringLiteral("This will power off the remote K4. You will not be able to power it back on from QK4. "
+                           "Continue?"),
+            QStringLiteral("Power Off"), QStringLiteral("Cancel"), m_container);
+        connect(m_confirmPopup, &ConfirmPopup::confirmed, this, [this]() {
+            if (m_connectionController)
+                m_connectionController->sendCAT(QStringLiteral("PS0;"));
+            // No auto-disconnect — K4 closes the socket on its end, and the
+            // existing disconnected flow takes over.
+        });
+    }
+
+    m_confirmPopup->showAboveWidget(m_powerButton);
 }

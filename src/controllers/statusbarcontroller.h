@@ -3,32 +3,38 @@
 
 #include <QObject>
 
-class RadioState;
+class ConnectionController;
+class ConfirmPopup;
+class IconTextLabel;
+class NetHealthWidget;
 class NetworkMetrics;
-class QWidget;
+class PowerStatusButton;
 class QLabel;
 class QTimer;
-class NetHealthWidget;
+class QWidget;
+class RadioState;
 
-// Owns the top status bar: title, date/time clock, power/SWR/voltage/current
-// readings, KPA1500 status, K4 connection status, and NetHealthWidget.
+// Owns the top status bar: title, date/time clock, at-a-glance metric slots
+// (temperature, voltage), KPA1500 status, K4 connection status, NetHealthWidget,
+// and the K4 remote-power button on the right.
 //
-// Observes RadioState directly for voltage/current/SWR updates so MainWindow
-// no longer needs onSupplyVoltageChanged / onSupplyCurrentChanged / onSwrChanged
-// slots for the purpose of updating status-bar labels. MainWindow keeps those
-// slots only to update the side panel readouts.
+// Observes RadioState directly for voltage and power-state updates so MainWindow
+// no longer needs to route those slots. The bar dropped its W / SWR / A readouts
+// (redundant with the rest of the UI); future at-a-glance fields are added as
+// IconTextLabel instances and wired to whatever RadioState signal feeds them.
 //
-// Forward power (the power label) is TX-meter-driven, not RFPower-driven, so
-// the controller exposes setForwardPower() for MainWindow's txMeterChanged
-// handler to call.
+// The power button on the right is the click target for the K4 remote power-off
+// flow: a ConfirmPopup is shown above it, and on confirm the controller sends
+// "PS0;" via the injected ConnectionController. The K4 closes the socket; the
+// normal disconnected flow handles the cleanup.
 //
 // See PATTERNS.md → Controller Pattern.
 class StatusBarController : public QObject {
     Q_OBJECT
 
 public:
-    explicit StatusBarController(RadioState *radioState, NetworkMetrics *networkMetrics, QWidget *parentWidget,
-                                 QObject *parent = nullptr);
+    StatusBarController(RadioState *radioState, ConnectionController *connectionController,
+                        NetworkMetrics *networkMetrics, QWidget *parentWidget, QObject *parent = nullptr);
     ~StatusBarController() override;
 
     // Container widget — MainWindow adds this into its top layout.
@@ -36,7 +42,6 @@ public:
 
     // Task-level API.
     void setTitle(const QString &text);
-    void setForwardPower(double watts);
     void clearReadings();
     void setKpa1500Visible(bool visible);
     void setKpa1500Status(const QString &text, const QString &styleSheet);
@@ -51,18 +56,21 @@ public:
     void showAuthFailed();                       // red bold — "Auth Failed"
 
 private:
-    RadioState *m_radioState; // injected, not owned
-    QWidget *m_container;     // owned via Qt parent (parentWidget)
+    void onPowerButtonClicked();
+
+    RadioState *m_radioState;                     // injected, not owned
+    ConnectionController *m_connectionController; // injected, not owned
+    QWidget *m_container;                         // owned via Qt parent (parentWidget)
     QLabel *m_titleLabel;
     QLabel *m_dateTimeLabel;
-    QLabel *m_powerLabel;
-    QLabel *m_swrLabel;
-    QLabel *m_voltageLabel;
-    QLabel *m_currentLabel;
+    IconTextLabel *m_temperatureField;
+    IconTextLabel *m_voltageField;
     QLabel *m_connectionStatusLabel;
     QLabel *m_kpa1500StatusLabel;
     NetHealthWidget *m_netHealthWidget;
+    PowerStatusButton *m_powerButton;
     QTimer *m_clockTimer;
+    ConfirmPopup *m_confirmPopup = nullptr; // lazily constructed on first click
 
     void updateDateTime();
 };
