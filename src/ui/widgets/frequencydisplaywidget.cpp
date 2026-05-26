@@ -7,7 +7,7 @@
 #include <QFontMetrics>
 
 FrequencyDisplayWidget::FrequencyDisplayWidget(QWidget *parent)
-    : QWidget(parent), m_digits("00000000"), m_normalColor(K4Styles::Colors::TextWhite),
+    : QWidget(parent), m_digits(QString(kDigits, '0')), m_normalColor(K4Styles::Colors::TextWhite),
       m_editColor(K4Styles::Colors::VfoACyan) {
 
     // Set up font with tabular figures for consistent digit widths
@@ -23,8 +23,8 @@ FrequencyDisplayWidget::FrequencyDisplayWidget(QWidget *parent)
     setCursor(Qt::PointingHandCursor);
     setAttribute(Qt::WA_Hover);
 
-    // Size hint based on max display width (XX.XXX.XXX = 8 digits + 2 dots)
-    int width = m_charWidth * 8 + m_dotWidth * 2 + 4; // +4 for padding
+    // Size hint based on max display width (X.XXX.XXX.XXX = 10 digits + 3 dots)
+    int width = m_charWidth * kDigits + m_dotWidth * 3 + 4; // +4 for padding
     setMinimumWidth(width);
     setFixedHeight(K4Styles::Dimensions::MenuItemHeight);
 }
@@ -76,42 +76,60 @@ void FrequencyDisplayWidget::parseFrequency(const QString &freq) {
         }
     }
 
-    // Pad left with zeros to 8 digits, or truncate if too long
-    while (digits.length() < 8) {
+    // Pad left with zeros to kDigits, or truncate (keeping rightmost) if too long
+    while (digits.length() < kDigits) {
         digits.prepend('0');
     }
-    if (digits.length() > 8) {
-        digits = digits.right(8);
+    if (digits.length() > kDigits) {
+        digits = digits.right(kDigits);
     }
 
     m_digits = digits;
 }
 
 int FrequencyDisplayWidget::displayStartIndex() const {
-    // The leading zero of a <10 MHz frequency is suppressed in the normal
-    // display — but NOT while editing, so digit 0 stays visible, clickable
-    // and cursor-addressable (you can't reach >=10 MHz otherwise) and the
-    // layout doesn't shift when digit 0 flips between '0' and non-'0'.
-    return (m_digits[0] == '0' && m_cursorPosition < 0) ? 1 : 0;
+    // Default to showing the rightmost 8 digits (matches pre-VHF behavior:
+    // HF defaults to "0.000.000" with one suppressed leading zero, 14 MHz reads
+    // "14.074.000", 7 MHz reads "7.024.980"). For higher frequencies, additional
+    // leading digits are revealed automatically: 144 MHz → "144.100.000",
+    // 1.296 GHz → "1.296.000.000". In edit mode show all digits so any position
+    // is reachable for typing higher-MHz frequencies.
+    if (m_cursorPosition >= 0) {
+        return 0;
+    }
+    constexpr int kBaseVisible = 8;
+    constexpr int kBaseStart = kDigits - kBaseVisible; // index of the 8-digit-wide window
+    int start = 0;
+    while (start < kBaseStart && m_digits[start] == '0') {
+        ++start;
+    }
+    // Mimic old <10 MHz behavior: strip the one remaining leading zero so 7 MHz
+    // renders as "7.024.980" not "07.024.980".
+    if (start == kBaseStart && m_digits[start] == '0') {
+        ++start;
+    }
+    return start;
 }
 
 QString FrequencyDisplayWidget::formatWithDots() const {
-    // Format: X.XXX.XXX or XX.XXX.XXX
-    // Input: "07024980" -> Output: "7.024.980"
-    // Input: "14024980" -> Output: "14.024.980"
+    // Format groups three digits from the right separated by dots:
+    //   "0000007024980" → "7.024.980"
+    //   "0000014074000" → "14.074.000"
+    //   "0000144100000" → "144.100.000"
+    //   "0001296000000" → "1.296.000.000"
 
     QString result;
     int startIdx = displayStartIndex();
 
-    for (int i = startIdx; i < 8; ++i) {
+    for (int i = startIdx; i < kDigits; ++i) {
         result.append(m_digits[i]);
 
-        // Insert dots after positions 1 (or 0 if started at 1) and 4
-        int posFromRight = 7 - i;
-        if (posFromRight == 6 || posFromRight == 3) {
-            if (i < 7) { // Don't add trailing dot
-                result.append('.');
-            }
+        // Insert a dot when the next digit starts a new 3-digit group from the right.
+        // posFromRight of the dot's gap is (kDigits - i - 1); if that's >0 and a
+        // multiple of 3, the dot belongs between m_digits[i] and m_digits[i+1].
+        int posFromRight = kMaxDigitIndex - i;
+        if (posFromRight > 0 && posFromRight % 3 == 0) {
+            result.append('.');
         }
     }
 
@@ -191,11 +209,11 @@ int FrequencyDisplayWidget::digitPositionFromX(int x) const {
     }
 
     // Click beyond display - select last digit
-    return 7;
+    return kMaxDigitIndex;
 }
 
 void FrequencyDisplayWidget::enterEditMode(int digitPosition) {
-    if (digitPosition < 0 || digitPosition > 7) {
+    if (digitPosition < 0 || digitPosition > kMaxDigitIndex) {
         return;
     }
 
@@ -258,7 +276,7 @@ void FrequencyDisplayWidget::paintEvent(QPaintEvent *) {
             // ("inactive trailing digits"). The digit AT the tuning rate position stays in
             // m_normalColor and is marked by the underline below — that's the active
             // rate indicator the user reads to know the current tuning step.
-            int posFromRight = 7 - digitIdx;
+            int posFromRight = kMaxDigitIndex - digitIdx;
             if (m_tuningRateDigit >= 0 && posFromRight < m_tuningRateDigit) {
                 charColor = QColor(K4Styles::Colors::TextGray);
             } else {
@@ -279,7 +297,8 @@ void FrequencyDisplayWidget::paintEvent(QPaintEvent *) {
 
         // Tuning-rate indicator underline. Guarded by m_cursorPosition < 0 so the
         // edit-mode cursor's underline takes precedence and we don't double-draw.
-        if (m_cursorPosition < 0 && c != '.' && m_tuningRateDigit >= 0 && (7 - digitIdx) == m_tuningRateDigit) {
+        if (m_cursorPosition < 0 && c != '.' && m_tuningRateDigit >= 0 &&
+            (kMaxDigitIndex - digitIdx) == m_tuningRateDigit) {
             int underlineY = height() - 4;
             p.fillRect(x + 2, underlineY, charW - 4, 2, m_normalColor);
         }
@@ -338,7 +357,7 @@ void FrequencyDisplayWidget::keyPressEvent(QKeyEvent *event) {
         m_digits[m_cursorPosition] = QChar('0' + (key - Qt::Key_0));
 
         // Advance cursor (stop at end)
-        if (m_cursorPosition < 7) {
+        if (m_cursorPosition < kMaxDigitIndex) {
             m_cursorPosition++;
         }
         update();
@@ -348,7 +367,7 @@ void FrequencyDisplayWidget::keyPressEvent(QKeyEvent *event) {
             update();
         }
     } else if (key == Qt::Key_Right) {
-        if (m_cursorPosition < 7) {
+        if (m_cursorPosition < kMaxDigitIndex) {
             m_cursorPosition++;
             update();
         }
@@ -356,7 +375,7 @@ void FrequencyDisplayWidget::keyPressEvent(QKeyEvent *event) {
         m_cursorPosition = 0;
         update();
     } else if (key == Qt::Key_End) {
-        m_cursorPosition = 7;
+        m_cursorPosition = kMaxDigitIndex;
         update();
     } else if (key == Qt::Key_Return || key == Qt::Key_Enter) {
         exitEditMode(true); // Send frequency

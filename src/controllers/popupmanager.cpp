@@ -34,7 +34,7 @@
 PopupManager::PopupManager(RadioState *radioState, ConnectionController *connection, SpectrumController *spectrum,
                            VFOWidget *vfoA, VFOWidget *vfoB, QWidget *parentWidget, QObject *parent)
     : QObject(parent), m_radioState(radioState), m_connection(connection), m_spectrum(spectrum), m_vfoA(vfoA),
-      m_vfoB(vfoB), m_parentWidget(parentWidget), m_bandPopup(new BandPopupWidget(parentWidget)),
+      m_vfoB(vfoB), m_parentWidget(parentWidget), m_bandPopup(new BandPopupWidget(radioState, parentWidget)),
       m_displayPopup(new DisplayPopupWidget(parentWidget)), m_fnPopup(new FnPopupWidget(parentWidget)),
       m_macroDialog(new MacroDialog(parentWidget)), m_mainRxRow(new ButtonRowPopup(parentWidget)),
       m_subRxRow(new ButtonRowPopup(parentWidget)), m_txRow(new ButtonRowPopup(parentWidget)),

@@ -19,6 +19,7 @@
 #include "radiostate/rxtxmeterstate.h"
 #include "radiostate/spectrumdisplaystate.h"
 #include "radiostate/textdecodestate.h"
+#include "radiostate/xvtrbandstate.h"
 
 /**
  * @brief Central K4 state hub. Parses inbound CAT responses, stores every visible radio property,
@@ -488,6 +489,10 @@ public:
     int textDecodeThresholdB() const { return m_textDecodeState.textDecodeThresholdB; }
     int textDecodeLinesB() const { return m_textDecodeState.textDecodeLinesB; }
 
+    // XVTR per-band config — backed by m_xvtrBandState.
+    const QVector<XvtrBandConfig> &xvtrBands() const { return m_xvtrBandState.bands; }
+    int xvtrBandSelect() const { return m_xvtrBandState.currentSelect; }
+
     // Optimistic setters for Text Decode
     void setTextDecodeMode(int mode);
     void setTextDecodeThreshold(int threshold);
@@ -606,6 +611,12 @@ signals:
     // Error/notification messages from K4 (ERxx: format)
     void errorNotificationReceived(int errorCode, const QString &message);
 
+    // XVTR per-band config (XvtrBandState). xvtrBandsChanged fires when any
+    // band's mode/RF/IF/offset value changes; xvtrBandSelectChanged fires when
+    // the K4's current-band pointer (XVN / ME0086) moves.
+    void xvtrBandsChanged();
+    void xvtrBandSelectChanged(int band);
+
     // Audio effects and processing
     void afxModeChanged(int mode);                 // FX: 0=off, 1=delay, 2=pitch-map
     void apfChanged(bool enabled, int width);      // AP: Main RX APF (0=30Hz, 1=50Hz, 2=150Hz)
@@ -720,6 +731,9 @@ private:
     // models/radiostate/textdecodestate.h for the field layout and the handler
     // functions that mutate it.
     TextDecodeState m_textDecodeState;
+
+    // XVTR per-band config (XVN/XVM/XVR/XVI/XVO). See xvtrbandstate.h.
+    XvtrBandState m_xvtrBandState;
 
     // =========================================================================
     // Command Handler Registry

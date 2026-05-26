@@ -27,6 +27,7 @@ add_executable(test_radiostate test_radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radiostate Qt6::Core Qt6::Test)
@@ -46,6 +47,7 @@ add_executable(test_radiostate_registry test_radiostate_registry.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_radiostate_registry PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radiostate_registry Qt6::Core Qt6::Test)
@@ -68,6 +70,7 @@ add_executable(test_radiostate_golden test_radiostate_golden.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_radiostate_golden PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radiostate_golden Qt6::Core Qt6::Test)
@@ -93,6 +96,7 @@ if(QK4_BUILD_BENCHMARKS)
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
     )
     target_include_directories(bench_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_link_libraries(bench_radiostate Qt6::Core Qt6::Test)
@@ -140,6 +144,7 @@ add_executable(test_catserver test_catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_catserver PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_catserver Qt6::Core Qt6::Network Qt6::Test)
@@ -161,6 +166,7 @@ add_executable(test_catpushbroadcaster test_catpushbroadcaster.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_catpushbroadcaster PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_catpushbroadcaster Qt6::Core Qt6::Network Qt6::Test)

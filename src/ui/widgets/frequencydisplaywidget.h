@@ -29,6 +29,11 @@ class FrequencyDisplayWidget : public QWidget {
     Q_OBJECT
 
 public:
+    // 10 digits supports DC to 9.999.999.999 Hz (= ~10 GHz) — covers HF, VHF, UHF,
+    // and L-band XVTRs (e.g., 1.296.000.000 for 1296 MHz).
+    static constexpr int kDigits = 10;
+    static constexpr int kMaxDigitIndex = kDigits - 1;
+
     explicit FrequencyDisplayWidget(QWidget *parent = nullptr);
 
     // Set the displayed frequency (with or without dots)

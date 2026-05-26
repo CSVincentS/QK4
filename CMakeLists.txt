@@ -138,6 +138,7 @@ set(SOURCES
     src/models/radiostate/rxtxmeterstate.cpp
     src/models/radiostate/spectrumdisplaystate.cpp
     src/models/radiostate/textdecodestate.cpp
+    src/models/radiostate/xvtrbandstate.cpp
     src/models/menumodel.cpp
     src/ui/dialogs/radiomanagerdialog.cpp
     src/ui/widgets/dualcontrolbutton.cpp
@@ -264,6 +265,7 @@ set(HEADERS
     src/models/radiostate/processingstate.h
     src/models/radiostate/qskcontrolstate.h
     src/models/radiostate/textdecodestate.h
+    src/models/radiostate/xvtrbandstate.h
     src/models/menumodel.h
     src/utils/macroids.h
     src/ui/dialogs/radiomanagerdialog.h
