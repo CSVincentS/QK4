@@ -197,3 +197,18 @@ target_include_directories(test_kpodplususbworker PRIVATE
 )
 target_link_libraries(test_kpodplususbworker Qt6::Core Qt6::Test ${LIBUSB_LIBRARIES})
 add_test(NAME KpodPlusUsbWorkerTests COMMAND test_kpodplususbworker)
+
+# Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
+# test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
+# automatically gets the new test built — no parallel maintenance of an explicit
+# list in .github/workflows/lint.yml (which is what caused the late-May 2026
+# string of red builds when test_menumodel / test_catpushbroadcaster /
+# test_halikeydevice were added but the workflow's --target list wasn't).
+get_property(_qk4_dir_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+set(_qk4_test_targets "")
+foreach(_t IN LISTS _qk4_dir_targets)
+    if(_t MATCHES "^test_")
+        list(APPEND _qk4_test_targets ${_t})
+    endif()
+endforeach()
+add_custom_target(qk4_tests DEPENDS ${_qk4_test_targets})
