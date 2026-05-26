@@ -22,7 +22,8 @@ class MenuItemWidget : public QWidget {
     Q_OBJECT
 
 public:
-    explicit MenuItemWidget(MenuItem *item, QWidget *parent = nullptr);
+    // model is used to resolve "<n>" placeholders in item->name (XVTR Band rows).
+    explicit MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *parent = nullptr);
 
     void setSelected(bool selected);
     void setEditMode(bool editing);
@@ -42,6 +43,7 @@ private:
     void updateLabelColors();
 
     MenuItem *m_item;
+    const MenuModel *m_model;
     QLabel *m_nameLabel;
     QLabel *m_valueLabel;
     QLabel *m_lockLabel;

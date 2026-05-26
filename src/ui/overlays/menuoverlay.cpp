@@ -7,7 +7,8 @@
 
 // ============== MenuItemWidget ==============
 
-MenuItemWidget::MenuItemWidget(MenuItem *item, QWidget *parent) : QWidget(parent), m_item(item) {
+MenuItemWidget::MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *parent)
+    : QWidget(parent), m_item(item), m_model(model) {
     setFixedHeight(K4Styles::Dimensions::MenuItemHeight);
     setCursor(Qt::PointingHandCursor);
 
@@ -15,8 +16,9 @@ MenuItemWidget::MenuItemWidget(MenuItem *item, QWidget *parent) : QWidget(parent
     layout->setContentsMargins(15, 5, 15, 5);
     layout->setSpacing(10);
 
-    // Name label
-    m_nameLabel = new QLabel(item->name, this);
+    // Name label — resolved through the model so "<n>" placeholders in XVTR Band
+    // rows render with the current XVTR Band # Select value.
+    m_nameLabel = new QLabel(m_model ? m_model->resolvedName(*item) : item->name, this);
     m_nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                    .arg(K4Styles::Colors::TextGray)
                                    .arg(K4Styles::Dimensions::FontSizePopup)); // Initial unselected state
@@ -88,6 +90,9 @@ void MenuItemWidget::setEditMode(bool editing) {
 
 void MenuItemWidget::updateDisplay() {
     m_valueLabel->setText(m_item->displayValue());
+    if (m_model) {
+        m_nameLabel->setText(m_model->resolvedName(*m_item));
+    }
 }
 
 void MenuItemWidget::paintEvent(QPaintEvent *event) {
@@ -341,7 +346,7 @@ void MenuOverlayWidget::populateItems() {
     QVector<MenuItem *> items =
         m_currentFilter.isEmpty() ? m_model->getAllItems() : m_model->filterByName(m_currentFilter);
     for (MenuItem *item : items) {
-        MenuItemWidget *widget = new MenuItemWidget(item, m_listContainer);
+        MenuItemWidget *widget = new MenuItemWidget(item, m_model, m_listContainer);
         connect(widget, &MenuItemWidget::clicked, this, [this, widget]() {
             int index = m_itemWidgets.indexOf(widget);
             if (index >= 0) {
@@ -674,6 +679,15 @@ void MenuOverlayWidget::onMenuValueChanged(int menuId, int newValue) {
         if (widget->menuItem()->id == menuId) {
             widget->updateDisplay();
             break;
+        }
+    }
+    // XVTR Band # Select changes the substitution for every "<n>" row — refresh
+    // those widgets so their resolved name picks up the new band number.
+    if (menuId == MenuModel::XVTR_BAND_SELECT_ID) {
+        for (auto *widget : m_itemWidgets) {
+            if (widget->menuItem()->name.contains(QStringLiteral("<n>"))) {
+                widget->updateDisplay();
+            }
         }
     }
     updateNormButton();

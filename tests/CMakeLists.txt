@@ -106,6 +106,14 @@ target_include_directories(test_radioutils PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radioutils Qt6::Core Qt6::Test)
 add_test(NAME RadioUtilsTests COMMAND test_radioutils)
 
+# MenuModel parsing + label resolution tests
+add_executable(test_menumodel test_menumodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/menumodel.cpp
+)
+target_include_directories(test_menumodel PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_menumodel Qt6::Core Qt6::Test)
+add_test(NAME MenuModelTests COMMAND test_menumodel)
+
 # Protocol packet parsing tests
 add_executable(test_protocol test_protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
