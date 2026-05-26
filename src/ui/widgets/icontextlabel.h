@@ -1,6 +1,8 @@
 #ifndef ICONTEXTLABEL_H
 #define ICONTEXTLABEL_H
 
+#include "ui/styling/k4glyphs.h"
+
 #include <QPixmap>
 #include <QWidget>
 
@@ -19,6 +21,10 @@ public:
     explicit IconTextLabel(QWidget *parent = nullptr);
 
     void setIcon(const QPixmap &pixmap);
+    // Bind a procedural glyph (see K4Glyphs). Once set, the icon re-tints
+    // every time setValueColor() / clear() changes the value color, so the
+    // glyph and number always read in the same color. Wins over setIcon().
+    void setGlyph(K4Glyphs::Glyph glyph);
     // Optional prefix label ("LPA", "PA", "FAN", ...). Rendered between the
     // icon and the value, in a muted color. Persists across clear() so the
     // disconnected state reads as e.g. "LPA --" instead of just "--".
@@ -31,12 +37,14 @@ public:
 
 private:
     void applyValueStyle(const QColor &color);
+    void renderGlyph(const QColor &color);
 
     QLabel *m_iconLabel;
     QLabel *m_prefixLabel;
     QLabel *m_valueLabel;
     QLabel *m_unitLabel;
     QColor m_valueColor;
+    K4Glyphs::Glyph m_glyph;
 };
 
 #endif // ICONTEXTLABEL_H

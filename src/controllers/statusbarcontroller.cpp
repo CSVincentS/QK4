@@ -4,6 +4,7 @@
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
 #include "ui/popups/confirmpopup.h"
+#include "ui/styling/k4glyphs.h"
 #include "ui/styling/k4styles.h"
 #include "ui/widgets/icontextlabel.h"
 #include "ui/widgets/nethealthwidget.h"
@@ -32,6 +33,21 @@ QColor temperatureColor(int celsius) {
     if (celsius >= kCritTempC)
         return QColor(K4Styles::Colors::TxRed);
     if (celsius >= kWarnTempC)
+        return QColor(K4Styles::Colors::MeterOrange);
+    return QColor(K4Styles::Colors::AccentAmber);
+}
+
+// Low-voltage thresholds for a nominal 13.8 V K4 supply:
+//   >= kVoltsWarn → amber (normal)
+//   <  kVoltsWarn → orange (sag — watch the load)
+//   <  kVoltsCrit → red (brown-out territory)
+constexpr double kVoltsWarn = 12.0;
+constexpr double kVoltsCrit = 11.0;
+
+QColor voltageColor(double volts) {
+    if (volts < kVoltsCrit)
+        return QColor(K4Styles::Colors::TxRed);
+    if (volts < kVoltsWarn)
         return QColor(K4Styles::Colors::MeterOrange);
     return QColor(K4Styles::Colors::AccentAmber);
 }
@@ -66,19 +82,21 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
 
     // Lower-PA heatsink temperature (SIRF LT, °C).
     m_lpaTempField = new IconTextLabel(m_container);
+    m_lpaTempField->setGlyph(K4Glyphs::thermometer());
     m_lpaTempField->setLabel("LPA");
     m_lpaTempField->setUnit("°C");
     layout->addWidget(m_lpaTempField);
 
     // PA heatsink temperature (SIRF PT, °C).
     m_paTempField = new IconTextLabel(m_container);
+    m_paTempField->setGlyph(K4Glyphs::thermometer());
     m_paTempField->setLabel("PA");
     m_paTempField->setUnit("°C");
     layout->addWidget(m_paTempField);
 
-    // Voltage slot (was a flat label — now styled via IconTextLabel to match
-    // the new bar language; icon arrives in a follow-up).
+    // Supply voltage.
     m_voltageField = new IconTextLabel(m_container);
+    m_voltageField->setGlyph(K4Glyphs::lightning());
     m_voltageField->setUnit("V");
     layout->addWidget(m_voltageField);
 
@@ -108,9 +126,12 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     layout->addWidget(m_powerButton);
     connect(m_powerButton, &QToolButton::clicked, this, &StatusBarController::onPowerButtonClicked);
 
-    // Voltage updates → value field.
-    connect(m_radioState, &RadioState::supplyVoltageChanged, this,
-            [this](double volts) { m_voltageField->setValue(QString("%1").arg(volts, 0, 'f', 1)); });
+    // Voltage updates → value field. Set color first so the bound lightning
+    // glyph re-tints together with the number on any threshold crossing.
+    connect(m_radioState, &RadioState::supplyVoltageChanged, this, [this](double volts) {
+        m_voltageField->setValueColor(voltageColor(volts));
+        m_voltageField->setValue(QString("%1").arg(volts, 0, 'f', 1));
+    });
 
     // PA / LPA temperatures from SIRF (PT / LT fields).
     connect(m_radioState, &RadioState::paTemperatureChanged, this, [this](int c) {

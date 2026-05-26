@@ -42,11 +42,27 @@ IconTextLabel::IconTextLabel(QWidget *parent)
 }
 
 void IconTextLabel::setIcon(const QPixmap &pixmap) {
+    // Static-pixmap path; setGlyph() takes precedence when present, since the
+    // glyph factory needs to re-render on color changes.
+    m_glyph = nullptr;
     if (pixmap.isNull()) {
         m_iconLabel->clear();
         return;
     }
     m_iconLabel->setPixmap(pixmap.scaled(kIconSize, kIconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+void IconTextLabel::setGlyph(K4Glyphs::Glyph glyph) {
+    m_glyph = std::move(glyph);
+    // Render once immediately so the widget has something visible even before
+    // the first value arrives.
+    renderGlyph(m_valueLabel->text() == kEmptyPlaceholder ? QColor(K4Styles::Colors::TextFaded) : m_valueColor);
+}
+
+void IconTextLabel::renderGlyph(const QColor &color) {
+    if (!m_glyph)
+        return;
+    m_iconLabel->setPixmap(m_glyph(color));
 }
 
 void IconTextLabel::setLabel(const QString &label) {
@@ -81,12 +97,16 @@ void IconTextLabel::setUnit(const QString &unit) {
 void IconTextLabel::setValueColor(const QColor &color) {
     m_valueColor = color;
     applyValueStyle(m_valueColor);
+    renderGlyph(m_valueColor);
 }
 
 void IconTextLabel::clear() {
     m_valueLabel->setText(kEmptyPlaceholder);
-    // Placeholder reads as muted "no data" rather than active amber.
-    applyValueStyle(QColor(K4Styles::Colors::TextFaded));
+    // Placeholder reads as muted "no data" rather than active amber. The
+    // bound glyph (if any) follows so the whole slot reads as muted.
+    const QColor muted(K4Styles::Colors::TextFaded);
+    applyValueStyle(muted);
+    renderGlyph(muted);
 }
 
 void IconTextLabel::applyValueStyle(const QColor &color) {

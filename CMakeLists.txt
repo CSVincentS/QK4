@@ -190,6 +190,7 @@ set(SOURCES
     src/ui/dialogs/macrodialog.cpp
     src/ui/widgets/notificationwidget.cpp
     src/ui/styling/k4styles.cpp
+    src/ui/styling/k4glyphs.cpp
     src/ui/popups/k4popupbase.cpp
     src/ui/widgets/kpa1500minipanel.cpp
     src/ui/overlays/sidecontroloverlay.cpp

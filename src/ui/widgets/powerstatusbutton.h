@@ -1,6 +1,8 @@
 #ifndef POWERSTATUSBUTTON_H
 #define POWERSTATUSBUTTON_H
 
+#include "ui/styling/k4glyphs.h"
+
 #include <QToolButton>
 
 // Status-bar power icon. Doubles as a connection / power-state indicator and
@@ -32,6 +34,7 @@ private:
     void applyAppearance();
 
     State m_state = State::Unknown;
+    K4Glyphs::Glyph m_glyph;
 };
 
 #endif // POWERSTATUSBUTTON_H
