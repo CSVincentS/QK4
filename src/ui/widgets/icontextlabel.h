@@ -19,16 +19,21 @@ public:
     explicit IconTextLabel(QWidget *parent = nullptr);
 
     void setIcon(const QPixmap &pixmap);
+    // Optional prefix label ("LPA", "PA", "FAN", ...). Rendered between the
+    // icon and the value, in a muted color. Persists across clear() so the
+    // disconnected state reads as e.g. "LPA --" instead of just "--".
+    void setLabel(const QString &label);
     void setValue(const QString &text);
     void setUnit(const QString &unit);
     void setValueColor(const QColor &color);
-    // Render the empty-state placeholder ("--").
+    // Render the empty-state placeholder ("--"). Preserves any prefix label.
     void clear();
 
 private:
     void applyValueStyle(const QColor &color);
 
     QLabel *m_iconLabel;
+    QLabel *m_prefixLabel;
     QLabel *m_valueLabel;
     QLabel *m_unitLabel;
     QColor m_valueColor;

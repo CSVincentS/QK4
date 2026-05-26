@@ -11,8 +11,8 @@ constexpr const char *kEmptyPlaceholder = "--";
 } // namespace
 
 IconTextLabel::IconTextLabel(QWidget *parent)
-    : QWidget(parent), m_iconLabel(new QLabel(this)), m_valueLabel(new QLabel(this)), m_unitLabel(new QLabel(this)),
-      m_valueColor(K4Styles::Colors::AccentAmber) {
+    : QWidget(parent), m_iconLabel(new QLabel(this)), m_prefixLabel(new QLabel(this)), m_valueLabel(new QLabel(this)),
+      m_unitLabel(new QLabel(this)), m_valueColor(K4Styles::Colors::AccentAmber) {
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
@@ -20,6 +20,12 @@ IconTextLabel::IconTextLabel(QWidget *parent)
     m_iconLabel->setFixedSize(kIconSize, kIconSize);
     m_iconLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_iconLabel);
+
+    m_prefixLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+    m_prefixLabel->setFont(K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeMedium, QFont::Bold));
+    m_prefixLabel->setStyleSheet(QString("color: %1;").arg(K4Styles::Colors::TextGray));
+    m_prefixLabel->hide();
+    layout->addWidget(m_prefixLabel);
 
     m_valueLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
     m_valueLabel->setFont(K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizePopup));
@@ -41,6 +47,16 @@ void IconTextLabel::setIcon(const QPixmap &pixmap) {
         return;
     }
     m_iconLabel->setPixmap(pixmap.scaled(kIconSize, kIconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+void IconTextLabel::setLabel(const QString &label) {
+    if (label.isEmpty()) {
+        m_prefixLabel->clear();
+        m_prefixLabel->hide();
+        return;
+    }
+    m_prefixLabel->setText(label);
+    m_prefixLabel->show();
 }
 
 void IconTextLabel::setValue(const QString &text) {

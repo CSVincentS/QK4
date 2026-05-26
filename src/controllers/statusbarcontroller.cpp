@@ -19,6 +19,22 @@ namespace {
 // 1 Hz clock tick. Sub-second drift on the status-bar clock is imperceptible;
 // saves 50× timer overhead vs 50 ms updates.
 constexpr int kClockUpdateIntervalMs = 1000;
+
+// Generic "safe-for-ham-radio" PA/LPA thresholds — we don't have the K4's
+// published spec for these stages, so these are conservative working bounds:
+//   <  kWarnTempC  → amber (normal operating)
+//   >= kWarnTempC  → orange (warming, watch it)
+//   >= kCritTempC  → red (back off TX)
+constexpr int kWarnTempC = 60;
+constexpr int kCritTempC = 75;
+
+QColor temperatureColor(int celsius) {
+    if (celsius >= kCritTempC)
+        return QColor(K4Styles::Colors::TxRed);
+    if (celsius >= kWarnTempC)
+        return QColor(K4Styles::Colors::MeterOrange);
+    return QColor(K4Styles::Colors::AccentAmber);
+}
 } // namespace
 
 StatusBarController::StatusBarController(RadioState *radioState, ConnectionController *connectionController,
@@ -48,12 +64,17 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
 
     layout->addStretch();
 
-    // Temperature slot — waits on user-supplied CAT command + icon. Renders "--"
-    // until then; populating it later is one setValue() call from a new RadioState
-    // signal handler.
-    m_temperatureField = new IconTextLabel(m_container);
-    m_temperatureField->setUnit("°F");
-    layout->addWidget(m_temperatureField);
+    // Lower-PA heatsink temperature (SIRF LT, °C).
+    m_lpaTempField = new IconTextLabel(m_container);
+    m_lpaTempField->setLabel("LPA");
+    m_lpaTempField->setUnit("°C");
+    layout->addWidget(m_lpaTempField);
+
+    // PA heatsink temperature (SIRF PT, °C).
+    m_paTempField = new IconTextLabel(m_container);
+    m_paTempField->setLabel("PA");
+    m_paTempField->setUnit("°C");
+    layout->addWidget(m_paTempField);
 
     // Voltage slot (was a flat label — now styled via IconTextLabel to match
     // the new bar language; icon arrives in a follow-up).
@@ -91,6 +112,16 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     connect(m_radioState, &RadioState::supplyVoltageChanged, this,
             [this](double volts) { m_voltageField->setValue(QString("%1").arg(volts, 0, 'f', 1)); });
 
+    // PA / LPA temperatures from SIRF (PT / LT fields).
+    connect(m_radioState, &RadioState::paTemperatureChanged, this, [this](int c) {
+        m_paTempField->setValueColor(temperatureColor(c));
+        m_paTempField->setValue(QString::number(c));
+    });
+    connect(m_radioState, &RadioState::lpaTemperatureChanged, this, [this](int c) {
+        m_lpaTempField->setValueColor(temperatureColor(c));
+        m_lpaTempField->setValue(QString::number(c));
+    });
+
     // PS0/PS1 → power button state.
     connect(m_radioState, &RadioState::powerStateChanged, this, [this](bool on) {
         m_powerButton->setState(on ? PowerStatusButton::State::On : PowerStatusButton::State::Off);
@@ -102,7 +133,8 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     connect(m_connectionController, &ConnectionController::connectionStateChanged, this,
             [this](TcpClient::ConnectionState state) {
                 if (state == TcpClient::Disconnected) {
-                    m_temperatureField->clear();
+                    m_lpaTempField->clear();
+                    m_paTempField->clear();
                     m_voltageField->clear();
                     m_powerButton->setState(PowerStatusButton::State::Off);
                 } else if (state == TcpClient::Connecting || state == TcpClient::Authenticating) {
@@ -172,7 +204,8 @@ void StatusBarController::showAuthFailed() {
 }
 
 void StatusBarController::clearReadings() {
-    m_temperatureField->clear();
+    m_lpaTempField->clear();
+    m_paTempField->clear();
     m_voltageField->clear();
 }
 

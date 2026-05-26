@@ -243,6 +243,11 @@ public:
     // then true (PS1) / false (PS0). See radiostate/powerstate.h.
     std::optional<bool> isPoweredOn() const { return m_powerState.isOn(); }
 
+    // PA / Lower-PA temperatures in °C from the SIRF PT / LT fields. Sentinel -1
+    // means "not yet seen" — UI should render the disconnected placeholder.
+    int paTemperatureC() const { return m_rxTxMeterState.paTemperatureC; }
+    int lpaTemperatureC() const { return m_rxTxMeterState.lpaTemperatureC; }
+
     // TEST mode (TX test)
     bool testMode() const { return m_rxTxMeterState.testMode; }
 
@@ -556,6 +561,8 @@ signals:
     void supplyVoltageChanged(double volts);
     void supplyCurrentChanged(double amps);
     void paDrainCurrentChanged(double amps);
+    void paTemperatureChanged(int celsius);  // SIRF PT field (final-PA heatsink temp)
+    void lpaTemperatureChanged(int celsius); // SIRF LT field (Lower-PA heatsink temp)
     void swrChanged(double swr);
     void txMeterChanged(int alc, int compression, double fwdPower, double swr);
     void splitChanged(bool enabled);

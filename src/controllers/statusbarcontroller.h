@@ -63,7 +63,8 @@ private:
     QWidget *m_container;                         // owned via Qt parent (parentWidget)
     QLabel *m_titleLabel;
     QLabel *m_dateTimeLabel;
-    IconTextLabel *m_temperatureField;
+    IconTextLabel *m_lpaTempField;
+    IconTextLabel *m_paTempField;
     IconTextLabel *m_voltageField;
     QLabel *m_connectionStatusLabel;
     QLabel *m_kpa1500StatusLabel;
