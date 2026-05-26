@@ -11,9 +11,18 @@ class RadioState;
 //
 // Plain struct — follows Pattern C (see PATTERNS.md → Subsystem State).
 struct LevelsState {
+    // PC command range (K4 reference rev D5):
+    //   L = QRP (0.1–10.0 W) — rfPower stored as W
+    //   H = QRO (1–110 W) — rfPower stored as W
+    //   X = XVTR (0.1–10.0 mW) — rfPower stored as mW
+    // Used by the side-panel power readout to switch its unit label between
+    // "PWR" (W) and "mW", and by CatFrames::rfPowerExtended() to emit PCX
+    // with the right suffix.
+    enum class PowerRange { Qrp, Qro, Xvtr };
+
     // TX signal levels.
-    double rfPower = -1.0; // sentinel → first PC echo always emits
-    bool isQrpMode = false;
+    double rfPower = -1.0; // sentinel → first PC echo always emits. Units depend on powerRange.
+    PowerRange powerRange = PowerRange::Qro;
     int micGain = -1;     // MG: 0-80
     int compression = -1; // CP: 0-30 (SSB only)
 

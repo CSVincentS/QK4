@@ -28,7 +28,7 @@ private slots:
     void onTransmitStateChanged(bool tx);
     void onSplitChanged(bool on);
     void onRitXitChanged(bool rit, bool xit, int offset);
-    void onRfPowerChanged(double watts, bool qrp);
+    void onRfPowerChanged(double value, LevelsState::PowerRange range);
     void onFilterBandwidthChanged(int bw);
     void onKeyerSpeedChanged(int wpm);
     void onVoxChanged(bool on);

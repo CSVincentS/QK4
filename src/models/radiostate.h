@@ -96,7 +96,9 @@ public:
 
     // Power and levels
     double rfPower() const { return m_levelsState.rfPower; }
-    bool isQrpMode() const { return m_levelsState.isQrpMode; }
+    LevelsState::PowerRange powerRange() const { return m_levelsState.powerRange; }
+    bool isQrpMode() const { return m_levelsState.powerRange == LevelsState::PowerRange::Qrp; }
+    bool isXvtrPowerMode() const { return m_levelsState.powerRange == LevelsState::PowerRange::Xvtr; }
     int micGain() const { return m_levelsState.micGain; }
     int compression() const { return m_levelsState.compression; }
     int rfGain() const { return m_levelsState.rfGain; }
@@ -542,7 +544,10 @@ signals:
     void sMeterBChanged(double value);
 
     void transmitStateChanged(bool transmitting);
-    void rfPowerChanged(double watts, bool isQrp);
+    // Emitted when PC echo lands. `value` is in W for Qrp/Qro and mW for Xvtr —
+    // UI consumers should check `range` before formatting (it dictates both the
+    // unit suffix and the decimal precision).
+    void rfPowerChanged(double value, LevelsState::PowerRange range);
     void supplyVoltageChanged(double volts);
     void supplyCurrentChanged(double amps);
     void paDrainCurrentChanged(double amps);

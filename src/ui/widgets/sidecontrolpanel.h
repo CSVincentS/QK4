@@ -1,6 +1,7 @@
 #ifndef SIDECONTROLPANEL_H
 #define SIDECONTROLPANEL_H
 
+#include "models/radiostate/levelsstate.h"
 #include <QWidget>
 #include <QLabel>
 #include <QPushButton>
@@ -42,7 +43,8 @@ public:
     // Voice mode values
     void setMicGain(int gain);     // 0-80
     void setCompression(int comp); // 0-30
-    void setPower(double power);
+    // range selects unit label (PWR=W, mW for XVTR) and decimal precision.
+    void setPower(double power, LevelsState::PowerRange range = LevelsState::PowerRange::Qro);
     void setDelay(double delay);
     void setBandwidth(double bw);
     void setHighCut(double hi); // kHz

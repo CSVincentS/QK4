@@ -25,6 +25,16 @@ public:
                                       PopupManager *popupManager, QObject *parent = nullptr);
     ~BandNavigationController() override;
 
+    // Last BN echo from the K4 for the indicated VFO. -1 until first echo.
+    // Bands 0..10 = HF/6m, 11..22 = XVTR Band 1..12.
+    int currentBand(bool forVfoB = false) const { return forVfoB ? m_currentBandNumB : m_currentBandNum; }
+
+signals:
+    // Emitted when the K4's current band changes (via BN / BN$ echo). The
+    // antenna-label and other UI controllers that need to know "are we on
+    // XVTR" subscribe here. forVfoB distinguishes BN$ (true) from BN (false).
+    void currentBandChanged(int band, bool forVfoB);
+
 private slots:
     // Connected to PopupManager::bandSelected in constructor.
     void onBandSelected(const QString &bandName);

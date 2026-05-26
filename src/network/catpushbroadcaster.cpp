@@ -82,9 +82,13 @@ void CatPushBroadcaster::onRitXitChanged(bool rit, bool xit, int offset) {
     broadcast(CatFrames::xitEnabled(xit));
 }
 
-void CatPushBroadcaster::onRfPowerChanged(double watts, bool qrp) {
-    Q_UNUSED(qrp);
-    broadcast(CatFrames::rfPower(watts));
+void CatPushBroadcaster::onRfPowerChanged(double value, LevelsState::PowerRange range) {
+    // CatFrames::rfPower formats as W. For XVTR (mW) we'd need a different frame
+    // (PCnnnX), which AI2 subscribers rarely care about — defer; the K4-direct
+    // PC echo still reaches them via passive forwarding.
+    if (range == LevelsState::PowerRange::Xvtr)
+        return;
+    broadcast(CatFrames::rfPower(value));
 }
 
 void CatPushBroadcaster::onFilterBandwidthChanged(int bw) {

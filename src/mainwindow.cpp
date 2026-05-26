@@ -130,8 +130,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     m_processingDisplayController = new ProcessingDisplayController(m_radioState, m_vfoA, m_vfoB, this);
 
-    m_antennaDisplayController =
-        new AntennaDisplayController(m_radioState, m_txAntennaLabel, m_rxAntALabel, m_rxAntBLabel, this);
+    m_antennaDisplayController = new AntennaDisplayController(m_radioState, m_bandNavController, m_txAntennaLabel,
+                                                              m_rxAntALabel, m_rxAntBLabel, this);
 
     const VfoRowIndicatorController::Labels rowLabels{
         m_splitLabel, m_vfoRow->bSetLabel(), m_txTriangle, m_txTriangleB, m_voxLabel, m_qskLabel,
@@ -257,11 +257,12 @@ void MainWindow::setupRadioStateWiring() {
             &SpectrumController::checkAndHideMiniPanB);
 
     // RadioState signals -> status / side-panel readings (direct-observation).
-    // rfPowerChanged carries (watts, isQrp) but we only need the QRP flag — lambda
-    // propagates it to both VFO TX meters so their scale matches the radio.
-    connect(m_radioState, &RadioState::rfPowerChanged, this, [this](double, bool isQrp) {
-        m_vfoA->setTxMeterQrp(isQrp);
-        m_vfoB->setTxMeterQrp(isQrp);
+    // rfPowerChanged carries (value, range) — the VFO TX meter scales by QRP vs
+    // QRO; for XVTR the meter scale is also "small" so we treat XVTR like QRP.
+    connect(m_radioState, &RadioState::rfPowerChanged, this, [this](double, LevelsState::PowerRange range) {
+        const bool smallScale = (range == LevelsState::PowerRange::Qrp || range == LevelsState::PowerRange::Xvtr);
+        m_vfoA->setTxMeterQrp(smallScale);
+        m_vfoB->setTxMeterQrp(smallScale);
     });
     connect(m_radioState, &RadioState::supplyVoltageChanged, m_sideControlPanel, &SideControlPanel::setVoltage);
     // Side panel's "X.XA" mirrors the K4 front-panel meter: supply current (IS) at idle,
