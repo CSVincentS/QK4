@@ -12,7 +12,8 @@ constexpr const char *kEmptyPlaceholder = "--";
 
 IconTextLabel::IconTextLabel(QWidget *parent)
     : QWidget(parent), m_iconLabel(new QLabel(this)), m_prefixLabel(new QLabel(this)), m_valueLabel(new QLabel(this)),
-      m_unitLabel(new QLabel(this)), m_valueColor(K4Styles::Colors::AccentAmber) {
+      m_unitLabel(new QLabel(this)), m_valueColor(K4Styles::Colors::AccentAmber),
+      m_glyphColor(K4Styles::Colors::AccentAmber) {
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
@@ -54,9 +55,17 @@ void IconTextLabel::setIcon(const QPixmap &pixmap) {
 
 void IconTextLabel::setGlyph(K4Glyphs::Glyph glyph) {
     m_glyph = std::move(glyph);
-    // Render once immediately so the widget has something visible even before
-    // the first value arrives.
-    renderGlyph(m_valueLabel->text() == kEmptyPlaceholder ? QColor(K4Styles::Colors::TextFaded) : m_valueColor);
+    // Render once immediately. While the field is still in the empty state,
+    // honour the muted "no data" color; otherwise use the most recently set
+    // glyph color so setGlyph + setGlyphColor are order-independent.
+    const QColor initial =
+        m_valueLabel->text() == kEmptyPlaceholder ? QColor(K4Styles::Colors::TextFaded) : m_glyphColor;
+    renderGlyph(initial);
+}
+
+void IconTextLabel::setGlyphColor(const QColor &color) {
+    m_glyphColor = color;
+    renderGlyph(color);
 }
 
 void IconTextLabel::renderGlyph(const QColor &color) {
@@ -97,13 +106,14 @@ void IconTextLabel::setUnit(const QString &unit) {
 void IconTextLabel::setValueColor(const QColor &color) {
     m_valueColor = color;
     applyValueStyle(m_valueColor);
-    renderGlyph(m_valueColor);
 }
 
 void IconTextLabel::clear() {
     m_valueLabel->setText(kEmptyPlaceholder);
-    // Placeholder reads as muted "no data" rather than active amber. The
-    // bound glyph (if any) follows so the whole slot reads as muted.
+    // Disconnected/empty state: mute both the value and the glyph uniformly,
+    // so the slot reads as "no data" regardless of any semantic glyph color
+    // the controller had set. The semantic color returns the next time the
+    // controller calls setGlyphColor() on a real reading.
     const QColor muted(K4Styles::Colors::TextFaded);
     applyValueStyle(muted);
     renderGlyph(muted);

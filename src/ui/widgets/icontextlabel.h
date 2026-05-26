@@ -21,10 +21,12 @@ public:
     explicit IconTextLabel(QWidget *parent = nullptr);
 
     void setIcon(const QPixmap &pixmap);
-    // Bind a procedural glyph (see K4Glyphs). Once set, the icon re-tints
-    // every time setValueColor() / clear() changes the value color, so the
-    // glyph and number always read in the same color. Wins over setIcon().
+    // Bind a procedural glyph (see K4Glyphs). After binding, the glyph's
+    // color is driven independently from the value text by setGlyphColor().
+    // Wins over setIcon().
     void setGlyph(K4Glyphs::Glyph glyph);
+    // Re-render the bound glyph in the given color. No-op if no glyph is set.
+    void setGlyphColor(const QColor &color);
     // Optional prefix label ("LPA", "PA", "FAN", ...). Rendered between the
     // icon and the value, in a muted color. Persists across clear() so the
     // disconnected state reads as e.g. "LPA --" instead of just "--".
@@ -44,6 +46,7 @@ private:
     QLabel *m_valueLabel;
     QLabel *m_unitLabel;
     QColor m_valueColor;
+    QColor m_glyphColor;
     K4Glyphs::Glyph m_glyph;
 };
 

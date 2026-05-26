@@ -22,34 +22,45 @@ namespace {
 constexpr int kClockUpdateIntervalMs = 1000;
 
 // Generic "safe-for-ham-radio" PA/LPA thresholds — we don't have the K4's
-// published spec for these stages, so these are conservative working bounds:
-//   <  kWarnTempC  → amber (normal operating)
-//   >= kWarnTempC  → orange (warming, watch it)
-//   >= kCritTempC  → red (back off TX)
+// published spec for these stages, so these are conservative working bounds.
 constexpr int kWarnTempC = 60;
 constexpr int kCritTempC = 75;
 
-QColor temperatureColor(int celsius) {
-    if (celsius >= kCritTempC)
-        return QColor(K4Styles::Colors::TxRed);
-    if (celsius >= kWarnTempC)
-        return QColor(K4Styles::Colors::MeterOrange);
-    return QColor(K4Styles::Colors::AccentAmber);
-}
-
-// Low-voltage thresholds for a nominal 13.8 V K4 supply:
-//   >= kVoltsWarn → amber (normal)
-//   <  kVoltsWarn → orange (sag — watch the load)
-//   <  kVoltsCrit → red (brown-out territory)
+// Low-voltage thresholds for a nominal 13.8 V K4 supply.
 constexpr double kVoltsWarn = 12.0;
 constexpr double kVoltsCrit = 11.0;
 
-QColor voltageColor(double volts) {
+// Field colors split into (glyph, value) so the glyph can carry its own
+// semantic baseline color in the normal range while still re-tinting with
+// the value on warning / critical.
+struct ColorPair {
+    QColor glyph;
+    QColor value;
+};
+
+ColorPair temperatureColors(int celsius) {
+    const QColor red(K4Styles::Colors::TxRed);
+    const QColor orange(K4Styles::Colors::MeterOrange);
+    const QColor amber(K4Styles::Colors::AccentAmber);
+    if (celsius >= kCritTempC)
+        return {red, red};
+    if (celsius >= kWarnTempC)
+        return {orange, orange};
+    // Normal: semantic warm-orange glyph (thermometer "reads hot") + amber value.
+    return {orange, amber};
+}
+
+ColorPair voltageColors(double volts) {
+    const QColor red(K4Styles::Colors::TxRed);
+    const QColor orange(K4Styles::Colors::MeterOrange);
+    const QColor amber(K4Styles::Colors::AccentAmber);
+    const QColor gold(K4Styles::Colors::FilterIndicatorGold);
     if (volts < kVoltsCrit)
-        return QColor(K4Styles::Colors::TxRed);
+        return {red, red};
     if (volts < kVoltsWarn)
-        return QColor(K4Styles::Colors::MeterOrange);
-    return QColor(K4Styles::Colors::AccentAmber);
+        return {orange, orange};
+    // Normal: semantic gold bolt ("electric") + amber value.
+    return {gold, amber};
 }
 } // namespace
 
@@ -83,6 +94,7 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     // Lower-PA heatsink temperature (SIRF LT, °C).
     m_lpaTempField = new IconTextLabel(m_container);
     m_lpaTempField->setGlyph(K4Glyphs::thermometer());
+    m_lpaTempField->setGlyphColor(QColor(K4Styles::Colors::MeterOrange));
     m_lpaTempField->setLabel("LPA");
     m_lpaTempField->setUnit("°C");
     layout->addWidget(m_lpaTempField);
@@ -90,6 +102,7 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     // PA heatsink temperature (SIRF PT, °C).
     m_paTempField = new IconTextLabel(m_container);
     m_paTempField->setGlyph(K4Glyphs::thermometer());
+    m_paTempField->setGlyphColor(QColor(K4Styles::Colors::MeterOrange));
     m_paTempField->setLabel("PA");
     m_paTempField->setUnit("°C");
     layout->addWidget(m_paTempField);
@@ -97,6 +110,7 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     // Supply voltage.
     m_voltageField = new IconTextLabel(m_container);
     m_voltageField->setGlyph(K4Glyphs::lightning());
+    m_voltageField->setGlyphColor(QColor(K4Styles::Colors::FilterIndicatorGold));
     m_voltageField->setUnit("V");
     layout->addWidget(m_voltageField);
 
@@ -126,20 +140,28 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     layout->addWidget(m_powerButton);
     connect(m_powerButton, &QToolButton::clicked, this, &StatusBarController::onPowerButtonClicked);
 
-    // Voltage updates → value field. Set color first so the bound lightning
-    // glyph re-tints together with the number on any threshold crossing.
+    // Voltage updates → value field. Glyph stays gold (semantic baseline)
+    // in the normal range, but flips with the value to orange/red on sag.
     connect(m_radioState, &RadioState::supplyVoltageChanged, this, [this](double volts) {
-        m_voltageField->setValueColor(voltageColor(volts));
+        const auto colors = voltageColors(volts);
+        m_voltageField->setGlyphColor(colors.glyph);
+        m_voltageField->setValueColor(colors.value);
         m_voltageField->setValue(QString("%1").arg(volts, 0, 'f', 1));
     });
 
-    // PA / LPA temperatures from SIRF (PT / LT fields).
+    // PA / LPA temperatures from SIRF (PT / LT fields). Thermometer glyph
+    // sits in the warm-orange "this is heat" baseline and re-tints to red
+    // when the value crosses critical.
     connect(m_radioState, &RadioState::paTemperatureChanged, this, [this](int c) {
-        m_paTempField->setValueColor(temperatureColor(c));
+        const auto colors = temperatureColors(c);
+        m_paTempField->setGlyphColor(colors.glyph);
+        m_paTempField->setValueColor(colors.value);
         m_paTempField->setValue(QString::number(c));
     });
     connect(m_radioState, &RadioState::lpaTemperatureChanged, this, [this](int c) {
-        m_lpaTempField->setValueColor(temperatureColor(c));
+        const auto colors = temperatureColors(c);
+        m_lpaTempField->setGlyphColor(colors.glyph);
+        m_lpaTempField->setValueColor(colors.value);
         m_lpaTempField->setValue(QString::number(c));
     });
 
