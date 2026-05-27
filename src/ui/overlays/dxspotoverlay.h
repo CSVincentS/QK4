@@ -9,8 +9,9 @@
 /**
  * @brief Transparent overlay drawn on top of the panadapter that plots DX-cluster spots by
  *        frequency. Lays out callsign labels in up to MAX_DISPLAY_ROWS rows (stacking same-freq
- *        clusters), caps per-frequency at MAX_PER_FREQUENCY. Clicking a label emits
- *        `spotClicked(frequencyHz)` for click-to-tune.
+ *        clusters), caps per-frequency at MAX_PER_FREQUENCY. Left-clicking a label emits
+ *        `spotClicked(frequencyHz)`, right-clicking emits `spotRightClicked(frequencyHz)` —
+ *        both for click-to-tune (left → VFO A, right → VFO B).
  */
 class DxSpotOverlay : public QWidget {
     Q_OBJECT
@@ -27,6 +28,7 @@ public slots:
 
 signals:
     void spotClicked(qint64 frequencyHz);
+    void spotRightClicked(qint64 frequencyHz);
 
 protected:
     void paintEvent(QPaintEvent *event) override;

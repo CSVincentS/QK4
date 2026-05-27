@@ -41,6 +41,7 @@ BandNavigationController::~BandNavigationController() {
 }
 
 void BandNavigationController::setCurrentBand(int bandNum, bool forVfoB) {
+    const int previous = forVfoB ? m_currentBandNumB : m_currentBandNum;
     if (forVfoB) {
         m_currentBandNumB = bandNum;
         // Only refresh the popup indicator when BSet is active — that's
@@ -52,6 +53,8 @@ void BandNavigationController::setCurrentBand(int bandNum, bool forVfoB) {
         if (!m_radioState->bSetEnabled())
             m_popupManager->setSelectedBandByNumber(bandNum);
     }
+    if (previous != bandNum)
+        emit currentBandChanged(bandNum, forVfoB);
 }
 
 void BandNavigationController::onBandSelected(const QString &bandName) {

@@ -2899,6 +2899,128 @@ private slots:
         }
     }
 
+    // K4 remote power state (PS command).
+    void testPowerStateInitiallyUnknown() {
+        RadioState rs;
+        QVERIFY(!rs.isPoweredOn().has_value());
+    }
+
+    void testPowerStateOn() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS1;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().at(0).toBool(), true);
+        QVERIFY(rs.isPoweredOn().has_value());
+        QCOMPARE(rs.isPoweredOn().value(), true);
+    }
+
+    void testPowerStateOff() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS0;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().at(0).toBool(), false);
+        QCOMPARE(rs.isPoweredOn().value(), false);
+    }
+
+    void testPowerStateNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("PS1;");
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS1;"); // same value
+        QCOMPARE(spy.count(), 0);
+    }
+
+    void testPowerStateMalformed() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::powerStateChanged);
+        rs.parseCATCommand("PS;");  // too short
+        rs.parseCATCommand("PS2;"); // invalid flag
+        rs.parseCATCommand("PSx;"); // non-digit
+        QCOMPARE(spy.count(), 0);
+        QVERIFY(!rs.isPoweredOn().has_value());
+    }
+
+    void testPowerStateResetClearsToUnknown() {
+        RadioState rs;
+        rs.parseCATCommand("PS1;");
+        QCOMPARE(rs.isPoweredOn().value(), true);
+        rs.reset();
+        QVERIFY(!rs.isPoweredOn().has_value());
+    }
+
+    // SIRF parser — realistic frame yields PT and LT.
+    void testSirfEmitsPaAndLpaTemperatures() {
+        RadioState rs;
+        QSignalSpy paSpy(&rs, &RadioState::paTemperatureChanged);
+        QSignalSpy lpaSpy(&rs, &RadioState::lpaTemperatureChanged);
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:28,LM:5,PA:0.6,PM:0,PT:26;");
+        QCOMPARE(paSpy.count(), 1);
+        QCOMPARE(paSpy.first().at(0).toInt(), 26);
+        QCOMPARE(lpaSpy.count(), 1);
+        QCOMPARE(lpaSpy.first().at(0).toInt(), 28);
+        QCOMPARE(rs.paTemperatureC(), 26);
+        QCOMPARE(rs.lpaTemperatureC(), 28);
+    }
+
+    // The whole point of the tokenizer: a hypothetical future SIRF key whose name
+    // contains "PT" or "LT" as a substring (XPT, RPT, RLT, ALT, …) must NOT
+    // collide with the real PT/LT lookups.
+    void testSirfTokenizerIsExactKeyMatch() {
+        RadioState rs;
+        QSignalSpy paSpy(&rs, &RadioState::paTemperatureChanged);
+        QSignalSpy lpaSpy(&rs, &RadioState::lpaTemperatureChanged);
+        // XPT and RLT come BEFORE PT/LT in the payload — substring matching
+        // (indexOf("PT")) would have picked up XPT:99; we must end up with PT=26.
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,XPT:99,RLT:88,LT:28,LM:5,PA:0.6,PM:0,PT:26;");
+        QCOMPARE(paSpy.count(), 1);
+        QCOMPARE(paSpy.first().at(0).toInt(), 26);
+        QCOMPARE(lpaSpy.count(), 1);
+        QCOMPARE(lpaSpy.first().at(0).toInt(), 28);
+    }
+
+    // Regression: PM-derived PA drain current must still parse after the rewrite.
+    void testSirfStillEmitsPaDrainCurrent() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::paDrainCurrentChanged);
+        // PM:7680 / 768 = 10.0 A
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:28,LM:5,PA:0.6,PM:7680,PT:26;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().at(0).toDouble(), 10.0);
+    }
+
+    void testSirfTemperatureNoChangeNoSignal() {
+        RadioState rs;
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:28,LM:5,PA:0.6,PM:0,PT:26;");
+        QSignalSpy paSpy(&rs, &RadioState::paTemperatureChanged);
+        QSignalSpy lpaSpy(&rs, &RadioState::lpaTemperatureChanged);
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:28,LM:5,PA:0.6,PM:0,PT:26;");
+        QCOMPARE(paSpy.count(), 0);
+        QCOMPARE(lpaSpy.count(), 0);
+    }
+
+    void testSirfMissingTempFieldsDoNotEmit() {
+        RadioState rs;
+        QSignalSpy paSpy(&rs, &RadioState::paTemperatureChanged);
+        QSignalSpy lpaSpy(&rs, &RadioState::lpaTemperatureChanged);
+        rs.parseCATCommand("SIRFPM:0;");
+        QCOMPARE(paSpy.count(), 0);
+        QCOMPARE(lpaSpy.count(), 0);
+        QCOMPARE(rs.paTemperatureC(), -1);
+        QCOMPARE(rs.lpaTemperatureC(), -1);
+    }
+
+    void testSirfTemperaturesResetToUnknown() {
+        RadioState rs;
+        rs.parseCATCommand("SIRFV8:8.0,V5:4.9,LT:28,LM:5,PA:0.6,PM:0,PT:26;");
+        QCOMPARE(rs.paTemperatureC(), 26);
+        QCOMPARE(rs.lpaTemperatureC(), 28);
+        rs.reset();
+        QCOMPARE(rs.paTemperatureC(), -1);
+        QCOMPARE(rs.lpaTemperatureC(), -1);
+    }
+
     // Defaults-with-special-values check: a handful of fields use non-negative
     // sentinels (default 50, 30, 1000, etc.) that could collide with legal
     // values. Lock in the exact default so a regression changes it visibly.

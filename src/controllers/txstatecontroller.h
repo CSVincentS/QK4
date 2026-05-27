@@ -4,7 +4,6 @@
 #include <QObject>
 
 class RadioState;
-class StatusBarController;
 class SideControlPanel;
 class VfoFrequencyController;
 class VFOWidget;
@@ -20,19 +19,17 @@ class QLabel;
 //     when XIT is active (shown freq = dial + XIT offset).
 //
 //   - txMeterChanged → routes meter tuple to the active TX VFO's meter
-//     and to the side-panel / top-status-bar forward-power displays.
-//     Also computes PA drain current Id from forward power + supply
-//     voltage using the K4's measured ~34% PA efficiency.
+//     and to the side-panel forward-power display. PA drain current Id
+//     comes from the K4's SIRF stream directly (RadioState::paDrainCurrent).
 //
 // Split-state dispatch: SPLIT OFF → VFO A transmits; SPLIT ON → VFO B.
 class TxStateController : public QObject {
     Q_OBJECT
 
 public:
-    explicit TxStateController(RadioState *radioState, StatusBarController *statusBar,
-                               SideControlPanel *sideControlPanel, VfoFrequencyController *vfoFrequencyController,
-                               VFOWidget *vfoA, VFOWidget *vfoB, QLabel *txIndicator, QLabel *txTriangle,
-                               QLabel *txTriangleB, QObject *parent = nullptr);
+    explicit TxStateController(RadioState *radioState, SideControlPanel *sideControlPanel,
+                               VfoFrequencyController *vfoFrequencyController, VFOWidget *vfoA, VFOWidget *vfoB,
+                               QLabel *txIndicator, QLabel *txTriangle, QLabel *txTriangleB, QObject *parent = nullptr);
     ~TxStateController() override;
 
     // Resets the TX triangles to their RX-state default on K4 disconnect.
@@ -44,7 +41,6 @@ private slots:
 
 private:
     RadioState *m_radioState;                         // injected, not owned
-    StatusBarController *m_statusBar;                 // injected, not owned
     SideControlPanel *m_sideControlPanel;             // injected, not owned
     VfoFrequencyController *m_vfoFrequencyController; // injected, not owned
     VFOWidget *m_vfoA;                                // injected, not owned

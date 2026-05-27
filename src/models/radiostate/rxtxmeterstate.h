@@ -45,6 +45,11 @@ struct RxTxMeterState {
     // to fixed η") on reset().
     double calibratedPaEfficiency = 0.0;
 
+    // PA / Lower-PA temperatures in degrees Celsius. Streamed inside SIRF as the
+    // PT (PA) and LT (LPA) keys. Sentinel -1 = unknown (not yet seen / post-reset).
+    int paTemperatureC = -1;
+    int lpaTemperatureC = -1;
+
     // TX/RX transition.
     bool isTransmitting = false;
 

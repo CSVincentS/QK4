@@ -1,4 +1,5 @@
 #include "halikeydevice.h"
+#include "halikey_edge.h"
 #include "halikeymidiworker.h"
 #include "halikeyv14worker.h"
 #include "halikeyworkerbase.h"
@@ -7,46 +8,33 @@
 
 Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey")
 
-namespace {
-// Inline debounce decision shared by all three lines. Returns true if the event should be
-// emitted; false if it's redundant (same state) or a bounce (within DEBOUNCE_NS).
-// On accept, updates the confirmed-state atomic and the last-edge timestamp.
-bool acceptEdge(bool raw, std::atomic<bool> &confirmed, std::atomic<qint64> &lastEdgeNs, qint64 nowNs) {
-    if (raw == confirmed.load(std::memory_order_acquire))
-        return false; // Redundant — same direction as last confirmed edge
-    const qint64 last = lastEdgeNs.load(std::memory_order_relaxed);
-    if (nowNs - last < HalikeyDevice::DEBOUNCE_NS)
-        return false; // Bounce — within the dead window
-    lastEdgeNs.store(nowNs, std::memory_order_relaxed);
-    confirmed.store(raw, std::memory_order_release);
-    return true;
-}
-} // namespace
+// WHY: HalikeyDevice no longer runs a time-window debounce. Each worker is authoritative for
+// clean edges — the V1.4 serial worker confirms across ≥2 reads (≥500 µs apart) before
+// emitting; the MIDI worker delivers already-debounced firmware events. The previous 3 ms
+// processing-time gate silently dropped real MIDI releases on Windows when WinMM delivered
+// press+release in a single burst (see docs/halikey-midi-windows-debounce-bug.md), and also
+// harbored a latent bug where a rejected edge left `confirmed` stale. acceptEdge() (extracted
+// into halikey_edge.h for isolated testing) now does just same-direction dedupe.
+using HalikeyEdge::acceptEdge;
 
-HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent) : QObject(parent), m_deviceType(deviceType) {
-    // Monotonic clock for debounce timestamping. Starting here means nowNs() == 0 represents
-    // "construction time" — any real paddle event will have a positive timestamp, so the
-    // first edge ever delivered will pass the bounce gate (0 - 0 < DEBOUNCE_NS) only on
-    // construction, which is fine because there's no prior confirmed state to compare against.
-    m_clock.start();
-}
+HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent) : QObject(parent), m_deviceType(deviceType) {}
 
 HalikeyDevice::~HalikeyDevice() {
     closePort();
 }
 
 void HalikeyDevice::onRawDit(bool pressed) {
-    if (acceptEdge(pressed, m_confirmedDitState, m_lastDitEdgeNs, m_clock.nsecsElapsed()))
+    if (acceptEdge(pressed, m_confirmedDitState))
         emit ditStateChanged(pressed);
 }
 
 void HalikeyDevice::onRawDah(bool pressed) {
-    if (acceptEdge(pressed, m_confirmedDahState, m_lastDahEdgeNs, m_clock.nsecsElapsed()))
+    if (acceptEdge(pressed, m_confirmedDahState))
         emit dahStateChanged(pressed);
 }
 
 void HalikeyDevice::onRawPtt(bool pressed) {
-    if (acceptEdge(pressed, m_confirmedPttState, m_lastPttEdgeNs, m_clock.nsecsElapsed()))
+    if (acceptEdge(pressed, m_confirmedPttState))
         emit pttStateChanged(pressed);
 }
 
@@ -59,9 +47,6 @@ bool HalikeyDevice::openPort(const QString &portName) {
     m_confirmedDitState.store(false, std::memory_order_relaxed);
     m_confirmedDahState.store(false, std::memory_order_relaxed);
     m_confirmedPttState.store(false, std::memory_order_relaxed);
-    m_lastDitEdgeNs.store(0, std::memory_order_relaxed);
-    m_lastDahEdgeNs.store(0, std::memory_order_relaxed);
-    m_lastPttEdgeNs.store(0, std::memory_order_relaxed);
 
     // Create worker based on injected device type (0 = V1.4, 1 = MIDI)
     if (m_deviceType == 1) {
@@ -123,9 +108,6 @@ void HalikeyDevice::closePort() {
     m_confirmedDitState.store(false, std::memory_order_relaxed);
     m_confirmedDahState.store(false, std::memory_order_relaxed);
     m_confirmedPttState.store(false, std::memory_order_relaxed);
-    m_lastDitEdgeNs.store(0, std::memory_order_relaxed);
-    m_lastDahEdgeNs.store(0, std::memory_order_relaxed);
-    m_lastPttEdgeNs.store(0, std::memory_order_relaxed);
 
     if (wasConnected) {
         emit disconnected();

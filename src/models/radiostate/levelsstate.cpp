@@ -6,7 +6,7 @@
 
 void LevelsState::reset() {
     rfPower = -1.0;
-    isQrpMode = false;
+    powerRange = PowerRange::Qro;
     micGain = -1;
     compression = -1;
     rfGain = -999;
@@ -43,7 +43,7 @@ void handlePC(LevelsState &state, RadioState &owner, const QString &cmd) {
     // PCnnnr; where nnn=power value, r=L/H/X.
     // L = QRP (0.1-10W): nnn is watts*10 (e.g., 099 = 9.9W).
     // H = QRO (1-110W): nnn is watts directly.
-    // X = XVTR (0.1-10mW): skipped — not surfaced in UI.
+    // X = XVTR (0.1-10mW): nnn is mW*10 (e.g., 010 = 1.0 mW).
     if (cmd.length() < 6)
         return;
     bool ok;
@@ -52,29 +52,32 @@ void handlePC(LevelsState &state, RadioState &owner, const QString &cmd) {
         return;
 
     const QChar mode = cmd.at(5);
-    double watts;
-    bool qrp;
+    double value;
+    LevelsState::PowerRange range;
     if (mode == 'L') {
-        watts = powerRaw / 10.0;
-        qrp = true;
+        value = powerRaw / 10.0;
+        range = LevelsState::PowerRange::Qrp;
     } else if (mode == 'H') {
-        watts = static_cast<double>(powerRaw);
-        qrp = false;
+        value = static_cast<double>(powerRaw);
+        range = LevelsState::PowerRange::Qro;
+    } else if (mode == 'X') {
+        value = powerRaw / 10.0; // mW
+        range = LevelsState::PowerRange::Xvtr;
     } else {
         return;
     }
 
     bool changed = false;
-    if (watts != state.rfPower) {
-        state.rfPower = watts;
+    if (value != state.rfPower) {
+        state.rfPower = value;
         changed = true;
     }
-    if (qrp != state.isQrpMode) {
-        state.isQrpMode = qrp;
+    if (range != state.powerRange) {
+        state.powerRange = range;
         changed = true;
     }
     if (changed)
-        emit owner.rfPowerChanged(state.rfPower, state.isQrpMode);
+        emit owner.rfPowerChanged(state.rfPower, state.powerRange);
 }
 
 // WHY: RF gain arrives with a leading dash (e.g., "RG-010"), but is stored as a
@@ -124,18 +127,20 @@ void handleSQSub(LevelsState &state, RadioState &owner, const QString &cmd) {
 }
 
 void setRfPower(LevelsState &state, RadioState &owner, double watts) {
-    const bool qrp = (watts <= 10.0);
+    // Optimistic UI setter — assumes HF range (auto-pick QRP if ≤10 W). XVTR
+    // mW writes don't go through this path; they come from the K4 via handlePC.
+    const LevelsState::PowerRange range = (watts <= 10.0) ? LevelsState::PowerRange::Qrp : LevelsState::PowerRange::Qro;
     bool changed = false;
     if (state.rfPower != watts) {
         state.rfPower = watts;
         changed = true;
     }
-    if (qrp != state.isQrpMode) {
-        state.isQrpMode = qrp;
+    if (range != state.powerRange) {
+        state.powerRange = range;
         changed = true;
     }
     if (changed)
-        emit owner.rfPowerChanged(state.rfPower, state.isQrpMode);
+        emit owner.rfPowerChanged(state.rfPower, state.powerRange);
 }
 
 void setMicGain(LevelsState &state, RadioState &owner, int gain) {

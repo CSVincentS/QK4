@@ -130,8 +130,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     m_processingDisplayController = new ProcessingDisplayController(m_radioState, m_vfoA, m_vfoB, this);
 
-    m_antennaDisplayController =
-        new AntennaDisplayController(m_radioState, m_txAntennaLabel, m_rxAntALabel, m_rxAntBLabel, this);
+    m_antennaDisplayController = new AntennaDisplayController(m_radioState, m_bandNavController, m_txAntennaLabel,
+                                                              m_rxAntALabel, m_rxAntBLabel, this);
 
     const VfoRowIndicatorController::Labels rowLabels{
         m_splitLabel, m_vfoRow->bSetLabel(), m_txTriangle, m_txTriangleB, m_voxLabel, m_qskLabel,
@@ -146,9 +146,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     m_subDivIndicatorController = new SubDivIndicatorController(m_radioState, m_spectrumController, m_vfoB, m_subLabel,
                                                                 m_divLabel, m_modeBLabel, this);
 
-    m_txStateController =
-        new TxStateController(m_radioState, m_statusBarController, m_sideControlPanel, m_vfoFrequencyController, m_vfoA,
-                              m_vfoB, m_txIndicator, m_txTriangle, m_txTriangleB, this);
+    m_txStateController = new TxStateController(m_radioState, m_sideControlPanel, m_vfoFrequencyController, m_vfoA,
+                                                m_vfoB, m_txIndicator, m_txTriangle, m_txTriangleB, this);
 
     m_sideControlDisplayController = new SideControlDisplayController(m_radioState, m_sideControlPanel, this);
 
@@ -257,11 +256,12 @@ void MainWindow::setupRadioStateWiring() {
             &SpectrumController::checkAndHideMiniPanB);
 
     // RadioState signals -> status / side-panel readings (direct-observation).
-    // rfPowerChanged carries (watts, isQrp) but we only need the QRP flag — lambda
-    // propagates it to both VFO TX meters so their scale matches the radio.
-    connect(m_radioState, &RadioState::rfPowerChanged, this, [this](double, bool isQrp) {
-        m_vfoA->setTxMeterQrp(isQrp);
-        m_vfoB->setTxMeterQrp(isQrp);
+    // rfPowerChanged carries (value, range) — the VFO TX meter scales by QRP vs
+    // QRO; for XVTR the meter scale is also "small" so we treat XVTR like QRP.
+    connect(m_radioState, &RadioState::rfPowerChanged, this, [this](double, LevelsState::PowerRange range) {
+        const bool smallScale = (range == LevelsState::PowerRange::Qrp || range == LevelsState::PowerRange::Xvtr);
+        m_vfoA->setTxMeterQrp(smallScale);
+        m_vfoB->setTxMeterQrp(smallScale);
     });
     connect(m_radioState, &RadioState::supplyVoltageChanged, m_sideControlPanel, &SideControlPanel::setVoltage);
     // Side panel's "X.XA" mirrors the K4 front-panel meter: supply current (IS) at idle,
@@ -470,8 +470,8 @@ void MainWindow::setupUi() {
     mainLayout->setSpacing(0);
 
     // Top status bar — owned by StatusBarController
-    m_statusBarController =
-        new StatusBarController(m_radioState, m_connectionController->networkMetrics(), centralWidget, this);
+    m_statusBarController = new StatusBarController(m_radioState, m_connectionController,
+                                                    m_connectionController->networkMetrics(), centralWidget, this);
     mainLayout->addWidget(m_statusBarController->widget());
 
     // Middle section: Side Panel + Main Content (L-shaped)
@@ -1166,6 +1166,7 @@ void MainWindow::onRadioReady() {
         "#FPS15;"); // Set display FPS to 15 on connect (12 default is too slow for large monitors)
     m_connectionController->sendCAT("#FPS;"); // Query back to confirm and update menu
     m_connectionController->sendCAT("#SCL;"); // Panadapter scale - not in RDY, needed for dB range
+    m_connectionController->sendCAT("PS;");   // Remote power state - not in RDY, drives the status-bar power button
     // Note: ML and KP commands come in RDY; dump - no need to query
 
     // Sync element length with K4 server (sent in RDY dump as KZLnn)

@@ -10,11 +10,10 @@
 #include <QLabel>
 #include <QString>
 
-TxStateController::TxStateController(RadioState *radioState, StatusBarController *statusBar,
-                                     SideControlPanel *sideControlPanel, VfoFrequencyController *vfoFrequencyController,
-                                     VFOWidget *vfoA, VFOWidget *vfoB, QLabel *txIndicator, QLabel *txTriangle,
-                                     QLabel *txTriangleB, QObject *parent)
-    : QObject(parent), m_radioState(radioState), m_statusBar(statusBar), m_sideControlPanel(sideControlPanel),
+TxStateController::TxStateController(RadioState *radioState, SideControlPanel *sideControlPanel,
+                                     VfoFrequencyController *vfoFrequencyController, VFOWidget *vfoA, VFOWidget *vfoB,
+                                     QLabel *txIndicator, QLabel *txTriangle, QLabel *txTriangleB, QObject *parent)
+    : QObject(parent), m_radioState(radioState), m_sideControlPanel(sideControlPanel),
       m_vfoFrequencyController(vfoFrequencyController), m_vfoA(vfoA), m_vfoB(vfoB), m_txIndicator(txIndicator),
       m_txTriangle(txTriangle), m_txTriangleB(txTriangleB) {
     connect(m_radioState, &RadioState::transmitStateChanged, this, &TxStateController::onTransmitStateChanged);
@@ -72,7 +71,6 @@ void TxStateController::onTransmitStateChanged(bool transmitting) {
 }
 
 void TxStateController::onTxMeterChanged(int alc, int comp, double fwdPower, double swr) {
-    m_statusBar->setForwardPower(fwdPower);
     m_sideControlPanel->setPowerReading(fwdPower);
 
     // PA drain current comes straight from the K4's SIRF stream (LM field, parsed in

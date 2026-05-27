@@ -11,7 +11,9 @@
  *
  * Features:
  * - Custom-painted frequency with dot separators (XX.XXX.XXX)
- * - Click any digit to enter edit mode at that position
+ * - Click to enter edit mode; cursor starts at the leftmost digit
+ * - In edit mode all 8 digits are shown (incl. a leading zero) so any
+ *   position is reachable — required to go from <10 MHz to >=10 MHz
  * - All digits change to edit color (VFO theme: cyan for A, green for B)
  * - Type digits to replace at cursor position (auto-advances)
  * - Arrow keys to navigate between digits
@@ -27,6 +29,11 @@ class FrequencyDisplayWidget : public QWidget {
     Q_OBJECT
 
 public:
+    // 10 digits supports DC to 9.999.999.999 Hz (= ~10 GHz) — covers HF, VHF, UHF,
+    // and L-band XVTRs (e.g., 1.296.000.000 for 1296 MHz).
+    static constexpr int kDigits = 10;
+    static constexpr int kMaxDigitIndex = kDigits - 1;
+
     explicit FrequencyDisplayWidget(QWidget *parent = nullptr);
 
     // Set the displayed frequency (with or without dots)
@@ -84,6 +91,11 @@ private:
     // Convert character index in display string to digit index (0-7)
     // Returns -1 for dot characters
     int digitIndexFromCharIndex(int charIndex) const;
+
+    // Index of the first m_digits position shown in the display: 1 when the
+    // leading zero is suppressed (<10 MHz and not editing), else 0. In edit
+    // mode all 8 digits are shown so digit 0 stays reachable.
+    int displayStartIndex() const;
 
     // Format m_digits as display string with dots (e.g., "7.024.980")
     QString formatWithDots() const;

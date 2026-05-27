@@ -246,6 +246,12 @@ void TcpClient::sendCAT(const QString &command) {
         m_socket->write(packet);
         m_socket->flush();
         qCDebug(catTx) << "sent:" << command << "(" << packet.size() << "bytes)";
+        // Mirror the KPOD+ "TX@" trace format for KZ commands so HaliKey-keyer emits can be
+        // correlated 1:1 against cw.keyer traces and KPOD+ EP02 KZ@ traces.
+        if (command.startsWith(QLatin1String("KZ"))) {
+            qCDebug(catTx).noquote() << "TX@" << QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz")) << "["
+                                     << command << "]";
+        }
     } else {
         qCWarning(catTx) << "DROPPED (state=" << m_state.load(std::memory_order_acquire) << "):" << command;
     }

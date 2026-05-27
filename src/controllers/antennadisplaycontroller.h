@@ -4,6 +4,7 @@
 #include <QObject>
 
 class RadioState;
+class BandNavigationController;
 class QLabel;
 
 // Observes RadioState::antennaChanged (AN/AR/AR$) and antennaNameChanged
@@ -18,8 +19,8 @@ class AntennaDisplayController : public QObject {
     Q_OBJECT
 
 public:
-    explicit AntennaDisplayController(RadioState *radioState, QLabel *txAntennaLabel, QLabel *rxAntALabel,
-                                      QLabel *rxAntBLabel, QObject *parent = nullptr);
+    explicit AntennaDisplayController(RadioState *radioState, BandNavigationController *bandNav, QLabel *txAntennaLabel,
+                                      QLabel *rxAntALabel, QLabel *rxAntBLabel, QObject *parent = nullptr);
     ~AntennaDisplayController() override;
 
     // Clears all three antenna labels on K4 disconnect.
@@ -30,10 +31,11 @@ private slots:
     void onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub);
 
 private:
-    RadioState *m_radioState; // injected, not owned
-    QLabel *m_txAntennaLabel; // injected, not owned
-    QLabel *m_rxAntALabel;    // injected, not owned
-    QLabel *m_rxAntBLabel;    // injected, not owned
+    RadioState *m_radioState;            // injected, not owned
+    BandNavigationController *m_bandNav; // injected, not owned
+    QLabel *m_txAntennaLabel;            // injected, not owned
+    QLabel *m_rxAntALabel;               // injected, not owned
+    QLabel *m_rxAntBLabel;               // injected, not owned
 };
 
 #endif // ANTENNADISPLAYCONTROLLER_H

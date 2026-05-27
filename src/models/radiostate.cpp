@@ -28,6 +28,9 @@ void RadioState::reset() {
     // Processing state (NB/NR/PA/RA/GT + NA/NM for both VFOs).
     m_processingState.reset();
 
+    // XVTR per-band configs (12 slots).
+    m_xvtrBandState.reset();
+
     // Antenna
     m_antennaState.reset();
 
@@ -38,6 +41,10 @@ void RadioState::reset() {
 
     // QSK (full break-in) + per-mode delays. (TEST/B SET live on m_rxTxMeterState.)
     m_qskControlState.reset();
+
+    // K4 remote power state — back to "unknown" so the indicator goes neutral
+    // until the next session sends a PS query.
+    m_powerState.reset();
 
     // VFO link + lock A/B reset via m_frequencyVfoState.reset() above.
 
@@ -626,6 +633,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"ML", [this](const QString &c) { handleML(c); }});
     m_commandHandlers.append({"CP", [this](const QString &c) { handleCP(c); }});
     m_commandHandlers.append({"PC", [this](const QString &c) { handlePC(c); }});
+    m_commandHandlers.append({"PS", [this](const QString &c) { PowerHandlers::handlePS(m_powerState, *this, c); }});
     m_commandHandlers.append({"KS", [this](const QString &c) { handleKS(c); }});
     m_commandHandlers.append({"KP", [this](const QString &c) { handleKP(c); }});
     m_commandHandlers.append({"SM", [this](const QString &c) { handleSM(c); }});
@@ -684,6 +692,18 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"ID", [this](const QString &c) { handleID(c); }});
     m_commandHandlers.append({"OM", [this](const QString &c) { handleOM(c); }});
     m_commandHandlers.append({"ER", [this](const QString &c) { handleER(c); }});
+
+    // XVTR per-band config — XvtrBandHandlers populates m_xvtrBandState.
+    m_commandHandlers.append(
+        {"XVN", [this](const QString &c) { XvtrBandHandlers::handleXVN(m_xvtrBandState, *this, c); }});
+    m_commandHandlers.append(
+        {"XVM", [this](const QString &c) { XvtrBandHandlers::handleXVM(m_xvtrBandState, *this, c); }});
+    m_commandHandlers.append(
+        {"XVR", [this](const QString &c) { XvtrBandHandlers::handleXVR(m_xvtrBandState, *this, c); }});
+    m_commandHandlers.append(
+        {"XVI", [this](const QString &c) { XvtrBandHandlers::handleXVI(m_xvtrBandState, *this, c); }});
+    m_commandHandlers.append(
+        {"XVO", [this](const QString &c) { XvtrBandHandlers::handleXVO(m_xvtrBandState, *this, c); }});
 
     // Sort by prefix length (longest first) for correct matching
     std::sort(m_commandHandlers.begin(), m_commandHandlers.end(),

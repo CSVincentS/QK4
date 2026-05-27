@@ -313,18 +313,6 @@ void RxEqPopupWidget::setupUi(const QString &title, const QString &accentColor) 
     auto *buttonsLayout = new QVBoxLayout();
     buttonsLayout->setSpacing(4);
 
-    // Close button
-    m_closeBtn = new QPushButton(this);
-    m_closeBtn->setFixedSize(76, K4Styles::Dimensions::ButtonHeightMedium);
-    m_closeBtn->setText("\u21A9"); // ↩ return arrow
-    m_closeBtn->setStyleSheet(K4Styles::popupButtonNormal() +
-                              QString("QPushButton { font-size: %1px; }").arg(K4Styles::Dimensions::FontSizeTitle));
-    connect(m_closeBtn, &QPushButton::clicked, this, &RxEqPopupWidget::onCloseClicked);
-    buttonsLayout->addWidget(m_closeBtn);
-
-    // Small spacer before presets
-    buttonsLayout->addSpacing(K4Styles::Dimensions::PopupContentMargin);
-
     // 4 preset rows
     for (int i = 0; i < 4; i++) {
         auto *presetRow = new EqPresetRowWidget(i, this);
@@ -390,10 +378,6 @@ void RxEqPopupWidget::onBandValueChanged(int bandIndex, int dB) {
 void RxEqPopupWidget::onFlatClicked() {
     resetToFlat();
     emit flatRequested();
-}
-
-void RxEqPopupWidget::onCloseClicked() {
-    hidePopup();
 }
 
 void RxEqPopupWidget::updatePresetName(int index, const QString &name) {

@@ -242,6 +242,10 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttSta
 }
 
 void HaliKeyV14Worker::monitorLoop() {
+    // WHY: This count-based confirmation (DEBOUNCE_COUNT=2 across ≥500 µs read intervals) is
+    // the ONLY contact-bounce defense in the serial path. HalikeyDevice no longer runs a
+    // time-window debounce — see docs/halikey-midi-windows-debounce-bug.md for why that was
+    // removed. Do not relax this filter without first restoring an alternative bounce gate.
     bool lastDitState = false;
     bool lastDahState = false;
     bool lastPttState = false;

@@ -22,11 +22,13 @@ add_executable(test_radiostate test_radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/powerstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radiostate Qt6::Core Qt6::Test)
@@ -41,11 +43,13 @@ add_executable(test_radiostate_registry test_radiostate_registry.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/powerstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_radiostate_registry PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radiostate_registry Qt6::Core Qt6::Test)
@@ -63,11 +67,13 @@ add_executable(test_radiostate_golden test_radiostate_golden.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/powerstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_radiostate_golden PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radiostate_golden Qt6::Core Qt6::Test)
@@ -88,11 +94,13 @@ if(QK4_BUILD_BENCHMARKS)
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+        ${CMAKE_SOURCE_DIR}/src/models/radiostate/powerstate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
         ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
     )
     target_include_directories(bench_radiostate PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_link_libraries(bench_radiostate Qt6::Core Qt6::Test)
@@ -106,6 +114,14 @@ target_include_directories(test_radioutils PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radioutils Qt6::Core Qt6::Test)
 add_test(NAME RadioUtilsTests COMMAND test_radioutils)
 
+# MenuModel parsing + label resolution tests
+add_executable(test_menumodel test_menumodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/menumodel.cpp
+)
+target_include_directories(test_menumodel PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_menumodel Qt6::Core Qt6::Test)
+add_test(NAME MenuModelTests COMMAND test_menumodel)
+
 # Protocol packet parsing tests
 add_executable(test_protocol test_protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
@@ -117,6 +133,8 @@ add_test(NAME ProtocolTests COMMAND test_protocol)
 # CatServer command handler tests
 add_executable(test_catserver test_catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/network/catserver.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catframes.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catpushbroadcaster.cpp
     ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
@@ -125,15 +143,40 @@ add_executable(test_catserver test_catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/powerstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
 )
 target_include_directories(test_catserver PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_catserver Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME CatServerTests COMMAND test_catserver)
+
+# CatPushBroadcaster per-client AI subscription / push tests
+add_executable(test_catpushbroadcaster test_catpushbroadcaster.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catpushbroadcaster.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/catframes.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/antennastate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/audioeffectsstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/datacontrolstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/frequencyvfostate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/levelsstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/modefilterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/powerstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/processingstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/qskcontrolstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/rxtxmeterstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/spectrumdisplaystate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/textdecodestate.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/radiostate/xvtrbandstate.cpp
+)
+target_include_directories(test_catpushbroadcaster PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_catpushbroadcaster Qt6::Core Qt6::Network Qt6::Test)
+add_test(NAME CatPushBroadcasterTests COMMAND test_catpushbroadcaster)
 
 # DX Cluster spot parsing tests
 add_executable(test_dxcluster test_dxcluster.cpp
@@ -142,6 +185,12 @@ add_executable(test_dxcluster test_dxcluster.cpp
 target_include_directories(test_dxcluster PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_dxcluster Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME DxClusterTests COMMAND test_dxcluster)
+
+# HalikeyDevice edge-dedupe tests — pure logic, no Qt/RtMidi/serial linkage needed.
+add_executable(test_halikeydevice test_halikeydevice.cpp)
+target_include_directories(test_halikeydevice PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_halikeydevice Qt6::Core Qt6::Test)
+add_test(NAME HalikeyDeviceTests COMMAND test_halikeydevice)
 
 # KPOD+ USB worker — pure-logic tests (command builders, EP02 trim, response decoder)
 add_executable(test_kpodplususbworker test_kpodplususbworker.cpp
@@ -154,3 +203,18 @@ target_include_directories(test_kpodplususbworker PRIVATE
 )
 target_link_libraries(test_kpodplususbworker Qt6::Core Qt6::Test ${LIBUSB_LIBRARIES})
 add_test(NAME KpodPlusUsbWorkerTests COMMAND test_kpodplususbworker)
+
+# Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
+# test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
+# automatically gets the new test built — no parallel maintenance of an explicit
+# list in .github/workflows/lint.yml (which is what caused the late-May 2026
+# string of red builds when test_menumodel / test_catpushbroadcaster /
+# test_halikeydevice were added but the workflow's --target list wasn't).
+get_property(_qk4_dir_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+set(_qk4_test_targets "")
+foreach(_t IN LISTS _qk4_dir_targets)
+    if(_t MATCHES "^test_")
+        list(APPEND _qk4_test_targets ${_t})
+    endif()
+endforeach()
+add_custom_target(qk4_tests DEPENDS ${_qk4_test_targets})

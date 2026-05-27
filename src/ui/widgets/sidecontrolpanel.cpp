@@ -282,6 +282,12 @@ void SideControlPanel::setupUi() {
     iconRow->addStretch();
     layout->addLayout(iconRow);
 
+    auto *versionLabel = new QLabel(QString("QK4 V.%1").arg(QK4_VERSION), this);
+    versionLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                    .arg(K4Styles::Colors::InactiveGray)
+                                    .arg(K4Styles::Dimensions::FontSizeSmall));
+    layout->addWidget(versionLabel);
+
     // Connect icon button signals
     connect(m_helpBtn, &QPushButton::clicked, this, &SideControlPanel::helpClicked);
     connect(m_connectBtn, &QPushButton::clicked, this, &SideControlPanel::connectClicked);
@@ -511,9 +517,23 @@ void SideControlPanel::setCompression(int comp) {
     }
 }
 
-void SideControlPanel::setPower(double power) {
-    // Show decimal for QRP (≤10W), whole number for QRO (>10W)
-    QString powerStr = (power <= 10.0) ? QString::number(power, 'f', 1) : QString::number(static_cast<int>(power));
+void SideControlPanel::setPower(double power, LevelsState::PowerRange range) {
+    // Choose unit + precision per range. XVTR mW always shows one decimal
+    // (matches the K4's "mW 1.0" front-panel readout). QRP shows decimal
+    // (≤10 W); QRO shows whole watts (>10 W).
+    QString powerStr;
+    QString label;
+    if (range == LevelsState::PowerRange::Xvtr) {
+        powerStr = QString::number(power, 'f', 1);
+        label = QStringLiteral("mW");
+    } else {
+        powerStr = (power <= 10.0) ? QString::number(power, 'f', 1) : QString::number(static_cast<int>(power));
+        label = QStringLiteral("PWR");
+    }
+    // Swap the label between PWR and mW so the user can see at a glance that
+    // the K4 is operating in transverter range. The DLY label on the alternate
+    // face stays put.
+    m_pwrBtn->setPrimaryLabel(label);
     if (m_pwrIsPrimary) {
         m_pwrBtn->setPrimaryValue(powerStr);
     } else {

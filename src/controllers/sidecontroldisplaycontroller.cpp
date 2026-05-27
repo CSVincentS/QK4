@@ -26,7 +26,8 @@ SideControlDisplayController::SideControlDisplayController(RadioState *radioStat
     connect(m_radioState, &RadioState::keyerSpeedChanged, m_panel, &SideControlPanel::setWpm);
     connect(m_radioState, &RadioState::cwPitchChanged, this,
             [this](int pitch) { m_panel->setPitch(pitch / 1000.0); }); // Hz → kHz
-    connect(m_radioState, &RadioState::rfPowerChanged, this, [this](double watts, bool) { m_panel->setPower(watts); });
+    connect(m_radioState, &RadioState::rfPowerChanged, this,
+            [this](double value, LevelsState::PowerRange range) { m_panel->setPower(value, range); });
     connect(m_radioState, &RadioState::qskDelayChanged, this,
             [this](int delay) { m_panel->setDelay(delay / 100.0); }); // 10 ms → seconds
     connect(m_radioState, &RadioState::rfGainChanged, m_panel, &SideControlPanel::setMainRfGain);

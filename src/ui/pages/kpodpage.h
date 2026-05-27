@@ -4,7 +4,6 @@
 #include <QWidget>
 #include <QCheckBox>
 #include <QLabel>
-#include <QSpinBox>
 #include <QComboBox>
 
 class QVBoxLayout;
@@ -42,14 +41,11 @@ private:
     QLabel *m_kpodDeviceIdLabel = nullptr;
     QLabel *m_kpodHelpLabel = nullptr;
 
-    // KPOD+ keyer configuration controls
+    // KPOD+ configuration controls. Keyer speed / CW pitch / iambic mode /
+    // paddle orientation are no longer configured here — they mirror the K4
+    // (see CwController). Encode mode has no K4 equivalent and stays manual.
     QWidget *m_keyerConfigWidget = nullptr;
-    QSpinBox *m_wpmSpinner = nullptr;
-    QSpinBox *m_pitchSpinner = nullptr;
-    QComboBox *m_iambicModeCombo = nullptr;
-    QComboBox *m_paddleOrientCombo = nullptr;
     QComboBox *m_encodeModeCombo = nullptr;
-    QSpinBox *m_stuckTimeoutSpinner = nullptr;
 };
 
 #endif // KPODPAGE_H

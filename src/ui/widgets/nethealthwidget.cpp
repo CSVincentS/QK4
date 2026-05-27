@@ -104,14 +104,13 @@ void NetHealthWidget::showMetricsPopup() {
                              .arg(K4Styles::Colors::TextWhite)
                              .arg(K4Styles::Dimensions::FontSizeMedium);
 
-    // RTT line
+    const bool connected = m_metrics->rttCurrent() >= 0;
+
     auto *rttLabel = new QLabel(m_popup);
-    if (m_metrics->rttCurrent() >= 0) {
-        rttLabel->setText(QString("<span style='%1'>RTT </span><span style='%2'>%3ms</span>"
-                                  "<span style='%1'>  (jit: </span><span style='%2'>%4</span><span style='%1'>)</span>")
+    if (connected) {
+        rttLabel->setText(QString("<span style='%1'>RTT </span><span style='%2'>%3ms</span>")
                               .arg(labelStyle, valueStyle)
-                              .arg(m_metrics->rttCurrent())
-                              .arg(m_metrics->rttJitter(), 0, 'f', 1));
+                              .arg(m_metrics->rttCurrent()));
     } else {
         rttLabel->setText(
             QString("<span style='%1'>RTT </span><span style='%2'>--</span>").arg(labelStyle, valueStyle));
@@ -119,10 +118,21 @@ void NetHealthWidget::showMetricsPopup() {
     rttLabel->setTextFormat(Qt::RichText);
     layout->addWidget(rttLabel);
 
-    // BUF line
+    auto *jitLabel = new QLabel(m_popup);
+    if (connected) {
+        jitLabel->setText(QString("<span style='%1'>JIT </span><span style='%2'>%3</span>")
+                              .arg(labelStyle, valueStyle)
+                              .arg(m_metrics->rttJitter(), 0, 'f', 1));
+    } else {
+        jitLabel->setText(
+            QString("<span style='%1'>JIT </span><span style='%2'>--</span>").arg(labelStyle, valueStyle));
+    }
+    jitLabel->setTextFormat(Qt::RichText);
+    layout->addWidget(jitLabel);
+
     auto *bufLabel = new QLabel(m_popup);
     int bufMs = static_cast<int>(m_metrics->bufferBytes() / 96.0);
-    if (m_metrics->rttCurrent() >= 0) {
+    if (connected) {
         bufLabel->setText(
             QString("<span style='%1'>BUF </span><span style='%2'>%3ms</span>").arg(labelStyle, valueStyle).arg(bufMs));
     } else {
@@ -131,28 +141,6 @@ void NetHealthWidget::showMetricsPopup() {
     }
     bufLabel->setTextFormat(Qt::RichText);
     layout->addWidget(bufLabel);
-
-    // PKT + tier line
-    auto *pktLabel = new QLabel(m_popup);
-    static const char *tierNames[] = {"GREEN", "YELLOW", "ORANGE", "RED"};
-    static const char *tierColors[] = {K4Styles::Colors::StatusGreen, K4Styles::Colors::MeterYellow,
-                                       K4Styles::Colors::MeterOrange, K4Styles::Colors::TxRed};
-    QString tierStyle = QString("color: %1; font-size: %2px; font-weight: bold; border: none;")
-                            .arg(tierColors[m_tier])
-                            .arg(K4Styles::Dimensions::FontSizeMedium);
-    if (m_metrics->rttCurrent() >= 0) {
-        pktLabel->setText(QString("<span style='%1'>PKT </span><span style='%2'>%3/2s</span>"
-                                  "   <span style='%4'>%5</span>")
-                              .arg(labelStyle, valueStyle)
-                              .arg(m_metrics->packetRate())
-                              .arg(tierStyle, tierNames[m_tier]));
-    } else {
-        pktLabel->setText(QString("<span style='%1'>PKT </span><span style='%2'>--</span>"
-                                  "   <span style='%4'>%5</span>")
-                              .arg(labelStyle, valueStyle, tierStyle, tierNames[m_tier]));
-    }
-    pktLabel->setTextFormat(Qt::RichText);
-    layout->addWidget(pktLabel);
 
     m_popup->adjustSize();
 

@@ -116,6 +116,8 @@ set(SOURCES
     src/network/kpa1500client.cpp
     src/network/dxclusterclient.cpp
     src/network/catserver.cpp
+    src/network/catframes.cpp
+    src/network/catpushbroadcaster.cpp
     src/network/k4discovery.cpp
     src/audio/audioengine.cpp
     src/audio/opusdecoder.cpp
@@ -131,11 +133,13 @@ set(SOURCES
     src/models/radiostate/frequencyvfostate.cpp
     src/models/radiostate/levelsstate.cpp
     src/models/radiostate/modefilterstate.cpp
+    src/models/radiostate/powerstate.cpp
     src/models/radiostate/processingstate.cpp
     src/models/radiostate/qskcontrolstate.cpp
     src/models/radiostate/rxtxmeterstate.cpp
     src/models/radiostate/spectrumdisplaystate.cpp
     src/models/radiostate/textdecodestate.cpp
+    src/models/radiostate/xvtrbandstate.cpp
     src/models/menumodel.cpp
     src/ui/dialogs/radiomanagerdialog.cpp
     src/ui/widgets/dualcontrolbutton.cpp
@@ -168,6 +172,8 @@ set(SOURCES
     src/ui/popups/modepopupwidget.cpp
     src/ui/widgets/txmeterwidget.cpp
     src/ui/widgets/nethealthwidget.cpp
+    src/ui/widgets/icontextlabel.cpp
+    src/ui/widgets/powerstatusbutton.cpp
     src/ui/popups/fnpopupwidget.cpp
     src/ui/popups/rxeqpopupwidget.cpp
     src/ui/popups/antennacfgpopup.cpp
@@ -178,11 +184,13 @@ set(SOURCES
     src/ui/popups/voxpopup.cpp
     src/ui/popups/ssbbwpopup.cpp
     src/ui/popups/keyingweightpopup.cpp
+    src/ui/popups/confirmpopup.cpp
     src/ui/popups/softwarelistpopup.cpp
     src/ui/dialogs/textdecodewindow.cpp
     src/ui/dialogs/macrodialog.cpp
     src/ui/widgets/notificationwidget.cpp
     src/ui/styling/k4styles.cpp
+    src/ui/styling/k4glyphs.cpp
     src/ui/popups/k4popupbase.cpp
     src/ui/widgets/kpa1500minipanel.cpp
     src/ui/overlays/sidecontroloverlay.cpp
@@ -243,6 +251,8 @@ set(HEADERS
     src/network/kpa1500client.h
     src/network/dxclusterclient.h
     src/network/catserver.h
+    src/network/catframes.h
+    src/network/catpushbroadcaster.h
     src/network/k4discovery.h
     src/audio/audioengine.h
     src/audio/opusdecoder.h
@@ -260,6 +270,7 @@ set(HEADERS
     src/models/radiostate/processingstate.h
     src/models/radiostate/qskcontrolstate.h
     src/models/radiostate/textdecodestate.h
+    src/models/radiostate/xvtrbandstate.h
     src/models/menumodel.h
     src/utils/macroids.h
     src/ui/dialogs/radiomanagerdialog.h

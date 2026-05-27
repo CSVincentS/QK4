@@ -206,19 +206,24 @@ void DxSpotOverlay::paintEvent(QPaintEvent *event) {
 }
 
 void DxSpotOverlay::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
+    const Qt::MouseButton button = event->button();
+    if (button == Qt::LeftButton || button == Qt::RightButton) {
         QPoint pos = event->pos();
         for (const auto &label : m_labels) {
             // WHY: pad the hit rect by 2 px in each direction. The painted text rect is only
             // 12 px tall and the visible glyph has a 1 px outline halo; without padding the
             // user has to land pixel-perfect on the rect and easily clicks 1–2 px outside it.
             if (label.rect.adjusted(-2, -2, 2, 2).contains(pos)) {
-                emit spotClicked(label.frequencyHz);
+                if (button == Qt::LeftButton)
+                    emit spotClicked(label.frequencyHz);
+                else
+                    emit spotRightClicked(label.frequencyHz);
                 event->accept();
                 return;
             }
         }
     }
-    // Not on a spot label — pass through to panadapter
+    // Not on a spot label — pass through to panadapter click-tune (left → VFO A,
+    // right → VFO B at the mouse-x frequency).
     event->ignore();
 }

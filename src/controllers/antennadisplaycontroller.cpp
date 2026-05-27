@@ -1,9 +1,17 @@
 #include "antennadisplaycontroller.h"
 
+#include "bandnavigationcontroller.h"
 #include "models/radiostate.h"
 
 #include <QLabel>
 #include <QString>
+
+namespace {
+// XVTR band number range per K4 BN command (BN11..BN22 = XVTR Band 1..12).
+bool isXvtrBand(int bandNum) {
+    return bandNum >= 11 && bandNum <= 22;
+}
+} // namespace
 
 namespace {
 
@@ -67,13 +75,20 @@ QString formatSubRxAntenna(int arValue, int txAnt, RadioState *radioState) {
 
 } // namespace
 
-AntennaDisplayController::AntennaDisplayController(RadioState *radioState, QLabel *txAntennaLabel, QLabel *rxAntALabel,
-                                                   QLabel *rxAntBLabel, QObject *parent)
-    : QObject(parent), m_radioState(radioState), m_txAntennaLabel(txAntennaLabel), m_rxAntALabel(rxAntALabel),
-      m_rxAntBLabel(rxAntBLabel) {
+AntennaDisplayController::AntennaDisplayController(RadioState *radioState, BandNavigationController *bandNav,
+                                                   QLabel *txAntennaLabel, QLabel *rxAntALabel, QLabel *rxAntBLabel,
+                                                   QObject *parent)
+    : QObject(parent), m_radioState(radioState), m_bandNav(bandNav), m_txAntennaLabel(txAntennaLabel),
+      m_rxAntALabel(rxAntALabel), m_rxAntBLabel(rxAntBLabel) {
     connect(m_radioState, &RadioState::antennaChanged, this, &AntennaDisplayController::onAntennaChanged);
     // Antenna name changes don't include AR/AR$ values; re-read RadioState and reformat.
     connect(m_radioState, &RadioState::antennaNameChanged, this, [this](int, const QString &) { refreshLabels(); });
+    // On XVTR bands the K4 stops applying AN/AR semantics and the UI shows
+    // "XV IN" / "XV OUT" instead. Refresh on every band change so we swap
+    // labels when entering or leaving XVTR.
+    if (m_bandNav) {
+        connect(m_bandNav, &BandNavigationController::currentBandChanged, this, [this](int, bool) { refreshLabels(); });
+    }
 }
 
 AntennaDisplayController::~AntennaDisplayController() {
@@ -81,10 +96,25 @@ AntennaDisplayController::~AntennaDisplayController() {
 }
 
 void AntennaDisplayController::onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub) {
-    // TX antenna (AN command) — always 1-3, format as "N:name".
-    m_txAntennaLabel->setText(QString("%1:%2").arg(txAnt).arg(m_radioState->antennaName(txAnt)));
-    m_rxAntALabel->setText(formatMainRxAntenna(rxAntMain, txAnt, m_radioState));
-    m_rxAntBLabel->setText(formatSubRxAntenna(rxAntSub, txAnt, m_radioState));
+    // K4 AN/AR commands "do not pertain to transverter antennas" (K4 reference
+    // rev D5): on XVTR bands the TX antenna is XV OUT and any RX path is XV IN.
+    // We relabel here rather than via state because the K4 doesn't emit a
+    // distinct antenna value — it just stops applying AN/AR.
+    const bool xvtrMain = m_bandNav && isXvtrBand(m_bandNav->currentBand(/*forVfoB=*/false));
+    const bool xvtrSub = m_bandNav && isXvtrBand(m_bandNav->currentBand(/*forVfoB=*/true));
+
+    if (xvtrMain) {
+        m_txAntennaLabel->setText(QStringLiteral("XV OUT"));
+        m_rxAntALabel->setText(QStringLiteral("XV IN"));
+    } else {
+        m_txAntennaLabel->setText(QString("%1:%2").arg(txAnt).arg(m_radioState->antennaName(txAnt)));
+        m_rxAntALabel->setText(formatMainRxAntenna(rxAntMain, txAnt, m_radioState));
+    }
+    if (xvtrSub) {
+        m_rxAntBLabel->setText(QStringLiteral("XV IN"));
+    } else {
+        m_rxAntBLabel->setText(formatSubRxAntenna(rxAntSub, txAnt, m_radioState));
+    }
 }
 
 void AntennaDisplayController::refreshLabels() {

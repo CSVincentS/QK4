@@ -51,20 +51,27 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
         // Sync element length with K4 server
         int ditMs = 1200 / wpm;
         m_connection->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
+        // K4 is the source of truth — mirror the speed onto the KPOD+ keyer.
+        if (m_kpodPlus->isPolling())
+            m_kpodPlus->setKeyerSpeed(wpm);
     });
 
-    // Update local iambic keyer mode/reversal when K4 KP settings change.
-    // KPOD+ keyer state is intentionally NOT updated from this signal —
-    // KPOD+ keyer params live independently of the K4's KP settings.
+    // Update the local iambic keyer mode/reversal — and the KPOD+ keyer — when
+    // the K4's KP settings change. The K4 is the source of truth.
     connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int /*weight*/) {
         QMetaObject::invokeMethod(
             m_keyer, "setMode", Qt::QueuedConnection,
             Q_ARG(IambicKeyer::Mode, iambic == 'B' ? IambicKeyer::IambicB : IambicKeyer::IambicA));
         QMetaObject::invokeMethod(m_keyer, "setReversed", Qt::QueuedConnection, Q_ARG(bool, paddle == 'R'));
+        if (m_kpodPlus->isPolling())
+            m_kpodPlus->setKeyerParams(iambic == 'B' ? 1 : 0, paddle == 'R');
     });
 
     connect(m_radioState, &RadioState::cwPitchChanged, this, [this](int pitchHz) {
         QMetaObject::invokeMethod(m_sidetone, "setFrequency", Qt::QueuedConnection, Q_ARG(int, pitchHz));
+        // K4 is the source of truth — mirror the CW pitch onto the KPOD+ keyer.
+        if (m_kpodPlus->isPolling())
+            m_kpodPlus->setCwPitch(pitchHz);
     });
 
     // =========================================================================

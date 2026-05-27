@@ -1,14 +1,21 @@
 # K4Styles Reference
 
-Complete reference for `K4Styles::Colors`, `K4Styles::Dimensions`, `K4Styles::Fonts`, and the helper functions declared in `src/ui/k4styles.h`.
+Complete reference for `K4Styles::Colors`, `K4Styles::Dimensions`, `K4Styles::Fonts`, and the helper functions declared under `src/ui/styling/`.
 
-**Source of truth:** `src/ui/k4styles.h`. Keep this doc in sync when you add a constant or helper. Quick cross-check:
+**Source of truth:**
+- `src/ui/styling/k4constants.h` — `K4Styles::Colors::*` and `K4Styles::Dimensions::*` (lightweight, no Qt includes).
+- `src/ui/styling/k4styles.h` — `K4Styles::Fonts::*`, free-function stylesheet helpers, `K4Styles::Dialog::*` cached helpers.
+
+The split exists so files that touch only constants (panadapter renderers, hardware modules) don't pull in `<QPainter>` / `<QFont>` / `<QLinearGradient>`. `k4styles.h` includes `k4constants.h`, so `K4Styles::Colors::*` and `K4Styles::Dimensions::*` remain reachable from anywhere that includes either header.
+
+Keep this doc in sync when you add a constant or helper. Quick cross-check:
 
 ```bash
-rg 'constexpr const char \*' src/ui/k4styles.h      # all color / font-family constants
-rg '^constexpr int' src/ui/k4styles.h                # all dimension constants
-rg '^\s*QString\s+\w+\(' src/ui/k4styles.h           # free-function stylesheet helpers
-rg '^\s*const QString &\w+' src/ui/k4styles.h        # Dialog:: cached-QString helpers
+rg 'constexpr const char \*' src/ui/styling/k4constants.h   # all color constants
+rg '^constexpr int' src/ui/styling/k4constants.h            # all dimension constants
+rg '^\s*QString\s+\w+\(' src/ui/styling/k4styles.h          # free-function stylesheet helpers
+rg '^\s*const QString &\w+' src/ui/styling/k4styles.h       # Dialog:: cached-QString helpers
+rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family constants (Fonts::Primary, Fonts::Data)
 ```
 
 ---
@@ -143,7 +150,6 @@ rg '^\s*const QString &\w+' src/ui/k4styles.h        # Dialog:: cached-QString h
 | `BorderHover` | `#808080` | Button border on hover |
 | `BorderPressed` | `#909090` | Button border when pressed |
 | `BorderSelected` | `#AAAAAA` | Selected/active button border |
-| `BorderLight` | `#909090` | Light button border |
 
 ### Dialog & Panel Borders
 
@@ -240,6 +246,16 @@ All font sizes are in **pixels** — use with `QFont::setPixelSize()` or `K4Styl
 | `FontSizeTitle` | `16` | Large control buttons (+/-) (px) |
 | `FontSizeIndicator` | `18` | TX/RX/SPLIT indicator labels (px) |
 | `FontSizeFrequency` | `32` | VFO frequency displays (px) |
+
+### DX Cluster Spot Label Font Sizes
+
+User-configurable in Options → DX Cluster (the slider runs `FontSizeSpotMin..FontSizeSpotMax`).
+
+| Constant | Value | Usage |
+|----------|-------|-------|
+| `FontSizeSpot` | `11` | Default DX cluster spot-label size (px) |
+| `FontSizeSpotMin` | `8` | Slider minimum for spot label size (px) |
+| `FontSizeSpotMax` | `16` | Slider maximum for spot label size (px) |
 
 ### Popup Menu Font Sizes (horizontal control-bar popups)
 
@@ -492,7 +508,7 @@ Selected Gradient (top→bottom):
 Borders:
   #606060 ████ BorderNormal
   #808080 ████ BorderHover
-  #909090 ████ BorderPressed / BorderLight
+  #909090 ████ BorderPressed
   #AAAAAA ████ BorderSelected
 
 Dialog / Panel Borders:
@@ -539,15 +555,17 @@ Selection:
 
 ## Keeping This Doc Current
 
-This file is hand-maintained against `src/ui/k4styles.h`. It has previously drifted significantly. When you add or change a constant / helper:
+This file is hand-maintained against `src/ui/styling/k4constants.h` (constants) and `src/ui/styling/k4styles.h` (helpers). It has previously drifted significantly. When you add or change a constant / helper:
 
-1. Update `src/ui/k4styles.h` first (the source of truth).
+1. Update the appropriate header first (the source of truth):
+   - Colors / dimensions → `src/ui/styling/k4constants.h`
+   - Fonts / stylesheet helpers / `Dialog::` helpers → `src/ui/styling/k4styles.h`
 2. Add or update the corresponding row in this doc.
 3. Spot-check with the greps at the top of this file:
 
 ```bash
-rg 'constexpr const char \*' src/ui/k4styles.h | wc -l   # color count sanity check
-rg '^constexpr int' src/ui/k4styles.h | wc -l            # dimension count sanity check
+rg 'constexpr const char \*' src/ui/styling/k4constants.h | wc -l   # color count sanity check
+rg '^constexpr int' src/ui/styling/k4constants.h | wc -l            # dimension count sanity check
 ```
 
-If the counts in the header don't match what you see tabled above, this doc is stale again. Fix the tables; don't ship with mismatch.
+If the counts produced by those greps don't match what you see tabled above, this doc is stale again. Fix the tables; don't ship with mismatch.

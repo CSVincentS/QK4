@@ -2,6 +2,8 @@
 
 #include "models/radiostate.h"
 
+#include <QHash>
+#include <QStringView>
 #include <QtGlobal>
 
 void RxTxMeterState::reset() {
@@ -15,6 +17,8 @@ void RxTxMeterState::reset() {
     supplyCurrent = 0.0;
     paDrainCurrent = 0.0;
     calibratedPaEfficiency = 0.0;
+    paTemperatureC = -1;
+    lpaTemperatureC = -1;
     isTransmitting = false;
     subReceiverEnabled = false;
     diversityEnabled = false;
@@ -216,27 +220,38 @@ void handleSIFP(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
 }
 
 void handleSIRF(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
-    // SIRF V8:..,V5:..,LT:..,LM:..,PA:..,PM:..,PT:.. — RF deck status. We surface PM (peak
-    // measurement) divided by 768, which matches the K4's front-panel "Id" meter to within
-    // ~1 A across the full power range:
+    // SIRF V8:..,V5:..,LT:..,LM:..,PA:..,PM:..,PT:.. — RF deck status. We surface:
+    //   - PM (peak drain) ÷ 768 → Id (matches K4 front-panel "Id" within ~1 A)
+    //   - PT → PA temperature in °C
+    //   - LT → Lower-PA temperature in °C
     //
+    // PM-to-Id reference:
     //   50 W TX  PM ~12298 / 768 = 16.0 A (panel: 16 A)
     //   90 W TX  PM ~15214 / 768 = 19.8 A (panel: 19–20 A)
     //  100 W TX  PM ~15976 / 768 = 20.8 A (panel: 20–21 A)
+    // (LM is one stage's drain, ~5–7 A low vs the panel — don't use it.)
     //
-    // LM (which we used to parse) is just one stage's drain (~75 % of total) and consistently
-    // under-reads the panel by 5–7 A; PM is the peak-held aggregate the K4 actually displays.
-    QString data = cmd.mid(4);
+    // WHY tokenize instead of indexOf("KEY:"): naive substring matching is fragile —
+    // an added or relocated SIRF field like `XPT:` or `RPT:` could mis-route the PT
+    // lookup to the wrong value. Tokenizing once into a key→value map keys every
+    // lookup on exact field names, so unrelated field additions can never collide.
 
-    int pmIndex = data.indexOf("PM:");
-    if (pmIndex < 0)
-        return;
-    int commaIndex = data.indexOf(',', pmIndex);
-    if (commaIndex < 0)
-        commaIndex = data.indexOf(';', pmIndex);
-    QString pmStr = (commaIndex > pmIndex) ? data.mid(pmIndex + 3, commaIndex - pmIndex - 3) : data.mid(pmIndex + 3);
-    bool ok;
-    double pmRaw = pmStr.toDouble(&ok);
+    QStringView payload(cmd);
+    payload = payload.mid(4); // strip "SIRF"
+
+    QHash<QStringView, QStringView> fields;
+    for (auto token : payload.split(u',', Qt::SkipEmptyParts)) {
+        const qsizetype colon = token.indexOf(u':');
+        if (colon <= 0)
+            continue;
+        fields.insert(token.left(colon), token.mid(colon + 1));
+    }
+
+    bool ok = false;
+    const auto pmIt = fields.constFind(u"PM");
+    if (pmIt == fields.constEnd())
+        return; // PM is the original required field — preserve that contract.
+    const double pmRaw = pmIt.value().toDouble(&ok);
     if (!ok)
         return;
     constexpr double K4_PM_TO_AMPS = 768.0;
@@ -259,6 +274,24 @@ void handleSIRF(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
     if (!qFuzzyCompare(1.0 + current, 1.0 + state.paDrainCurrent)) {
         state.paDrainCurrent = current;
         emit owner.paDrainCurrentChanged(state.paDrainCurrent);
+    }
+
+    // PA temperature (PT, °C).
+    if (const auto it = fields.constFind(u"PT"); it != fields.constEnd()) {
+        const int t = it.value().toInt(&ok);
+        if (ok && t != state.paTemperatureC) {
+            state.paTemperatureC = t;
+            emit owner.paTemperatureChanged(t);
+        }
+    }
+
+    // Lower-PA temperature (LT, °C).
+    if (const auto it = fields.constFind(u"LT"); it != fields.constEnd()) {
+        const int t = it.value().toInt(&ok);
+        if (ok && t != state.lpaTemperatureC) {
+            state.lpaTemperatureC = t;
+            emit owner.lpaTemperatureChanged(t);
+        }
     }
 }
 
