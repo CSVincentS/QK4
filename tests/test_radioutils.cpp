@@ -84,6 +84,63 @@ private slots:
     void testSlTier_SL7() { QCOMPARE(RadioUtils::slTierToFrameSamples(7), 1440); }
     void testSlTier_outOfRange_negative() { QCOMPARE(RadioUtils::slTierToFrameSamples(-1), 720); }
     void testSlTier_outOfRange_high() { QCOMPARE(RadioUtils::slTierToFrameSamples(8), 720); }
+
+    // fixedTuneModeFromCat — verified against hardware + K4 command reference 2026-05-28
+    // FXT0 = Track (FXA ignored); FXT1: 0=Fixed1,1=Fixed2,2=Slide1,3=Static,4=Slide2
+    void testFixedTune_track_fxt0() {
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(0, 0) == RadioUtils::FixedTuneMode::Track);
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(0, 4) == RadioUtils::FixedTuneMode::Track); // FXA ignored
+    }
+    void testFixedTune_fixed1_fxa0() {
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(1, 0) == RadioUtils::FixedTuneMode::Fixed1);
+    }
+    void testFixedTune_fixed2_fxa1() {
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(1, 1) == RadioUtils::FixedTuneMode::Fixed2);
+    }
+    void testFixedTune_slide1_fxa2() {
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(1, 2) == RadioUtils::FixedTuneMode::Slide1);
+    }
+    void testFixedTune_static_fxa3() {
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(1, 3) == RadioUtils::FixedTuneMode::Static);
+    }
+    void testFixedTune_slide2_fxa4() {
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(1, 4) == RadioUtils::FixedTuneMode::Slide2);
+    }
+    void testFixedTune_unknownFxa_fallsBackToTrack() {
+        QVERIFY(RadioUtils::fixedTuneModeFromCat(1, 9) == RadioUtils::FixedTuneMode::Track);
+    }
+
+    // fixedTuneSetCommand — exact SET strings (FXA before FXT; Track sends only FXT0)
+    void testFixedTuneCmd_track() {
+        QCOMPARE(RadioUtils::fixedTuneSetCommand(RadioUtils::FixedTuneMode::Track), QString("#FXT0;"));
+    }
+    void testFixedTuneCmd_fixed1() {
+        QCOMPARE(RadioUtils::fixedTuneSetCommand(RadioUtils::FixedTuneMode::Fixed1), QString("#FXA0;#FXT1;"));
+    }
+    void testFixedTuneCmd_fixed2() {
+        QCOMPARE(RadioUtils::fixedTuneSetCommand(RadioUtils::FixedTuneMode::Fixed2), QString("#FXA1;#FXT1;"));
+    }
+    void testFixedTuneCmd_slide1() {
+        QCOMPARE(RadioUtils::fixedTuneSetCommand(RadioUtils::FixedTuneMode::Slide1), QString("#FXA2;#FXT1;"));
+    }
+    void testFixedTuneCmd_static() {
+        QCOMPARE(RadioUtils::fixedTuneSetCommand(RadioUtils::FixedTuneMode::Static), QString("#FXA3;#FXT1;"));
+    }
+    void testFixedTuneCmd_slide2() {
+        QCOMPARE(RadioUtils::fixedTuneSetCommand(RadioUtils::FixedTuneMode::Slide2), QString("#FXA4;#FXT1;"));
+    }
+
+    // Round-trip: every fixed mode's SET command re-decodes to the same mode.
+    void testFixedTune_roundTrip() {
+        const RadioUtils::FixedTuneMode modes[] = {RadioUtils::FixedTuneMode::Fixed1, RadioUtils::FixedTuneMode::Fixed2,
+                                                   RadioUtils::FixedTuneMode::Slide1, RadioUtils::FixedTuneMode::Static,
+                                                   RadioUtils::FixedTuneMode::Slide2};
+        for (auto mode : modes) {
+            QString cmd = RadioUtils::fixedTuneSetCommand(mode); // e.g. "#FXA2;#FXT1;"
+            int fxa = cmd.mid(4, 1).toInt();                     // digit after "#FXA"
+            QVERIFY(RadioUtils::fixedTuneModeFromCat(1, fxa) == mode);
+        }
+    }
 };
 
 QTEST_MAIN(TestRadioUtils)

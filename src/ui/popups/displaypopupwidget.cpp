@@ -1,5 +1,6 @@
 #include "ui/popups/displaypopupwidget.h"
 #include "ui/styling/k4constants.h"
+#include "utils/radioutils.h"
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QHideEvent>
@@ -435,57 +436,40 @@ void DisplayPopupWidget::onMenuItemClicked(MenuItem item) {
     // Note: AveragePeak only shows control page (first switch) - no CAT command on click
     // The +/- buttons in the control page handle averaging changes via averagingIncrement/DecrementRequested signals
     case FixedFreeze: {
-        // Cycle: STATIC(5) → SLIDE2(2) → TRACK(0) → FIXED1(3) → FIXED2(4) → SLIDE1(1) → repeat
-        int newMode;
-        switch (m_fixedTuneMode) {
-        case 5:
-            newMode = 2;
-            break; // STATIC → SLIDE2
-        case 2:
-            newMode = 0;
-            break; // SLIDE2 → TRACK
-        case 0:
-            newMode = 3;
-            break; // TRACK → FIXED1
-        case 3:
-            newMode = 4;
-            break; // FIXED1 → FIXED2
-        case 4:
-            newMode = 1;
-            break; // FIXED2 → SLIDE1
-        case 1:
-            newMode = 5;
-            break; // SLIDE1 → STATIC
+        using FTM = RadioUtils::FixedTuneMode;
+        // Front-panel tap cycle: STATIC → SLIDE2 → TRACK → FIXED1 → FIXED2 → SLIDE1 → repeat.
+        // m_fixedTuneMode mirrors RadioState (radio-confirmed); -1 means not yet reported.
+        FTM current = (m_fixedTuneMode >= 0) ? static_cast<FTM>(m_fixedTuneMode) : FTM::Static;
+        FTM next;
+        switch (current) {
+        case FTM::Static:
+            next = FTM::Slide2;
+            break;
+        case FTM::Slide2:
+            next = FTM::Track;
+            break;
+        case FTM::Track:
+            next = FTM::Fixed1;
+            break;
+        case FTM::Fixed1:
+            next = FTM::Fixed2;
+            break;
+        case FTM::Fixed2:
+            next = FTM::Slide1;
+            break;
+        case FTM::Slide1:
+            next = FTM::Static;
+            break;
         default:
-            newMode = 5;
-            break; // Start at STATIC
+            next = FTM::Static;
+            break;
         }
 
-        // Send optimized CAT commands
-        switch (newMode) {
-        case 5:
-            emit catCommandRequested("#FXA3;");
-            break; // STATIC
-        case 2:
-            emit catCommandRequested("#FXA4;");
-            break; // SLIDE2
-        case 0:
-            emit catCommandRequested("#FXA0;#FXT0;");
-            break; // TRACK
-        case 3:
-            emit catCommandRequested("#FXT1;");
-            break; // FIXED1
-        case 4:
-            emit catCommandRequested("#FXA1;");
-            break; // FIXED2
-        case 1:
-            emit catCommandRequested("#FXA2;");
-            break; // SLIDE1
-        }
-
-        // Optimistic update (K4 doesn't echo #FXT/#FXA commands)
-        m_fixedTuneMode = newMode;
-        updateMenuButtonLabels();
+        // Server-authoritative: set, then read back. The K4 does not echo #FXT/#FXA
+        // SETs at AI4 (QK4's operating mode), so we append a GET; the reply flows
+        // through RadioState -> setFixedTuneMode() and updates the label. No
+        // optimistic write here, so the displayed mode can never diverge from the radio.
+        emit catCommandRequested(RadioUtils::fixedTuneSetCommand(next) + "#FXA;#FXT;");
         break;
     }
     case CursAB:
@@ -702,40 +686,9 @@ void DisplayPopupWidget::setPeakMode(bool enabled) {
 }
 
 void DisplayPopupWidget::setFixedTuneMode(int fxt, int fxa) {
-    // Combine FXT and FXA into internal state (0-5)
-    // TRACK=0: FXT=0 (doesn't matter what FXA is)
-    // SLIDE1=1: FXT=1, FXA=0 (FULL SPAN)
-    // SLIDE2=2: FXT=1, FXA=4 (SLIDE NEAR EDGE)
-    // FIXED1=3: FXT=1, FXA=1 (HALF SPAN)
-    // FIXED2=4: FXT=1, FXA=2 (SLIDE EDGE)
-    // STATIC=5: FXT=1, FXA=3 (STATIC)
-    int newMode;
-    if (fxt == 0) {
-        newMode = 0; // TRACK
-    } else {
-        // FXT=1, map FXA to internal state
-        switch (fxa) {
-        case 0:
-            newMode = 1;
-            break; // SLIDE1
-        case 4:
-            newMode = 2;
-            break; // SLIDE2
-        case 1:
-            newMode = 3;
-            break; // FIXED1
-        case 2:
-            newMode = 4;
-            break; // FIXED2
-        case 3:
-            newMode = 5;
-            break; // STATIC
-        default:
-            newMode = 0;
-            break;
-        }
-    }
-
+    // Decode the radio's #FXT/#FXA into our 0-5 mode via the shared mapper
+    // (RadioUtils::FixedTuneMode underlying values match m_fixedTuneMode).
+    int newMode = static_cast<int>(RadioUtils::fixedTuneModeFromCat(fxt, fxa));
     if (m_fixedTuneMode != newMode) {
         m_fixedTuneMode = newMode;
         updateMenuButtonLabels();

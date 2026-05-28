@@ -83,4 +83,41 @@ int slTierToFrameSamples(int sl) {
     }
 }
 
+FixedTuneMode fixedTuneModeFromCat(int fxt, int fxa) {
+    if (fxt == 0)
+        return FixedTuneMode::Track;
+    switch (fxa) {
+    case 0:
+        return FixedTuneMode::Fixed1;
+    case 1:
+        return FixedTuneMode::Fixed2;
+    case 2:
+        return FixedTuneMode::Slide1;
+    case 3:
+        return FixedTuneMode::Static;
+    case 4:
+        return FixedTuneMode::Slide2;
+    default:
+        return FixedTuneMode::Track;
+    }
+}
+
+QString fixedTuneSetCommand(FixedTuneMode mode) {
+    switch (mode) {
+    case FixedTuneMode::Track:
+        return QStringLiteral("#FXT0;"); // FXA irrelevant when tracking
+    case FixedTuneMode::Fixed1:
+        return QStringLiteral("#FXA0;#FXT1;");
+    case FixedTuneMode::Fixed2:
+        return QStringLiteral("#FXA1;#FXT1;");
+    case FixedTuneMode::Slide1:
+        return QStringLiteral("#FXA2;#FXT1;");
+    case FixedTuneMode::Static:
+        return QStringLiteral("#FXA3;#FXT1;");
+    case FixedTuneMode::Slide2:
+        return QStringLiteral("#FXA4;#FXT1;");
+    }
+    return QStringLiteral("#FXT0;");
+}
+
 } // namespace RadioUtils

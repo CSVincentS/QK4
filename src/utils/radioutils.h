@@ -47,6 +47,37 @@ QString buildEqCommand(const QString &prefix, const QVector<int> &bands);
 /// Returns 720 (SL3 default) for out-of-range values.
 int slTierToFrameSamples(int sl);
 
+// --- K4 panadapter fixed-tune display mode ---------------------------------
+// The K4 encodes the panadapter tuning mode across two CAT params: #FXT
+// (0=track, 1=fixed) and #FXA (0-4). WARNING: Elecraft uses TWO naming
+// systems and they do NOT line up intuitively. The programmer's reference
+// names #FXA by behavior; the front panel shows different labels. We mirror
+// the front-panel labels (what the user sees on the radio), verified against
+// hardware 2026-05-28:
+//   #FXA  reference name       front-panel label (what QK4 shows)
+//   ----  -------------------  --------------------------------
+//    0    FULL SPAN            FIXED1
+//    1    HALF SPAN            FIXED2
+//    2    SLIDE EDGE           SLIDE1
+//    3    STATIC               STATIC
+//    4    SLIDE NEAR EDGE      SLIDE2
+//   (#FXT0 = TRACK, regardless of #FXA)
+// WHY centralized: the inbound parse and the outbound command builder must
+// agree, or the displayed mode desyncs from the radio (the historical
+// SLIDE1<->FIXED2 bug, caused by mis-associating the two naming systems).
+// One mapping here makes divergence impossible.
+enum class FixedTuneMode { Track = 0, Slide1, Slide2, Fixed1, Fixed2, Static };
+
+/// Decode raw #FXT/#FXA into a FixedTuneMode. fxt==0 is always Track (FXA
+/// ignored); unknown fxa values fall back to Track.
+FixedTuneMode fixedTuneModeFromCat(int fxt, int fxa);
+
+/// Build the CAT command that sets the K4 to `mode`, setting both #FXT and
+/// #FXA deterministically (no reliance on the radio's prior FXA). Does NOT
+/// include a read-back GET; callers append "#FXA;#FXT;" when they need the
+/// radio to confirm (the K4 does not echo these SETs at AI4).
+QString fixedTuneSetCommand(FixedTuneMode mode);
+
 } // namespace RadioUtils
 
 #endif // RADIOUTILS_H

@@ -186,9 +186,10 @@ private:
     int m_waterfallColor = -1; // 0-4
     int m_averaging = -1;      // 1-20
     int m_peakMode = -1;       // 0=off, 1=on (int for -1 init)
-    int m_fixedTuneMode = -1;  // Combined FXT+FXA state (0-5: SLIDE1, SLIDE2, FIXED1, FIXED2, STATIC, TRACK)
-    int m_freeze = -1;         // 0=run, 1=freeze (int for -1 init)
-    int m_vfaMode = -1;        // 0=OFF, 1=ON, 2=AUTO, 3=HIDE
+    int m_fixedTuneMode = -1; // RadioUtils::FixedTuneMode value (0=Track,1=Slide1,2=Slide2,3=Fixed1,4=Fixed2,5=Static);
+                              // mirrors RadioState
+    int m_freeze = -1;        // 0=run, 1=freeze (int for -1 init)
+    int m_vfaMode = -1;       // 0=OFF, 1=ON, 2=AUTO, 3=HIDE
     int m_vfbMode = -1;
 
     // DDC NB state (#NB$ and #NBL$ commands)
