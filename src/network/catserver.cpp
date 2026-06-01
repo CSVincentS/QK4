@@ -314,11 +314,13 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
         return QByteArray();
     }
 
-    // TX/RX commands - control audio input gate for external app transmit
-    // Don't forward to K4 - the audio stream itself triggers K4 TX
+    // TX/RX commands - control audio input gate for external app transmit.
+    // Don't forward to K4 - the audio stream itself triggers K4 TX.
+    // "TX;" asserts transmit; "TX/;" toggles based on the radio's current TX state.
     if (prefix == "TX") {
-        qCDebug(netCat) << "   PTT request: ON";
-        emit pttRequested(true);
+        const bool on = (args == "/") ? !m_radioState->isTransmitting() : true;
+        qCDebug(netCat) << "   PTT request:" << (on ? "ON" : "OFF");
+        emit pttRequested(on);
         return QByteArray();
     }
     if (prefix == "RX") {

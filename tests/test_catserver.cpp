@@ -460,6 +460,38 @@ private slots:
         client.disconnectFromHost();
     }
 
+    void testTxToggleCommand() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QSignalSpy spy(&server, &CatServer::pttRequested);
+
+        QTcpSocket client;
+        client.connectToHost("127.0.0.1", server.port());
+        QVERIFY(client.waitForConnected(1000));
+
+        // Not transmitting → "TX/;" toggles PTT on
+        client.write("TX/;");
+        client.flush();
+        QTest::qWait(100);
+
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), true);
+
+        // Simulate the radio now reporting transmit
+        rs.parseCATCommand("TX;");
+
+        // Transmitting → "TX/;" toggles PTT off
+        client.write("TX/;");
+        client.flush();
+        QTest::qWait(100);
+
+        QCOMPARE(spy.count(), 2);
+        QCOMPARE(spy.at(1).at(0).toBool(), false);
+        client.disconnectFromHost();
+    }
+
     // =========================================================================
     // Server lifecycle
     // =========================================================================
