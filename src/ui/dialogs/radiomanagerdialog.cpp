@@ -408,8 +408,19 @@ void RadioManagerDialog::onSaveClicked() {
 void RadioManagerDialog::onDeleteClicked() {
     if (m_currentIndex >= 0 && m_currentIndex < RadioSettings::instance()->radios().size()) {
         RadioSettings::instance()->removeRadio(m_currentIndex);
-        clearFields();
-        m_currentIndex = -1;
+        // WHY: removeRadio() emits radiosChanged -> refreshList(), which auto-selects a
+        // neighboring entry and repopulates the form. Sync to that selection instead of
+        // blanking it, so the highlighted row's details are shown (not a blank form).
+        int row = m_radioList->currentRow();
+        QListWidgetItem *item = (row >= 0) ? m_radioList->item(row) : nullptr;
+        bool isSaved = item && item->data(Qt::UserRole).toString() != QStringLiteral("discovered");
+        if (isSaved) {
+            m_currentIndex = row;
+            populateFieldsFromSelection();
+        } else {
+            clearFields();
+            m_currentIndex = -1;
+        }
     }
     updateButtonStates();
 }
