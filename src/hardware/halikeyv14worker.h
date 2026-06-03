@@ -30,6 +30,15 @@ private:
     // Debounce: 2 consecutive reads at ~500us = ~1ms
     static constexpr int DEBOUNCE_COUNT = 2;
 
+#ifdef Q_OS_WIN
+    // Diagnostic: last-logged raw modem-line states, so readPinState() only logs on a
+    // transition rather than every ~500us poll. Windows-only (the raw-pin trace lives in
+    // the Q_OS_WIN branch of readPinState).
+    bool m_lastRawCts = false;
+    bool m_lastRawDsr = false;
+    bool m_lastRawDcd = false;
+#endif
+
     // Native port handle
 #ifdef Q_OS_WIN
     void *m_handle = nullptr; // HANDLE

@@ -86,6 +86,48 @@ the timestamp of `[ELEM start DIT]` and the following `TX@... [ KZ.; ]` is the
 end-to-end latency from keyer-thread emit decision to TCP wire write — typically
 sub-millisecond, but useful for diagnosing event-queue backups under load.
 
+## Tracing the V1.4 serial layer (Windows / paddle edges)
+
+To debug the serial-read layer *below* the keyer (raw modem-control pins → dit/dah/ptt
+edges), enable the `hw.halikey` category:
+
+```powershell
+$env:QT_LOGGING_RULES = "hw.halikey.debug=true;cw.keyer.debug=true;CAT.TX.debug=true"
+$env:QT_FORCE_STDERR_LOGGING = "1"   # Windows GUI app: force logs to stderr (see below)
+$env:QT_MESSAGE_PATTERN = "%{time process} %{category}: %{message}"   # add timestamps
+.\build-qt67\Release\QK4.exe 2> qk4-cw-trace.log
+```
+
+You'll see `HaliKeyV14Worker: raw pins CTS:.. DCD:.. DSR:..` on every line transition and
+`dit/dah/ptt edge: true|false` when a debounced edge is emitted. The V1.4 pin mapping:
+`CTS` = dit lever / foot pedal (demuxed by mode in `CwController`), `DCD‖DSR` = dah lever.
+
+> **Windows logging gotcha.** Qt's default handler only writes to stderr if it thinks a
+> console is attached. When you redirect stderr to a *file* (a pipe), `GetConsoleMode`
+> fails and Qt silently routes everything to `OutputDebugString` instead — your log file
+> stays empty. Set `QT_FORCE_STDERR_LOGGING=1` to force it to the redirected handle.
+
+> **Note:** the category strings are case-sensitive — it is `CAT.TX.debug=true`
+> (not `cat.tx`).
+
+## Windows serial monitor: why it polls, not WaitCommEvent
+
+`HaliKeyV14Worker::monitorLoop()` uses a different I/O model per platform: Linux blocks on
+`TIOCMIWAIT`, macOS polls `ioctl(TIOCMGET)` every 500 µs, and **Windows polls
+`GetCommModemStatus` every ~1 ms** (high-resolution waitable timer).
+
+Windows originally used `WaitCommEvent` (block until `EV_CTS`/`EV_DSR`/`EV_RLSD` fires).
+**Do not go back to that.** USB-serial (FTDI etc.) VCP drivers do **not** reliably deliver
+modem-status change events: a paddle-line transition with no other line activity often
+fails to wake `WaitCommEvent` at all. The symptom is a stuck key — a release is never
+seen, so the keyer auto-repeats until some *unrelated* line change (e.g. the next press)
+belatedly wakes the loop. Captured signature: a dah `hold=2559ms` that "released" only
+when the next CTS press arrived, with **zero `raw pins` lines** in between. Polling reads
+the lines unconditionally each tick, so every transition is caught within one poll period
+regardless of driver event support. (Bounce defense is the same count-based
+`DEBOUNCE_COUNT` filter on all three platforms; the 8 ms hold gate in `IambicKeyer` is the
+secondary defense.)
+
 ## Disabling cleanly
 
 `unset QT_LOGGING_RULES` or omit the variable. Nothing else is needed.

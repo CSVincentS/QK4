@@ -222,6 +222,17 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttSta
     bool cts = (modemStatus & MS_CTS_ON) != 0;
     bool dsr = (modemStatus & MS_DSR_ON) != 0;
     bool dcd = (modemStatus & MS_RLSD_ON) != 0;
+    // Diagnostic: log each raw modem-line transition so we can see whether DCD and DSR
+    // (which together form the dah lever via `dcd || dsr`) actually rise/fall as a pair.
+    // A lingering DSR after DCD drops would latch dahState true → stuck dah. Chatty by
+    // design; gated behind hw.halikey.debug. Compares against last-logged raw bits.
+    if (cts != m_lastRawCts || dsr != m_lastRawDsr || dcd != m_lastRawDcd) {
+        qCDebug(hwHalikey) << "HaliKeyV14Worker: raw pins  CTS:" << cts << " DCD:" << dcd
+                           << " DSR:" << dsr << " => dah(dcd||dsr):" << (dcd || dsr);
+        m_lastRawCts = cts;
+        m_lastRawDsr = dsr;
+        m_lastRawDcd = dcd;
+    }
     ditState = false;
     dahState = dcd || dsr;
     pttState = cts;
@@ -330,63 +341,55 @@ void HaliKeyV14Worker::monitorLoop() {
     }
 
 #elif defined(Q_OS_WIN)
-    // Windows: WaitCommEvent for CTS/DSR changes with poll fallback
-    OVERLAPPED ov = {};
-    ov.hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
-    if (!ov.hEvent) {
-        emit errorOccurred("Failed to create event for serial monitoring");
-        closeNativePort();
-        return;
+    // Windows: POLL the modem-status lines on a fixed ~1 ms cadence — same model as the
+    // macOS branch below. WHY NOT WaitCommEvent (the previous approach): USB-serial (FTDI)
+    // VCP drivers do NOT reliably deliver EV_CTS / EV_DSR / EV_RLSD modem-status events.
+    // A paddle line transition with no other line activity frequently fails to wake
+    // WaitCommEvent at all, so a release was missed and the key stuck "on" until some
+    // unrelated line changed and belatedly woke the wait. This was confirmed in hw.halikey
+    // traces: a dah whose release was never signalled showed a bogus hold of ~2.5 s and only
+    // "released" when the next CTS press woke the loop. macOS (pure poll) and Linux
+    // (TIOCMIWAIT, kernel-level) were unaffected because neither depends on WaitCommEvent.
+    // GetCommModemStatus is a cheap local call, so polling catches every transition within
+    // one poll period. Debounce is the macOS count-based filter (DEBOUNCE_COUNT reads).
+    //
+    // Cadence: a high-resolution waitable timer (Win10 1803+) gives a true ~1 ms tick without
+    // raising the process-global timer resolution via timeBeginPeriod. Falls back to Sleep(1)
+    // if the high-res timer can't be created.
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+    HANDLE pollTimer = CreateWaitableTimerExW(nullptr, nullptr,
+                                              CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    if (pollTimer) {
+        LARGE_INTEGER due;
+        due.QuadPart = -10000LL; // first fire in 1 ms (100 ns units, negative = relative)
+        SetWaitableTimer(pollTimer, &due, 1 /* ms period */, nullptr, nullptr, FALSE);
     }
 
     while (m_running) {
-        DWORD evtMask = 0;
-        BOOL result = WaitCommEvent(m_handle, &evtMask, &ov);
+        if (pollTimer)
+            WaitForSingleObject(pollTimer, 5); // ~1 ms tick; 5 ms cap bounds m_running latency
+        else
+            Sleep(1);
 
-        if (!result) {
-            if (GetLastError() == ERROR_IO_PENDING) {
-                // Wait with timeout so we can check m_running
-                DWORD waitResult = WaitForSingleObject(ov.hEvent, 10);
-                if (waitResult == WAIT_TIMEOUT) {
-                    continue;
-                }
-                if (waitResult != WAIT_OBJECT_0) {
-                    if (!m_running)
-                        break;
-                    continue;
-                }
-                DWORD transferred = 0;
-                GetOverlappedResult(m_handle, &ov, &transferred, FALSE);
-            } else {
-                if (!m_running)
-                    break;
-                // Error — fall back to poll for this iteration
-                Sleep(1);
-                continue;
-            }
-        }
-
-        if (!m_running)
-            break;
-
-        ResetEvent(ov.hEvent);
-
-        // Read new state
         bool ditState = false, dahState = false, pttState = false;
         if (!readPinState(ditState, dahState, pttState)) {
             if (!m_running)
                 break;
             emit errorOccurred("Failed to read pin state");
-            CloseHandle(ov.hEvent);
+            if (pollTimer)
+                CloseHandle(pollTimer);
             return;
         }
 
-        // Debounce
+        // Debounce dit (count-based; identical to the macOS branch)
         if (ditState == rawDitState) {
             if (ditDebounceCounter < DEBOUNCE_COUNT)
                 ditDebounceCounter++;
             if (ditDebounceCounter >= DEBOUNCE_COUNT && ditState != lastDitState) {
                 lastDitState = ditState;
+                qCDebug(hwHalikey) << "HaliKeyV14Worker: dit edge:" << ditState;
                 emit ditStateChanged(ditState);
             }
         } else {
@@ -394,11 +397,13 @@ void HaliKeyV14Worker::monitorLoop() {
             ditDebounceCounter = 1;
         }
 
+        // Debounce dah
         if (dahState == rawDahState) {
             if (dahDebounceCounter < DEBOUNCE_COUNT)
                 dahDebounceCounter++;
             if (dahDebounceCounter >= DEBOUNCE_COUNT && dahState != lastDahState) {
                 lastDahState = dahState;
+                qCDebug(hwHalikey) << "HaliKeyV14Worker: dah edge:" << dahState;
                 emit dahStateChanged(dahState);
             }
         } else {
@@ -406,6 +411,7 @@ void HaliKeyV14Worker::monitorLoop() {
             dahDebounceCounter = 1;
         }
 
+        // Debounce ptt
         if (pttState == rawPttState) {
             if (pttDebounceCounter < DEBOUNCE_COUNT)
                 pttDebounceCounter++;
@@ -420,7 +426,8 @@ void HaliKeyV14Worker::monitorLoop() {
         }
     }
 
-    CloseHandle(ov.hEvent);
+    if (pollTimer)
+        CloseHandle(pollTimer);
 
 #else
     // macOS (and other POSIX): tight usleep poll loop at 500us (2kHz)
