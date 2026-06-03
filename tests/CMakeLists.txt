@@ -111,7 +111,7 @@ add_executable(test_radioutils test_radioutils.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp
 )
 target_include_directories(test_radioutils PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_radioutils Qt6::Core Qt6::Test)
+target_link_libraries(test_radioutils Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME RadioUtilsTests COMMAND test_radioutils)
 
 # MenuModel parsing + label resolution tests

@@ -141,6 +141,63 @@ private slots:
             QVERIFY(RadioUtils::fixedTuneModeFromCat(1, fxa) == mode);
         }
     }
+
+    // isValidIpv4 — strict dotted-quad
+    void testIpv4_simple() { QVERIFY(RadioUtils::isValidIpv4("192.168.1.10")); }
+    void testIpv4_zeros() { QVERIFY(RadioUtils::isValidIpv4("0.0.0.0")); }
+    void testIpv4_max() { QVERIFY(RadioUtils::isValidIpv4("255.255.255.255")); }
+    void testIpv4_loopback() { QVERIFY(RadioUtils::isValidIpv4("127.0.0.1")); }
+    void testIpv4_threeOctets() { QVERIFY(!RadioUtils::isValidIpv4("192.168.1")); }
+    void testIpv4_fiveOctets() { QVERIFY(!RadioUtils::isValidIpv4("1.2.3.4.5")); }
+    void testIpv4_octetTooLarge() { QVERIFY(!RadioUtils::isValidIpv4("192.168.100.500")); }
+    void testIpv4_signedOctet() { QVERIFY(!RadioUtils::isValidIpv4("192.168.1.-1")); }
+
+    // isValidHostOrIp — valid IPv4
+    void testHost_ipv4Simple() { QVERIFY(RadioUtils::isValidHostOrIp("1.2.3.4")); }
+    void testHost_ipv4Real() { QVERIFY(RadioUtils::isValidHostOrIp("192.168.1.10")); }
+    void testHost_ipv4Edges() {
+        QVERIFY(RadioUtils::isValidHostOrIp("0.0.0.0"));
+        QVERIFY(RadioUtils::isValidHostOrIp("255.255.255.255"));
+        QVERIFY(RadioUtils::isValidHostOrIp("127.0.0.1"));
+    }
+
+    // isValidHostOrIp — invalid IP-ish (all digits/dots must be a valid IPv4)
+    void testHost_octet500() { QVERIFY(!RadioUtils::isValidHostOrIp("192.168.100.500")); }
+    void testHost_octet256() { QVERIFY(!RadioUtils::isValidHostOrIp("256.1.1.1")); }
+    void testHost_tooFewOctets() { QVERIFY(!RadioUtils::isValidHostOrIp("192.168.1")); }
+    void testHost_tooManyOctets() { QVERIFY(!RadioUtils::isValidHostOrIp("1.2.3.4.5")); }
+    void testHost_emptyOctet() { QVERIFY(!RadioUtils::isValidHostOrIp("192.168..1")); }
+    void testHost_trailingDotNumeric() { QVERIFY(!RadioUtils::isValidHostOrIp("1.2.3.")); }
+    void testHost_leadingDotNumeric() { QVERIFY(!RadioUtils::isValidHostOrIp(".1.2.3")); }
+    void testHost_allNines() { QVERIFY(!RadioUtils::isValidHostOrIp("999.999.999.999")); }
+
+    // isValidHostOrIp — valid hostnames
+    void testHost_local() { QVERIFY(RadioUtils::isValidHostOrIp("k4.local")); }
+    void testHost_bare() { QVERIFY(RadioUtils::isValidHostOrIp("myradio")); }
+    void testHost_hyphenated() { QVERIFY(RadioUtils::isValidHostOrIp("K4-SN00045.local")); }
+    void testHost_fqdn() { QVERIFY(RadioUtils::isValidHostOrIp("host.example.com")); }
+    void testHost_singleChar() { QVERIFY(RadioUtils::isValidHostOrIp("a")); }
+
+    // isValidHostOrIp — invalid hostnames
+    void testHost_space() { QVERIFY(!RadioUtils::isValidHostOrIp("host name")); }
+    void testHost_underscore() { QVERIFY(!RadioUtils::isValidHostOrIp("my_radio")); }
+    void testHost_leadingHyphen() { QVERIFY(!RadioUtils::isValidHostOrIp("-leading.local")); }
+    void testHost_trailingHyphen() { QVERIFY(!RadioUtils::isValidHostOrIp("trailing-.local")); }
+    void testHost_emptyLabel() { QVERIFY(!RadioUtils::isValidHostOrIp("a..b")); }
+    void testHost_trailingDotFqdn() { QVERIFY(!RadioUtils::isValidHostOrIp("k4.local.")); }
+    void testHost_illegalChar() { QVERIFY(!RadioUtils::isValidHostOrIp("host!.local")); }
+
+    // isValidHostOrIp — IPv6 (accepted)
+    void testHost_ipv6Loopback() { QVERIFY(RadioUtils::isValidHostOrIp("::1")); }
+    void testHost_ipv6LinkLocal() { QVERIFY(RadioUtils::isValidHostOrIp("fe80::1")); }
+    void testHost_ipv6Doc() { QVERIFY(RadioUtils::isValidHostOrIp("2001:db8::1")); }
+    void testHost_ipv6Garbage() { QVERIFY(!RadioUtils::isValidHostOrIp("fe80::zz")); }
+
+    // isValidHostOrIp — edges
+    void testHost_empty() { QVERIFY(!RadioUtils::isValidHostOrIp("")); }
+    void testHost_whitespaceOnly() { QVERIFY(!RadioUtils::isValidHostOrIp("   ")); }
+    void testHost_trimmed() { QVERIFY(RadioUtils::isValidHostOrIp("  k4.local  ")); }
+    void testHost_tooLong() { QVERIFY(!RadioUtils::isValidHostOrIp(QString(254, 'a'))); }
 };
 
 QTEST_MAIN(TestRadioUtils)

@@ -78,6 +78,17 @@ FixedTuneMode fixedTuneModeFromCat(int fxt, int fxa);
 /// radio to confirm (the K4 does not echo these SETs at AI4).
 QString fixedTuneSetCommand(FixedTuneMode mode);
 
+/// True if s is a strictly-valid dotted IPv4 address: exactly 4 dot-separated
+/// octets, each parseable 0-255. Rejects "192.168.1", "192.168.100.500",
+/// "1.2.3.4.5". (QHostAddress is NOT used here — it leniently accepts partial
+/// forms like "192.168.1" as 192.168.0.1.)
+bool isValidIpv4(const QString &s);
+
+/// True if s is a valid host the K4 connection layer can use: a strict IPv4,
+/// an IPv6 literal, or an RFC-1123 hostname (incl. mDNS ".local" names like
+/// "k4.local", "K4-SN00045.local"). Trims input; empty -> false.
+bool isValidHostOrIp(const QString &s);
+
 } // namespace RadioUtils
 
 #endif // RADIOUTILS_H

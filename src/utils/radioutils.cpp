@@ -1,4 +1,7 @@
 #include "radioutils.h"
+#include <QHostAddress>
+#include <QRegularExpression>
+#include <QStringList>
 #include <QtGlobal>
 
 namespace RadioUtils {
@@ -118,6 +121,55 @@ QString fixedTuneSetCommand(FixedTuneMode mode) {
         return QStringLiteral("#FXA4;#FXT1;");
     }
     return QStringLiteral("#FXT0;");
+}
+
+bool isValidIpv4(const QString &s) {
+    const QStringList parts = s.split('.');
+    if (parts.size() != 4)
+        return false;
+    for (const QString &part : parts) {
+        if (part.isEmpty())
+            return false;
+        bool ok = false;
+        const int octet = part.toInt(&ok);
+        if (!ok || octet < 0 || octet > 255)
+            return false;
+        // toInt accepts a leading '+' / '-'; reject anything non-digit.
+        for (const QChar c : part) {
+            if (!c.isDigit())
+                return false;
+        }
+    }
+    return true;
+}
+
+bool isValidHostOrIp(const QString &s) {
+    const QString t = s.trimmed();
+    if (t.isEmpty())
+        return false;
+
+    // IPv6 literal — QHostAddress parses these strictly (unlike its lenient IPv4 handling).
+    if (t.contains(':')) {
+        QHostAddress addr;
+        return addr.setAddress(t) && addr.protocol() == QAbstractSocket::IPv6Protocol;
+    }
+
+    // WHY: an all-digits-and-dots string is an *attempted* IPv4 and must be a *valid*
+    // one — otherwise "192.168.100.500" would slip through the hostname branch below.
+    static const QRegularExpression numericLike(QStringLiteral("^[0-9.]+$"));
+    if (numericLike.match(t).hasMatch())
+        return isValidIpv4(t);
+
+    // RFC-1123 hostname: dot-separated labels, total length <= 253.
+    if (t.length() > 253)
+        return false;
+    static const QRegularExpression label(QStringLiteral("^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"));
+    const QStringList labels = t.split('.');
+    for (const QString &lbl : labels) {
+        if (!label.match(lbl).hasMatch())
+            return false;
+    }
+    return true;
 }
 
 } // namespace RadioUtils

@@ -1,6 +1,7 @@
 #include "ui/dialogs/radiomanagerdialog.h"
 #include "ui/styling/k4styles.h"
 #include "network/protocol.h"
+#include "utils/radioutils.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -14,6 +15,19 @@ RadioManagerDialog::RadioManagerDialog(QWidget *parent) : QDialog(parent), m_cur
     connect(RadioSettings::instance(), &RadioSettings::radiosChanged, this, &RadioManagerDialog::refreshList);
 
     startDiscovery();
+}
+
+QString RadioManagerDialog::lineEditStyle(const QString &borderColor) {
+    return QString("QLineEdit { "
+                   "  background-color: %1; "
+                   "  color: %2; "
+                   "  border: 1px solid %3; "
+                   "  border-radius: 4px; "
+                   "  padding: %4px; "
+                   "  min-width: 150px; "
+                   "}")
+        .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, borderColor)
+        .arg(K4Styles::Dimensions::PaddingSmall);
 }
 
 void RadioManagerDialog::setupUi() {
@@ -88,17 +102,9 @@ void RadioManagerDialog::setupUi() {
     formLayout->setHorizontalSpacing(K4Styles::Dimensions::PaddingMedium);
     formLayout->setVerticalSpacing(K4Styles::Dimensions::PaddingMedium);
 
-    QString lineEditStyle =
-        QString("QLineEdit { "
-                "  background-color: %1; "
-                "  color: %2; "
-                "  border: 1px solid %3; "
-                "  border-radius: 4px; "
-                "  padding: %4px; "
-                "  min-width: 150px; "
-                "}")
-            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
-            .arg(K4Styles::Dimensions::PaddingSmall);
+    const QString normalLineEditStyle = lineEditStyle(K4Styles::Colors::DialogBorder);
+    m_hostNormalStyle = normalLineEditStyle;
+    m_hostErrorStyle = lineEditStyle(K4Styles::Colors::ErrorRed);
 
     QString labelStyle = QString("QLabel { color: %1; font-size: %2px; }")
                              .arg(K4Styles::Colors::TextGray)
@@ -108,7 +114,7 @@ void RadioManagerDialog::setupUi() {
     auto *nameLabel = new QLabel("Name", this);
     nameLabel->setStyleSheet(labelStyle);
     m_nameEdit = new QLineEdit(this);
-    m_nameEdit->setStyleSheet(lineEditStyle);
+    m_nameEdit->setStyleSheet(normalLineEditStyle);
     m_nameEdit->setPlaceholderText("Server Name");
     formLayout->addWidget(nameLabel, 0, 0);
     formLayout->addWidget(m_nameEdit, 0, 1);
@@ -117,7 +123,7 @@ void RadioManagerDialog::setupUi() {
     auto *hostLabel = new QLabel("Host or IP", this);
     hostLabel->setStyleSheet(labelStyle);
     m_hostEdit = new QLineEdit(this);
-    m_hostEdit->setStyleSheet(lineEditStyle);
+    m_hostEdit->setStyleSheet(normalLineEditStyle);
     m_hostEdit->setPlaceholderText("192.168.1.100");
     formLayout->addWidget(hostLabel, 1, 0);
     formLayout->addWidget(m_hostEdit, 1, 1);
@@ -126,7 +132,7 @@ void RadioManagerDialog::setupUi() {
     auto *portLabel = new QLabel("Port", this);
     portLabel->setStyleSheet(labelStyle);
     m_portEdit = new QLineEdit(this);
-    m_portEdit->setStyleSheet(lineEditStyle);
+    m_portEdit->setStyleSheet(normalLineEditStyle);
     m_portEdit->setPlaceholderText("64242");
     m_portEdit->setMaximumWidth(80);
     formLayout->addWidget(portLabel, 2, 0);
@@ -136,7 +142,7 @@ void RadioManagerDialog::setupUi() {
     auto *passwordLabel = new QLabel("Password", this);
     passwordLabel->setStyleSheet(labelStyle);
     m_passwordEdit = new QLineEdit(this);
-    m_passwordEdit->setStyleSheet(lineEditStyle);
+    m_passwordEdit->setStyleSheet(normalLineEditStyle);
     m_passwordEdit->setEchoMode(QLineEdit::Password);
     m_passwordEdit->setPlaceholderText("Password");
     formLayout->addWidget(passwordLabel, 3, 0);
@@ -146,7 +152,7 @@ void RadioManagerDialog::setupUi() {
     m_identityLabel = new QLabel("ID", this);
     m_identityLabel->setStyleSheet(labelStyle);
     m_identityEdit = new QLineEdit(this);
-    m_identityEdit->setStyleSheet(lineEditStyle);
+    m_identityEdit->setStyleSheet(normalLineEditStyle);
     m_identityEdit->setPlaceholderText("Identity (optional)");
     formLayout->addWidget(m_identityLabel, 4, 0);
     formLayout->addWidget(m_identityEdit, 4, 1);
@@ -267,7 +273,10 @@ void RadioManagerDialog::setupUi() {
     connect(m_tlsCheckbox, &QCheckBox::toggled, this, &RadioManagerDialog::onTlsCheckboxToggled);
 
     // Update button states when host field changes
-    connect(m_hostEdit, &QLineEdit::textChanged, this, [this]() { updateButtonStates(); });
+    connect(m_hostEdit, &QLineEdit::textChanged, this, [this]() {
+        updateButtonStates();
+        updateHostFieldStyle();
+    });
 }
 
 void RadioManagerDialog::refreshList() {
@@ -300,7 +309,7 @@ void RadioManagerDialog::refreshList() {
 
 void RadioManagerDialog::onConnectClicked() {
     QString host = m_hostEdit->text().trimmed();
-    if (!host.isEmpty()) {
+    if (RadioUtils::isValidHostOrIp(host)) {
         // Check if this is a disconnect request (selected radio is already connected)
         if (!m_connectedHost.isEmpty() && host == m_connectedHost) {
             emit disconnectRequested();
@@ -356,8 +365,8 @@ void RadioManagerDialog::onSaveClicked() {
         name = host; // Use host as name if no name provided
     }
 
-    if (host.isEmpty()) {
-        return; // Can't save without host
+    if (!RadioUtils::isValidHostOrIp(host)) {
+        return; // Can't save without a valid host/IP
     }
 
     RadioEntry entry;
@@ -478,7 +487,7 @@ void RadioManagerDialog::onItemDoubleClicked(QListWidgetItem *item) {
 void RadioManagerDialog::updateButtonStates() {
     bool isSavedEntry = m_currentIndex >= 0 && m_currentIndex < RadioSettings::instance()->radios().size();
     QString host = m_hostEdit->text().trimmed();
-    bool hasHost = !host.isEmpty();
+    bool hasValidHost = RadioUtils::isValidHostOrIp(host);
 
     // Check if the selected radio is the connected one
     bool isConnectedRadio = !m_connectedHost.isEmpty() && host == m_connectedHost;
@@ -489,10 +498,20 @@ void RadioManagerDialog::updateButtonStates() {
     bool isDiscoveredEntry = currentItem && currentItem->data(Qt::UserRole).toString() == QStringLiteral("discovered");
 
     // Connect disabled for discovered entries — user must Save first
-    m_connectButton->setEnabled(hasHost && !isDiscoveredEntry);
+    m_connectButton->setEnabled(hasValidHost && !isDiscoveredEntry);
     m_connectButton->setText(isConnectedRadio ? "Disconnect" : "Connect");
     m_deleteButton->setEnabled(isSavedEntry);
-    m_saveButton->setEnabled(hasHost);
+    m_saveButton->setEnabled(hasValidHost);
+}
+
+void RadioManagerDialog::updateHostFieldStyle() {
+    const QString host = m_hostEdit->text().trimmed();
+    // Empty = neutral (don't flag a blank or just-cleared field as an error).
+    bool showError = !host.isEmpty() && !RadioUtils::isValidHostOrIp(host);
+    m_hostEdit->setStyleSheet(showError ? m_hostErrorStyle : m_hostNormalStyle);
+    m_hostEdit->setToolTip(showError ? QStringLiteral("Enter a valid IP address (e.g. 192.168.1.100) or "
+                                                      "hostname (e.g. k4.local)")
+                                     : QString());
 }
 
 void RadioManagerDialog::clearFields() {

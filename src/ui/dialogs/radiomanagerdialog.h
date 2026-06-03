@@ -51,7 +51,9 @@ private slots:
 
 private:
     void setupUi();
+    static QString lineEditStyle(const QString &borderColor);
     void updateButtonStates();
+    void updateHostFieldStyle();
     void clearFields();
     void populateFieldsFromSelection();
     void startDiscovery();
@@ -77,6 +79,9 @@ private:
     QPushButton *m_scanButton;
     QTimer *m_scanCountdown = nullptr;
     int m_scanSecondsLeft = 0;
+
+    QString m_hostNormalStyle; // m_hostEdit style with normal border
+    QString m_hostErrorStyle;  // m_hostEdit style with red border (invalid host)
 
     int m_currentIndex;
     QString m_connectedHost; // Host of currently connected radio (empty if disconnected)
