@@ -192,6 +192,14 @@ target_include_directories(test_halikeydevice PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_halikeydevice Qt6::Core Qt6::Test)
 add_test(NAME HalikeyDeviceTests COMMAND test_halikeydevice)
 
+# IambicKeyer state-machine tests — Iambic A/B squeeze behavior, single taps, reversal.
+add_executable(test_iambickeyer test_iambickeyer.cpp
+    ${CMAKE_SOURCE_DIR}/src/hardware/iambickeyer.cpp
+)
+target_include_directories(test_iambickeyer PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_iambickeyer Qt6::Core Qt6::Test)
+add_test(NAME IambicKeyerTests COMMAND test_iambickeyer)
+
 # KPOD+ USB worker — pure-logic tests (command builders, EP02 trim, response decoder)
 add_executable(test_kpodplususbworker test_kpodplususbworker.cpp
     ${CMAKE_SOURCE_DIR}/src/hardware/kpodplususbworker.cpp
