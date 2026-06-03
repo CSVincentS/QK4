@@ -227,8 +227,8 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttSta
     // A lingering DSR after DCD drops would latch dahState true → stuck dah. Chatty by
     // design; gated behind hw.halikey.debug. Compares against last-logged raw bits.
     if (cts != m_lastRawCts || dsr != m_lastRawDsr || dcd != m_lastRawDcd) {
-        qCDebug(hwHalikey) << "HaliKeyV14Worker: raw pins  CTS:" << cts << " DCD:" << dcd
-                           << " DSR:" << dsr << " => dah(dcd||dsr):" << (dcd || dsr);
+        qCDebug(hwHalikey) << "HaliKeyV14Worker: raw pins  CTS:" << cts << " DCD:" << dcd << " DSR:" << dsr
+                           << " => dah(dcd||dsr):" << (dcd || dsr);
         m_lastRawCts = cts;
         m_lastRawDsr = dsr;
         m_lastRawDcd = dcd;
@@ -359,8 +359,8 @@ void HaliKeyV14Worker::monitorLoop() {
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
 #endif
-    HANDLE pollTimer = CreateWaitableTimerExW(nullptr, nullptr,
-                                              CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    HANDLE pollTimer =
+        CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
     if (pollTimer) {
         LARGE_INTEGER due;
         due.QuadPart = -10000LL; // first fire in 1 ms (100 ns units, negative = relative)
