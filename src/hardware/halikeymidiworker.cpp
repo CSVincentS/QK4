@@ -140,15 +140,22 @@ void HaliKeyMidiWorker::handleMidiMessage(double deltaTime, const std::vector<un
 
     switch (data1) {
     case NOTE_LEFT_PADDLE:
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: dit (note 20)" << (pressed ? "down" : "up");
         emit ditStateChanged(pressed);
         break;
     case NOTE_RIGHT_PADDLE:
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: dah (note 21)" << (pressed ? "down" : "up");
         emit dahStateChanged(pressed);
         break;
     case NOTE_PTT:
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: ptt (note 31)" << (pressed ? "down" : "up");
         emit pttStateChanged(pressed);
         break;
     default:
+        // Log unrecognized notes so a HaliKey MIDI firmware using different note numbers
+        // than 20/21/31 is immediately visible in the trace rather than silently dropped.
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: unhandled note" << data1 << (pressed ? "down" : "up")
+                        << "status=" << Qt::hex << status;
         break;
     }
 }
