@@ -6,6 +6,7 @@
 #include "ui/widgets/vfowidget.h"
 #include "dxclustercontroller.h"
 #include "settings/radiosettings.h"
+#include "utils/bandplan.h"
 #include "utils/radioutils.h"
 
 #include "ui/overlays/dxspotoverlay.h"
@@ -393,6 +394,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     connect(m_radioState, &RadioState::frequencyChanged, this, [this](quint64) {
         updatePanadapterPassbands();
         updateTxMarkers();
+        updateBandPlanA();
     });
     connect(m_radioState, &RadioState::modeChanged, this,
             [this](RadioState::Mode mode) { m_panadapterA->setMode(RadioState::modeToString(mode)); });
@@ -560,6 +562,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     connect(m_radioState, &RadioState::frequencyBChanged, this, [this](quint64) {
         updatePanadapterPassbands();
         updateTxMarkers();
+        updateBandPlanB();
     });
     connect(m_radioState, &RadioState::modeBChanged, this,
             [this](RadioState::Mode mode) { m_panadapterB->setMode(RadioState::modeToString(mode)); });
@@ -745,6 +748,48 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         m_connectionController->sendCAT(cmd);
         m_radioState->parseCATCommand(cmd);
     });
+
+    // Band-plan overlay: region drives the segments; the toggle drives visibility. Both come
+    // from the RadioSettings singleton (written by the Station options page), so the controller
+    // listens directly — no coupling to the page.
+    RadioSettings *settings = RadioSettings::instance();
+    connect(settings, &RadioSettings::iaruRegionChanged, this, [this](int) {
+        updateBandPlanA();
+        updateBandPlanB();
+    });
+    connect(settings, &RadioSettings::bandPlanOverlayEnabledChanged, this, [this](bool enabled) {
+        m_panadapterA->setBandPlanVisible(enabled);
+        m_panadapterB->setBandPlanVisible(enabled);
+    });
+    const bool overlayOn = settings->bandPlanOverlayEnabled();
+    m_panadapterA->setBandPlanVisible(overlayOn);
+    m_panadapterB->setBandPlanVisible(overlayOn);
+    updateBandPlanA();
+    updateBandPlanB();
+}
+
+void SpectrumController::updateBandPlanA() {
+    const int region = RadioSettings::instance()->iaruRegion();
+    const qint64 freq = static_cast<qint64>(m_radioState->vfoA());
+    const int band = RadioUtils::getBandFromFrequency(freq);
+    if (band == m_lastBandA && region == m_lastRegionA)
+        return; // same band + region → segments unchanged; the overlay re-maps on its own
+    m_lastBandA = band;
+    m_lastRegionA = region;
+    m_panadapterA->setBandPlan(BandPlan::bandName(freq), BandPlan::segmentsForBand(region, freq),
+                               BandPlan::markersForBand(region, freq));
+}
+
+void SpectrumController::updateBandPlanB() {
+    const int region = RadioSettings::instance()->iaruRegion();
+    const qint64 freq = static_cast<qint64>(m_radioState->vfoB());
+    const int band = RadioUtils::getBandFromFrequency(freq);
+    if (band == m_lastBandB && region == m_lastRegionB)
+        return;
+    m_lastBandB = band;
+    m_lastRegionB = region;
+    m_panadapterB->setBandPlan(BandPlan::bandName(freq), BandPlan::segmentsForBand(region, freq),
+                               BandPlan::markersForBand(region, freq));
 }
 
 bool SpectrumController::eventFilter(QObject *watched, QEvent *event) {

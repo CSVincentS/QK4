@@ -114,6 +114,14 @@ target_include_directories(test_radioutils PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radioutils Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME RadioUtilsTests COMMAND test_radioutils)
 
+# BandPlan data/lookup tests (QColor needs Qt6::Gui)
+add_executable(test_bandplan test_bandplan.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/bandplan.cpp
+)
+target_include_directories(test_bandplan PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_bandplan Qt6::Core Qt6::Gui Qt6::Test)
+add_test(NAME BandPlanTests COMMAND test_bandplan)
+
 # MenuModel parsing + label resolution tests
 add_executable(test_menumodel test_menumodel.cpp
     ${CMAKE_SOURCE_DIR}/src/models/menumodel.cpp

@@ -15,6 +15,7 @@ class CatServer;
 class KPA1500Client;
 class DxClusterController;
 class AboutPage;
+class StationPage;
 class AudioInputPage;
 class AudioOutputPage;
 class RigControlPage;
@@ -34,6 +35,7 @@ class OptionsDialog : public QDialog {
 public:
     enum Page {
         PageAbout = 0,
+        PageStation,
         PageAudioInput,
         PageAudioOutput,
         PageRigControl,
@@ -71,6 +73,7 @@ private:
 
     // Page widgets
     AboutPage *m_aboutPage = nullptr;
+    StationPage *m_stationPage = nullptr;
     AudioInputPage *m_audioInputPage = nullptr;
     AudioOutputPage *m_audioOutputPage = nullptr;
     RigControlPage *m_rigControlPage = nullptr;

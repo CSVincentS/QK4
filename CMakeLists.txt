@@ -81,6 +81,7 @@ set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
     src/utils/radioutils.cpp
+    src/utils/bandplan.cpp
     src/controllers/connectioncontroller.cpp
     src/controllers/hardwarecontroller.cpp
     src/controllers/audiocontroller.cpp
@@ -159,6 +160,7 @@ set(SOURCES
     src/ui/popups/displaypopupwidget.cpp
     src/ui/dialogs/optionsdialog.cpp
     src/ui/pages/aboutpage.cpp
+    src/ui/pages/stationpage.cpp
     src/ui/pages/audioinputpage.cpp
     src/ui/pages/audiooutputpage.cpp
     src/ui/pages/rigcontrolpage.cpp
@@ -216,6 +218,7 @@ endif()
 set(HEADERS
     src/mainwindow.h
     src/utils/radioutils.h
+    src/utils/bandplan.h
     src/controllers/connectioncontroller.h
     src/controllers/hardwarecontroller.h
     src/controllers/audiocontroller.h
@@ -291,6 +294,7 @@ set(HEADERS
     src/ui/popups/displaypopupwidget.h
     src/ui/dialogs/optionsdialog.h
     src/ui/pages/aboutpage.h
+    src/ui/pages/stationpage.h
     src/ui/pages/audioinputpage.h
     src/ui/pages/audiooutputpage.h
     src/ui/pages/rigcontrolpage.h

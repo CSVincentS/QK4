@@ -167,6 +167,68 @@ void RadioSettings::setTextDecodeFontSize(bool subRx, int sizePx) {
     m_settings.sync();
 }
 
+int RadioSettings::iaruRegion() const {
+    // 1/2/3 = IARU regions, 4 = US (FCC). Default Region 2 (Americas).
+    return qBound(1, m_settings.value("station/iaruRegion", 2).toInt(), 4);
+}
+
+void RadioSettings::setIaruRegion(int region) {
+    region = qBound(1, region, 4);
+    if (iaruRegion() != region) {
+        m_settings.setValue("station/iaruRegion", region);
+        m_settings.sync();
+        emit iaruRegionChanged(region);
+    }
+}
+
+QString RadioSettings::callSign() const {
+    return m_settings.value("station/callSign", "").toString();
+}
+
+void RadioSettings::setCallSign(const QString &callSign) {
+    m_settings.setValue("station/callSign", callSign.trimmed().toUpper());
+    m_settings.sync();
+}
+
+QString RadioSettings::gridSquare() const {
+    return m_settings.value("station/gridSquare", "").toString();
+}
+
+void RadioSettings::setGridSquare(const QString &grid) {
+    m_settings.setValue("station/gridSquare", grid.trimmed());
+    m_settings.sync();
+}
+
+QString RadioSettings::operatorName() const {
+    return m_settings.value("station/operatorName", "").toString();
+}
+
+void RadioSettings::setOperatorName(const QString &name) {
+    m_settings.setValue("station/operatorName", name.trimmed());
+    m_settings.sync();
+}
+
+QString RadioSettings::qth() const {
+    return m_settings.value("station/qth", "").toString();
+}
+
+void RadioSettings::setQth(const QString &qth) {
+    m_settings.setValue("station/qth", qth.trimmed());
+    m_settings.sync();
+}
+
+bool RadioSettings::bandPlanOverlayEnabled() const {
+    return m_settings.value("station/bandPlanOverlay", true).toBool();
+}
+
+void RadioSettings::setBandPlanOverlayEnabled(bool enabled) {
+    if (bandPlanOverlayEnabled() != enabled) {
+        m_settings.setValue("station/bandPlanOverlay", enabled);
+        m_settings.sync();
+        emit bandPlanOverlayEnabledChanged(enabled);
+    }
+}
+
 int RadioSettings::micGain() const {
     return m_settings.value("audio/micGain", 25).toInt();
 }

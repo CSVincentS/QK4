@@ -148,6 +148,20 @@ public:
     int textDecodeFontSize(bool subRx) const;
     void setTextDecodeFontSize(bool subRx, int sizePx);
 
+    // Station / operator info
+    int iaruRegion() const; // 1, 2, or 3 — drives the panadapter band-plan overlay
+    void setIaruRegion(int region);
+    QString callSign() const;
+    void setCallSign(const QString &callSign);
+    QString gridSquare() const;
+    void setGridSquare(const QString &grid);
+    QString operatorName() const;
+    void setOperatorName(const QString &name);
+    QString qth() const;
+    void setQth(const QString &qth);
+    bool bandPlanOverlayEnabled() const;
+    void setBandPlanOverlayEnabled(bool enabled);
+
 signals:
     void radiosChanged();
     void kpodEnabledChanged(bool enabled);
@@ -168,6 +182,8 @@ signals:
     void txEqPresetsChanged();
     void dxClusterSettingsChanged();
     void kpodPlusSettingsChanged();
+    void iaruRegionChanged(int region);
+    void bandPlanOverlayEnabledChanged(bool enabled);
 
 private:
     explicit RadioSettings(QObject *parent = nullptr);

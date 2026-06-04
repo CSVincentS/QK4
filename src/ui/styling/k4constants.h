@@ -116,6 +116,15 @@ constexpr const char *ErrorBgDark = "#331111";  // Muted dark-red background for
 // Filter-edge indicator gold. Distinct from AccentAmber (#FFB000): brighter/yellower so it reads
 // clearly against the panadapter's amber passband fill. Used by FilterIndicatorWidget only.
 constexpr const char *FilterIndicatorGold = "#FFD040";
+
+// Band-plan overlay colors. Mode-segment fills (rendered translucent over the spectrum)
+// plus the band-name header row.
+constexpr const char *BandPlanCw = "#CB3B45";     // CW / Morse (crimson red)
+constexpr const char *BandPlanData = "#E0852F";   // Digital / data (RTTY, PSK, FT8...) orange
+constexpr const char *BandPlanPhone = "#6E83A6";  // SSB / phone (voice) slate blue
+constexpr const char *BandPlanBeacon = "#AB47BC"; // Beacons (exclusive) purple
+constexpr const char *BandPlanAll = "#90A4AE";    // All modes share (CW/data/phone) blue-grey
+constexpr const char *BandPlanBand = "#4E9A52";   // Band-name header row (green)
 } // namespace Colors
 
 namespace Dimensions {

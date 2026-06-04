@@ -63,6 +63,10 @@ protected:
 
 private:
     qint64 adjustClickFreqForMode(qint64 freq, bool vfoB);
+    // Push the band-plan overlay segments for the current VFO A/B band + IARU region.
+    // Cached band+region (sentinel -2) so per-Hz tuning doesn't re-push within a band.
+    void updateBandPlanA();
+    void updateBandPlanB();
 
     ConnectionController *m_connectionController = nullptr;
     RadioState *m_radioState = nullptr;
@@ -84,6 +88,10 @@ private:
     MouseVfoIndicator *m_mouseVfoIndicatorB = nullptr;
     bool m_scrollVfoB = false;
     int m_mouseQsyMode = 0;
+    int m_lastBandA = -2;
+    int m_lastRegionA = -2;
+    int m_lastBandB = -2;
+    int m_lastRegionB = -2;
 
     DxClusterController *m_dxClusterController = nullptr;
     DxSpotOverlay *m_spotOverlayA = nullptr;

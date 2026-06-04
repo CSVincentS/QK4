@@ -8,11 +8,13 @@
 #include <QTimer>
 #include <QVector>
 #include <memory>
+#include "utils/bandplan.h"
 #include "utils/wheelaccumulator.h"
 
 // Forward declarations for overlay widgets
 class DbmScaleOverlay;
 class FrequencyScaleOverlay;
+class BandPlanOverlay;
 
 // Modern GPU-accelerated panadapter using Qt RHI
 // Supports Metal (macOS), DirectX (Windows), Vulkan (Linux)
@@ -53,6 +55,13 @@ public:
     int span() const { return m_spanHz; }
     void setNotchFilter(bool enabled, int pitchHz);
     void setCursorVisible(bool visible);
+
+    // Band-plan overlay strip (top of panadapter): a band-name header row plus a sub-mode
+    // segment row with optional digital calling-frequency markers. Segments/markers are
+    // absolute-frequency; the strip re-maps to the freq axis on pan/zoom.
+    void setBandPlan(const QString &bandName, const QVector<BandPlan::BandSegment> &segments,
+                     const QVector<BandPlan::BandMarker> &markers);
+    void setBandPlanVisible(bool visible);
     void setAmplitudeUnits(bool useSUnits); // false=dBm, true=S-units
     void setAveraging(int level);           // 1-20: K4 #AVG display averaging
 
@@ -97,6 +106,8 @@ private:
     void updateDbmScaleOverlay();
     // Update frequency scale overlay position and values
     void updateFreqScaleOverlay();
+    // Update band-plan overlay position and segment data
+    void updateBandPlanOverlay();
     // Update dB range based on current ref level and scale
     void updateDbRangeFromRefAndScale();
     // Initialization
@@ -273,6 +284,12 @@ private:
     DbmScaleOverlay *m_dbmScaleOverlay = nullptr;
     // Frequency scale overlay (child widget for frequency labels at boundary)
     FrequencyScaleOverlay *m_freqScaleOverlay = nullptr;
+    // Band-plan overlay strip (child widget at top of panadapter)
+    BandPlanOverlay *m_bandPlanOverlay = nullptr;
+    QString m_bandPlanName;
+    QVector<BandPlan::BandSegment> m_bandPlanSegments;
+    QVector<BandPlan::BandMarker> m_bandPlanMarkers;
+    bool m_bandPlanVisible = true;
 };
 
 #endif // PANADAPTER_RHI_H
