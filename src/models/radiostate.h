@@ -157,8 +157,8 @@ public:
 
     // Control states
     bool isTransmitting() const { return m_rxTxMeterState.isTransmitting; }
-    bool subReceiverEnabled() const { return m_rxTxMeterState.subReceiverEnabled; }
-    bool diversityEnabled() const { return m_rxTxMeterState.diversityEnabled; }
+    bool subReceiverEnabled() const { return m_rxTxMeterState.subReceiverEnabled == 1; }
+    bool diversityEnabled() const { return m_rxTxMeterState.diversityEnabled == 1; }
     bool splitEnabled() const { return m_frequencyVfoState.splitEnabled; }
 
     // Processing (NB/NR/PA/RA/GT + NA/NM) — backed by m_processingState.

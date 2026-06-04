@@ -54,8 +54,13 @@ struct RxTxMeterState {
     bool isTransmitting = false;
 
     // Control toggles carried alongside the TX/RX feed.
-    bool subReceiverEnabled = false;
-    bool diversityEnabled = false;
+    // WHY tri-state (-1 = unknown until first SB/DV): a plain bool defaulting to
+    // false is swallowed by the change-guard when the radio's first report is the
+    // default-off state (SB0/DV0), so no Changed signal ever fires and consumers
+    // (VFO B dimming, sub-RX mute) keep their stale initial state. -1 guarantees
+    // the first update always emits. (0 = off, 1 = on.)
+    int subReceiverEnabled = -1;
+    int diversityEnabled = -1;
     bool testMode = false;
     bool bSetEnabled = false;
 

@@ -20,8 +20,8 @@ void RxTxMeterState::reset() {
     paTemperatureC = -1;
     lpaTemperatureC = -1;
     isTransmitting = false;
-    subReceiverEnabled = false;
-    diversityEnabled = false;
+    subReceiverEnabled = -1;
+    diversityEnabled = -1;
     testMode = false;
     bSetEnabled = false;
     messageBank = -1;
@@ -299,20 +299,20 @@ void handleSB(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
     // SB0=off, SB1=on, SB3=on (diversity)
     if (cmd.length() <= 2)
         return;
-    bool newState = (cmd.mid(2) != "0");
+    int newState = (cmd.mid(2) != "0") ? 1 : 0;
     if (newState != state.subReceiverEnabled) {
         state.subReceiverEnabled = newState;
-        emit owner.subRxEnabledChanged(state.subReceiverEnabled);
+        emit owner.subRxEnabledChanged(newState == 1);
     }
 }
 
 void handleDV(RxTxMeterState &state, RadioState &owner, const QString &cmd) {
     if (cmd.length() <= 2)
         return;
-    bool newState = (cmd.mid(2) == "1");
+    int newState = (cmd.mid(2) == "1") ? 1 : 0;
     if (newState != state.diversityEnabled) {
         state.diversityEnabled = newState;
-        emit owner.diversityChanged(state.diversityEnabled);
+        emit owner.diversityChanged(newState == 1);
     }
 }
 

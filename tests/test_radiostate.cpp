@@ -2489,6 +2489,18 @@ private slots:
         QCOMPARE(rs.subReceiverEnabled(), false);
     }
 
+    // Tri-state sentinel regression guard: the FIRST report must emit even when
+    // it is the default-off state. A plain bool defaulting to false swallowed
+    // SB0 here, so VFO B stayed white / sub stayed unmuted on a first connect.
+    void testSubRxFirstReportOffEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::subRxEnabledChanged);
+        rs.parseCATCommand("SB0;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toBool(), false);
+        QCOMPARE(rs.subReceiverEnabled(), false);
+    }
+
     // --- DV (diversity) ---
     void testDiversityOn() {
         RadioState rs;
@@ -2496,6 +2508,14 @@ private slots:
         rs.parseCATCommand("DV1;");
         QCOMPARE(rs.diversityEnabled(), true);
         QCOMPARE(spy.count(), 1);
+    }
+
+    void testDiversityFirstReportOffEmits() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::diversityChanged);
+        rs.parseCATCommand("DV0;");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toBool(), false);
     }
 
     // --- TS (test mode) ---
