@@ -58,6 +58,13 @@ AudioEngine::AudioEngine(QObject *parent)
     // press breaks the cycle: by that point the connection is fully up and the main thread is
     // free to process the permission dialog. Once opened, the mic stays open for the remainder
     // of the connection so subsequent PTT presses are instant — see openMic() for details.
+
+    // Monitor OS device/default changes so a "System Default" selection follows the OS
+    // live. Parented to this engine, so moveToThread() carries it to the audio thread and
+    // its signals arrive there — the same thread that owns the sink/source.
+    m_mediaDevices = new QMediaDevices(this);
+    connect(m_mediaDevices, &QMediaDevices::audioInputsChanged, this, &AudioEngine::onSystemDefaultInputChanged);
+    connect(m_mediaDevices, &QMediaDevices::audioOutputsChanged, this, &AudioEngine::onSystemDefaultOutputChanged);
 }
 
 AudioEngine::~AudioEngine() {
@@ -145,6 +152,7 @@ bool AudioEngine::setupAudioOutput() {
         return false;
     }
 
+    m_activeOutputDeviceId = outputDevice.id();
     m_audioSink = new QAudioSink(outputDevice, m_outputFormat, this);
     m_audioSink->setBufferSize(OUTPUT_BUFFER_SIZE);
 
@@ -191,6 +199,7 @@ bool AudioEngine::setupAudioInput() {
         return false;
     }
 
+    m_activeMicDeviceId = inputDevice.id();
     m_audioSource = new QAudioSource(inputDevice, m_inputFormat, this);
     m_audioSource->setBufferSize(INPUT_BUFFER_SIZE);
 
@@ -652,6 +661,43 @@ void AudioEngine::setOutputDevice(const QString &deviceId) {
             setupAudioOutput();
         }
     }
+}
+
+void AudioEngine::onSystemDefaultInputChanged() {
+    // Only follow the OS default when the user hasn't pinned a specific device.
+    if (!m_selectedMicDeviceId.isEmpty())
+        return;
+    // Nothing built yet — the next openMic() resolves the current default fresh.
+    if (!m_audioSource)
+        return;
+    const QString newDefault = QMediaDevices::defaultAudioInput().id();
+    if (newDefault.isEmpty() || newDefault == m_activeMicDeviceId)
+        return; // effective default unchanged
+
+    // Rebuild the source on the new default, preserving the open/closed state.
+    bool wasOpen = m_micEnabled.load(std::memory_order_relaxed);
+    if (wasOpen)
+        closeMic();
+    delete m_audioSource;
+    m_audioSource = nullptr;
+    if (wasOpen)
+        openMic();
+}
+
+void AudioEngine::onSystemDefaultOutputChanged() {
+    if (!m_selectedOutputDeviceId.isEmpty())
+        return;
+    if (!m_audioSink)
+        return; // output not started yet — start() will resolve the current default
+    const QString newDefault = QMediaDevices::defaultAudioOutput().id();
+    if (newDefault.isEmpty() || newDefault == m_activeOutputDeviceId)
+        return;
+
+    m_audioSink->stop();
+    delete m_audioSink;
+    m_audioSink = nullptr;
+    m_audioSinkDevice = nullptr;
+    setupAudioOutput();
 }
 
 QString AudioEngine::outputDeviceId() const {

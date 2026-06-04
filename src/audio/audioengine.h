@@ -6,6 +6,7 @@
 #include <QAudioSource>
 #include <QAudioFormat>
 #include <QIODevice>
+#include <QMediaDevices>
 #include <QTimer>
 #include <QQueue>
 #include <QMutex>
@@ -113,6 +114,12 @@ signals:
 private slots:
     void onMicDataReady();
     void feedAudioDevice();
+    // WHY: when the user leaves a device set to "System Default" (empty id), follow
+    // the OS default live instead of caching it for the whole session. QMediaDevices
+    // fires these when devices or the system default change; we rebuild the sink/
+    // source only if the effective default actually moved. Pinned devices are ignored.
+    void onSystemDefaultInputChanged();
+    void onSystemDefaultOutputChanged();
 
 private:
     bool setupAudioOutput();
@@ -144,8 +151,11 @@ private:
     QAudioSource *m_audioSource;
     QIODevice *m_audioSourceDevice;
     std::atomic<bool> m_micEnabled{false};
-    QString m_selectedMicDeviceId;    // Empty = use system default
-    QString m_selectedOutputDeviceId; // Empty = use system default
+    QString m_selectedMicDeviceId;           // Empty = use system default
+    QString m_selectedOutputDeviceId;        // Empty = use system default
+    QString m_activeMicDeviceId;             // id of the device the source was actually opened on
+    QString m_activeOutputDeviceId;          // id of the device the sink was actually opened on
+    QMediaDevices *m_mediaDevices = nullptr; // OS device/default-change monitor
 
     // Channel volume controls (0.0 to 1.0)
     std::atomic<float> m_mainVolume{1.0f};
