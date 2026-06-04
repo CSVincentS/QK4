@@ -142,6 +142,15 @@ private slots:
         }
     }
 
+    // snapFreqToStep — zero sub-step digits (KPOD/scroll/drag land on step boundary)
+    void testSnap_artifact100Hz() { QCOMPARE(RadioUtils::snapFreqToStep(7277380, 100), Q_INT64_C(7277300)); }
+    void testSnap_alreadyAligned() { QCOMPARE(RadioUtils::snapFreqToStep(7277400, 100), Q_INT64_C(7277400)); }
+    void testSnap_1HzStepUnchanged() { QCOMPARE(RadioUtils::snapFreqToStep(7277380, 1), Q_INT64_C(7277380)); }
+    void testSnap_1kHzStep() { QCOMPARE(RadioUtils::snapFreqToStep(7277380, 1000), Q_INT64_C(7277000)); }
+    void testSnap_otherArtifact() { QCOMPARE(RadioUtils::snapFreqToStep(14286750, 100), Q_INT64_C(14286700)); }
+    void testSnap_zeroFreq() { QCOMPARE(RadioUtils::snapFreqToStep(0, 100), Q_INT64_C(0)); }
+    void testSnap_guardZeroStep() { QCOMPARE(RadioUtils::snapFreqToStep(7277380, 0), Q_INT64_C(7277380)); }
+
     // isValidIpv4 — strict dotted-quad
     void testIpv4_simple() { QVERIFY(RadioUtils::isValidIpv4("192.168.1.10")); }
     void testIpv4_zeros() { QVERIFY(RadioUtils::isValidIpv4("0.0.0.0")); }

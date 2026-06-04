@@ -78,6 +78,12 @@ FixedTuneMode fixedTuneModeFromCat(int fxt, int fxa);
 /// radio to confirm (the K4 does not echo these SETs at AI4).
 QString fixedTuneSetCommand(FixedTuneMode mode);
 
+/// Snap an absolute frequency DOWN to the nearest multiple of stepHz, zeroing the
+/// digits below the current tuning step (e.g. 7277380 @ 100 Hz -> 7277300). No-op
+/// when already aligned or stepHz <= 0. Used by every tune path so dial/scroll/drag
+/// land on the same step boundary the dimmed-digit display indicates.
+qint64 snapFreqToStep(qint64 freq, int stepHz);
+
 /// True if s is a strictly-valid dotted IPv4 address: exactly 4 dot-separated
 /// octets, each parseable 0-255. Rejects "192.168.1", "192.168.100.500",
 /// "1.2.3.4.5". (QHostAddress is NOT used here — it leniently accepts partial

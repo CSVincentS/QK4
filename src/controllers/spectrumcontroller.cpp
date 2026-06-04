@@ -439,7 +439,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         // PSK-D/FSK-D: passband centered at dial+IS, so subtract IS to place passband on click
         freq = adjustClickFreqForMode(freq, false);
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("FA%1;").arg(snapped, 11, 10, QChar('0'));
@@ -462,7 +462,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         freq = adjustClickFreqForMode(freq, false);
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("FA%1;").arg(snapped, 11, 10, QChar('0'));
@@ -481,7 +481,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         quint64 currentFreq = tuneB ? m_radioState->vfoB() : m_radioState->vfoA();
         int stepHz = RadioUtils::tuningStepToHz(tuneB ? m_radioState->tuningStepB() : m_radioState->tuningStep());
-        qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
+        qint64 newFreq =
+            RadioUtils::snapFreqToStep(static_cast<qint64>(currentFreq), stepHz) + static_cast<qint64>(steps) * stepHz;
         if (newFreq > 0) {
             QString vfo = tuneB ? "FB" : "FA";
             QString cmd = QString("%1%2;").arg(vfo).arg(static_cast<quint64>(newFreq), 11, 10, QChar('0'));
@@ -526,7 +527,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         freq = adjustClickFreqForMode(freq, true); // right-click on Pan A → VFO B
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
@@ -547,7 +548,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         freq = adjustClickFreqForMode(freq, true); // right-drag on Pan A → VFO B
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
@@ -625,7 +626,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         freq = adjustClickFreqForMode(freq, !tuneA);
         QString vfo = tuneA ? "FA" : "FB";
         int stepHz = RadioUtils::tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("%1%2;").arg(vfo).arg(snapped, 11, 10, QChar('0'));
@@ -650,7 +651,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         freq = adjustClickFreqForMode(freq, !tuneA);
         QString vfo = tuneA ? "FA" : "FB";
         int stepHz = RadioUtils::tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("%1%2;").arg(vfo).arg(snapped, 11, 10, QChar('0'));
@@ -668,7 +669,8 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         quint64 currentFreq = tuneB ? m_radioState->vfoB() : m_radioState->vfoA();
         int stepHz = RadioUtils::tuningStepToHz(tuneB ? m_radioState->tuningStepB() : m_radioState->tuningStep());
-        qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
+        qint64 newFreq =
+            RadioUtils::snapFreqToStep(static_cast<qint64>(currentFreq), stepHz) + static_cast<qint64>(steps) * stepHz;
         if (newFreq > 0) {
             QString vfo = tuneB ? "FB" : "FA";
             QString cmd = QString("%1%2;").arg(vfo).arg(static_cast<quint64>(newFreq), 11, 10, QChar('0'));
@@ -714,7 +716,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         // L=A R=B mode: right-click always tunes VFO B
         freq = adjustClickFreqForMode(freq, true);
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
@@ -736,7 +738,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         // L=A R=B mode: right-drag always tunes VFO B
         freq = adjustClickFreqForMode(freq, true);
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
-        qint64 snapped = (freq / stepHz) * stepHz;
+        qint64 snapped = RadioUtils::snapFreqToStep(freq, stepHz);
         if (snapped <= 0)
             return;
         QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));

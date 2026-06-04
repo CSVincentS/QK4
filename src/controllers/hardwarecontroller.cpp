@@ -249,7 +249,8 @@ void HardwareController::onKpodEncoderRotatedWithRocker(int ticks, int rockerPos
             break;
         quint64 currentFreq = m_radioState->vfoA();
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
-        qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(ticks) * stepHz;
+        qint64 newFreq =
+            RadioUtils::snapFreqToStep(static_cast<qint64>(currentFreq), stepHz) + static_cast<qint64>(ticks) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FA%1;").arg(static_cast<quint64>(newFreq), 11, 10, QChar('0'));
             m_connectionController->sendCAT(cmd);
@@ -263,7 +264,8 @@ void HardwareController::onKpodEncoderRotatedWithRocker(int ticks, int rockerPos
             break;
         quint64 currentFreq = m_radioState->vfoB();
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
-        qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(ticks) * stepHz;
+        qint64 newFreq =
+            RadioUtils::snapFreqToStep(static_cast<qint64>(currentFreq), stepHz) + static_cast<qint64>(ticks) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FB%1;").arg(static_cast<quint64>(newFreq), 11, 10, QChar('0'));
             m_connectionController->sendCAT(cmd);

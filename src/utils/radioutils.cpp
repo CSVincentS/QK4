@@ -123,6 +123,11 @@ QString fixedTuneSetCommand(FixedTuneMode mode) {
     return QStringLiteral("#FXT0;");
 }
 
+qint64 snapFreqToStep(qint64 freq, int stepHz) {
+    // Integer division truncates toward zero; tune frequencies are positive, so this floors.
+    return (stepHz > 0) ? (freq / stepHz) * stepHz : freq;
+}
+
 bool isValidIpv4(const QString &s) {
     const QStringList parts = s.split('.');
     if (parts.size() != 4)
