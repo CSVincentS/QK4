@@ -144,5 +144,7 @@ private slots:
     void iaru_noMarkers() { QVERIFY(BandPlan::markersForBand(2, 14074000).isEmpty()); }
 };
 
-QTEST_MAIN(TestBandPlan)
+// GUILESS: the test links Qt6::Gui for QColor but needs no GUI app — using
+// QCoreApplication avoids requiring a display/platform plugin in headless CI.
+QTEST_GUILESS_MAIN(TestBandPlan)
 #include "test_bandplan.moc"
