@@ -80,10 +80,17 @@ private:
     int m_ditMs = 60;        // 1200 / WPM
     QElapsedTimer m_idleSince;
 
-    // Free-running monotonic clock used to measure paddle-press hold durations. Started in the
-    // constructor; never reset. Read concurrently from the HaliKey worker thread (in setDit/DahPaddle)
-    // — QElapsedTimer's methods are reentrant per Qt docs.
+    // Free-running monotonic clock used to measure paddle-press hold durations and as the
+    // timebase for the element deadline grid. Started in the constructor; never reset. Read
+    // concurrently from the HaliKey worker thread (in setDit/DahPaddle) — QElapsedTimer's
+    // methods are reentrant per Qt docs.
     QElapsedTimer m_pressClock;
+
+    // Absolute next-element deadline (ns on m_pressClock's timebase). Keyer-thread-only:
+    // written/read exclusively in enterElement(). Arming each element against this grid
+    // keeps per-element timer overshoot from accumulating into tempo drift; the Idle→element
+    // transition re-anchors it, so goIdle()/stop() need no reset.
+    qint64 m_nextDeadlineNs = 0;
 
     // Physical paddle state — written from HaliKey thread via DirectConnection,
     // read from keyer thread's timer. Atomics eliminate cross-thread queue delay

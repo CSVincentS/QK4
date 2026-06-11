@@ -157,8 +157,12 @@ void IambicKeyer::handlePaddleChange() {
 }
 
 void IambicKeyer::enterElement(bool isDit) {
+    // Captured BEFORE m_state is assigned below — anchors the deadline grid and gates the
+    // pause emit. Anchoring on every element instead would silently reintroduce the drift.
+    const bool fromIdle = (m_state == Idle);
+
     // Transitioning from idle — emit pause duration before the element
-    if (m_state == Idle && m_idleSince.isValid()) {
+    if (fromIdle && m_idleSince.isValid()) {
         int elapsed = static_cast<int>(m_idleSince.elapsed());
         if (elapsed <= 2000) {
             qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [PAUSE emit] elapsed=" << elapsed << "ms";
@@ -187,11 +191,33 @@ void IambicKeyer::enterElement(bool isDit) {
         m_squeezed = true;
 
     // Dit = 1 unit on + 1 unit off = 2 ditMs; Dah = 3 units on + 1 unit off = 4 ditMs
-    int interval = isDit ? m_ditMs * 2 : m_ditMs * 4;
-    m_elementTimer->start(interval);
+    const int intervalMs = isDit ? m_ditMs * 2 : m_ditMs * 4;
+
+    // WHY a deadline grid instead of m_elementTimer->start(intervalMs): a restarted
+    // single-shot timer accumulates overshoot + processing time on every element, so long
+    // element strings drift slow (~1 ms/element on Windows) and the KZ stream + sidetone
+    // inherit the jitter. Chaining on an absolute ns deadline lets element N's overshoot
+    // shorten element N+1's arm time instead — rounding errors never accumulate. A WPM
+    // change mid-chain extends the grid by the new interval from the current boundary,
+    // matching the K4's KZL semantics.
+    const qint64 intervalNs = qint64(intervalMs) * 1'000'000;
+    const qint64 now = m_pressClock.nsecsElapsed();
+    if (fromIdle)
+        m_nextDeadlineNs = now + intervalNs; // anchor a fresh grid
+    else
+        m_nextDeadlineNs += intervalNs; // chain on the absolute grid
+    qint64 remainNs = m_nextDeadlineNs - now;
+    if (remainNs <= 0) {
+        // WHY re-anchor: a stall >= one full element can't be caught up without
+        // machine-gunning catch-up elements; slip the grid to now instead.
+        m_nextDeadlineNs = now;
+        remainNs = 0;
+    }
+    const int armMs = static_cast<int>((remainNs + 500'000) / 1'000'000); // round to nearest ms
+    m_elementTimer->start(armMs);
 
     qCDebug(cwKeyer).noquote().nospace() << "KEYER@" << nowMs() << " [ELEM start " << (isDit ? "DIT" : "DAH")
-                                         << "] interval=" << interval
+                                         << "] interval=" << intervalMs << "ms armed=" << armMs
                                          << "ms physD=" << m_physDit.load(std::memory_order_acquire)
                                          << " physA=" << m_physDah.load(std::memory_order_acquire)
                                          << " latchD=" << m_ditLatch.load(std::memory_order_acquire)
