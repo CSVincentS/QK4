@@ -28,6 +28,22 @@ HaliKey paddle → platform worker (thread) → IambicKeyer::setDitPaddle / setD
 
 When KPOD+ is active, the HaliKey → IambicKeyer → KZ/Sidetone path is suppressed. KPOD+ owns the entire CW chain: paddle → onboard keyer → sidetone → KZ output forwarded directly to K4.
 
+## V1.4 serial latency (USB-serial bridge latency timer)
+
+FTDI-class USB-serial bridges batch modem-status (CTS/DSR/DCD) updates on a driver-side
+latency timer that defaults to **16 ms**. That sits *upstream* of QK4's 1 ms poll
+(`halikeyv14worker.cpp`), so paddle edges can reach the app up to 16 ms late regardless of
+application code. Lowering it to 1 ms removes that delay:
+
+- **Windows**: Device Manager → Ports (COM & LPT) → the HaliKey COM port → Properties →
+  Port Settings → Advanced → Latency Timer (msec) = **1**. Confirmed effective by a user
+  in the field.
+- **Linux**: `echo 1 | sudo tee /sys/bus/usb-serial/devices/<dev>/latency_timer` — resets
+  on re-plug; use a udev rule for persistence.
+- **macOS**: not user-tunable with the stock driver.
+
+The MIDI variant is unaffected (no serial bridge in the path).
+
 ## See also
 
 - `memory/kz-protocol.md` — KZ command protocol verified from K4/0 pcap.
