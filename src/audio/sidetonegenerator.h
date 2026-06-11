@@ -5,6 +5,7 @@
 #include <QAudioSink>
 #include <QIODevice>
 #include <QByteArray>
+#include <QMediaDevices>
 #include <QtMath>
 #include <atomic>
 
@@ -42,10 +43,17 @@ private:
     void playElement(int durationMs);
     int ditDurationMs() const;
     int dahDurationMs() const;
+    // WHY: when the user leaves the speaker on "System Default" (empty device id),
+    // follow the OS default live instead of caching it for the session — same
+    // pattern as AudioEngine. Without this, a default-device change (or hot-unplug)
+    // left the sink on a stale/dead device and the sidetone went silent.
+    void onSystemDefaultOutputChanged();
 
     QAudioSink *m_audioSink = nullptr;
     QIODevice *m_pushDevice = nullptr;
     QString m_selectedOutputDeviceId;
+    QString m_activeOutputDeviceId;          // id of the device the sink was actually opened on
+    QMediaDevices *m_mediaDevices = nullptr; // OS device/default-change monitor
     std::atomic<int> m_frequency{600};
     std::atomic<float> m_volume{0.3f};
     std::atomic<int> m_keyerWpm{20};

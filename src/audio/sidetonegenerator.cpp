@@ -7,7 +7,13 @@
 #include <algorithm>
 
 SidetoneGenerator::SidetoneGenerator(QObject *parent) : QObject(parent) {
-    // Audio init deferred to start() which runs on the sidetone thread
+    // Audio init deferred to start() which runs on the sidetone thread.
+    // WHY parented here, pre-moveToThread: the monitor rides moveToThread() with the
+    // generator, so audioOutputsChanged is delivered on the sidetone thread — the same
+    // thread that owns the sink. Same pattern as AudioEngine.
+    m_mediaDevices = new QMediaDevices(this);
+    connect(m_mediaDevices, &QMediaDevices::audioOutputsChanged, this,
+            &SidetoneGenerator::onSystemDefaultOutputChanged);
 }
 
 SidetoneGenerator::~SidetoneGenerator() {
@@ -52,6 +58,11 @@ void SidetoneGenerator::initAudio() {
     if (device.isNull())
         device = QMediaDevices::defaultAudioOutput();
 
+    // Record the actually-opened device so onSystemDefaultOutputChanged can detect
+    // whether the effective default really moved. Set before sink creation so even
+    // a failed start() records what was attempted (same ordering as AudioEngine).
+    m_activeOutputDeviceId = device.id();
+
     if (!device.isFormatSupported(format)) {
         qCWarning(qk4Audio) << "SidetoneGenerator: Default format not supported, trying nearest";
         format = device.preferredFormat();
@@ -78,6 +89,25 @@ void SidetoneGenerator::stop() {
         m_audioSink = nullptr;
         m_pushDevice = nullptr;
     }
+    m_activeOutputDeviceId.clear();
+}
+
+void SidetoneGenerator::onSystemDefaultOutputChanged() {
+    // Only follow the OS default when the user hasn't pinned a specific device.
+    if (!m_selectedOutputDeviceId.isEmpty())
+        return;
+    // Nothing built yet (or stop() already ran) — the next initAudio() resolves fresh.
+    if (!m_audioSink)
+        return;
+    const QString newDefault = QMediaDevices::defaultAudioOutput().id();
+    if (newDefault.isEmpty() || newDefault == m_activeOutputDeviceId)
+        return; // effective default unchanged
+
+    m_audioSink->stop();
+    delete m_audioSink;
+    m_audioSink = nullptr;
+    m_pushDevice = nullptr;
+    initAudio();
 }
 
 void SidetoneGenerator::setFrequency(int hz) {
