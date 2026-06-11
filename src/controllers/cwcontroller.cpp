@@ -104,6 +104,13 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
         }
     });
 
+    // Device-type mirror for the V1.4 PTT demux below. RadioSettings is a plain
+    // main-thread singleton; the PTT handler runs on the HaliKey worker thread.
+    // Same store/load pattern as m_cachedMode above.
+    m_cachedIsV14.store(RadioSettings::instance()->halikeyDeviceType() != 1, std::memory_order_release);
+    connect(RadioSettings::instance(), &RadioSettings::halikeyDeviceTypeChanged, this,
+            [this](int type) { m_cachedIsV14.store(type != 1, std::memory_order_release); });
+
     // =========================================================================
     // Keyer → CAT commands + sidetone audio
     // =========================================================================
@@ -201,7 +208,7 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     connect(
         m_halikey, &HalikeyDevice::pttStateChanged, this,
         [this](bool active) {
-            const bool isV14 = (RadioSettings::instance()->halikeyDeviceType() != 1);
+            const bool isV14 = m_cachedIsV14.load(std::memory_order_acquire);
             if (active) {
                 // RISING EDGE: pick a destination based on current mode and remember it,
                 // so the falling edge (or a mid-press mode change) can fire the matching
