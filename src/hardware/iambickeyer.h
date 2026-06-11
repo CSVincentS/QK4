@@ -39,6 +39,15 @@ public:
     void setDitPaddle(bool pressed);
     void setDahPaddle(bool pressed);
 
+    // Enable/disable the kMinHoldNs release gate. Plain atomic write — callable from
+    // any thread, like the paddle setters above (NOT a queued slot: the flag is read
+    // on the HaliKey worker thread inside setDit/DahPaddle, so a queued hop to the
+    // keyer thread would add delay without adding safety). V1.4 serial: enabled
+    // (contact-bounce signatures ≤4 ms, see docs/halikey-cw-trace.md). MIDI: disabled
+    // — events are firmware-debounced, and WinMM delivers press+release bursts
+    // back-to-back, so an arrival-time hold gate would drop real elements.
+    void setHoldGateEnabled(bool enabled);
+
     // Emergency stop (disconnect, etc.)
     Q_INVOKABLE void stop();
 
@@ -98,8 +107,12 @@ private:
     // Minimum-hold threshold for a press to count as "real" and keep its latch on release.
     // Anything shorter is treated as paddle bounce or accidental graze (the bounce signatures
     // captured in docs/halikey-cw-trace.md were all ≤ 4ms hold; comfortably below any deliberate
-    // tap at practical WPM rates).
+    // tap at practical WPM rates). V1.4-serial-only: the gate measures ARRIVAL-time spacing,
+    // which equals contact timing for the locally-polled serial worker but not for MIDI, where
+    // WinMM burst delivery can compress a real tap below the threshold. CwController disables
+    // it for the MIDI transport via setHoldGateEnabled(false).
     static constexpr qint64 kMinHoldNs = 8'000'000; // 8 ms
+    std::atomic<bool> m_holdGateEnabled{true};
 };
 
 #endif // IAMBICKEYER_H

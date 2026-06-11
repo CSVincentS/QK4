@@ -114,6 +114,44 @@ private slots:
             QCOMPARE(elem.at(i).at(0).toBool(), (i % 2 == 0) ? first : !first);
     }
 
+    // Hold gate ON (default / V1.4 serial): a press+release delivered back-to-back with no
+    // event-loop turn between them measures a sub-8ms hold — treated as contact bounce, the
+    // latch is cleared, and no element plays. Pins the V1.4 bounce filter against regression.
+    void holdGateOn_burstTapIsFiltered() {
+        IambicKeyer keyer;
+        keyer.setEnabled(true);
+        keyer.setSpeed(kWpm);
+        keyer.setMode(IambicKeyer::IambicA);
+        QSignalSpy elem(&keyer, &IambicKeyer::elementStarted);
+
+        // No qWait between the calls: both land before the queued handlePaddleChange runs,
+        // simulating a WinMM-style burst or a real serial bounce.
+        keyer.setDitPaddle(true);
+        keyer.setDitPaddle(false);
+
+        QTest::qWait(150);
+        QCOMPARE(elem.count(), 0);
+    }
+
+    // Hold gate OFF (MIDI transport): the same burst keeps its latch — the press is
+    // firmware-debounced and real — so exactly one dit element plays, then the keyer idles.
+    void holdGateOff_burstTapProducesOneDit() {
+        IambicKeyer keyer;
+        keyer.setEnabled(true);
+        keyer.setSpeed(kWpm);
+        keyer.setMode(IambicKeyer::IambicA);
+        keyer.setHoldGateEnabled(false);
+        QSignalSpy elem(&keyer, &IambicKeyer::elementStarted);
+        QSignalSpy finished(&keyer, &IambicKeyer::keyingFinished);
+
+        keyer.setDitPaddle(true);
+        keyer.setDitPaddle(false);
+
+        QVERIFY(finished.wait(2000));
+        QCOMPARE(elem.count(), 1);
+        QCOMPARE(elem.at(0).at(0).toBool(), true); // dit
+    }
+
     // Iambic A: releasing a squeeze appends NO further element — the in-progress element
     // finishes and the keyer idles.
     void iambicA_squeezeReleaseAppendsNoElement() {

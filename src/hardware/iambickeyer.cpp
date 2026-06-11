@@ -42,6 +42,10 @@ void IambicKeyer::setSpeed(int wpm) {
         m_ditMs = 1200 / wpm;
 }
 
+void IambicKeyer::setHoldGateEnabled(bool enabled) {
+    m_holdGateEnabled.store(enabled, std::memory_order_release);
+}
+
 void IambicKeyer::setDitPaddle(bool pressed) {
     // Write atomic immediately (called from HaliKey worker thread via DirectConnection).
     // Release ordering pairs with the acquire loads in ditDown()/handlePaddleChange so the
@@ -59,12 +63,14 @@ void IambicKeyer::setDitPaddle(bool pressed) {
         if (!m_ditLatch.exchange(true, std::memory_order_acq_rel))
             m_ditPressNs.store(now, std::memory_order_release);
     } else {
-        // Release: hold-duration gate. Anything shorter than kMinHoldNs is treated as bounce
+        // Release: hold-duration gate (V1.4 serial only — disabled for MIDI, see
+        // setHoldGateEnabled). Anything shorter than kMinHoldNs is treated as bounce
         // or accidental graze and the latch is cleared so the next element timer doesn't fire
         // a phantom element. See docs/halikey-cw-trace.md for the captured signatures.
+        // holdNs is computed unconditionally so the trace below logs it for both transports.
         const qint64 pressNs = m_ditPressNs.load(std::memory_order_acquire);
         holdNs = now - pressNs;
-        if (holdNs < kMinHoldNs) {
+        if (m_holdGateEnabled.load(std::memory_order_acquire) && holdNs < kMinHoldNs) {
             m_ditLatch.store(false, std::memory_order_release);
             bounceFiltered = true;
         }
@@ -96,7 +102,7 @@ void IambicKeyer::setDahPaddle(bool pressed) {
     } else {
         const qint64 pressNs = m_dahPressNs.load(std::memory_order_acquire);
         holdNs = now - pressNs;
-        if (holdNs < kMinHoldNs) {
+        if (m_holdGateEnabled.load(std::memory_order_acquire) && holdNs < kMinHoldNs) {
             m_dahLatch.store(false, std::memory_order_release);
             bounceFiltered = true;
         }

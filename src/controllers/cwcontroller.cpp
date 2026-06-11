@@ -104,12 +104,20 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
         }
     });
 
-    // Device-type mirror for the V1.4 PTT demux below. RadioSettings is a plain
-    // main-thread singleton; the PTT handler runs on the HaliKey worker thread.
-    // Same store/load pattern as m_cachedMode above.
-    m_cachedIsV14.store(RadioSettings::instance()->halikeyDeviceType() != 1, std::memory_order_release);
-    connect(RadioSettings::instance(), &RadioSettings::halikeyDeviceTypeChanged, this,
-            [this](int type) { m_cachedIsV14.store(type != 1, std::memory_order_release); });
+    // Device-type fan-out: mirror for the V1.4 PTT demux below + the keyer's hold
+    // gate (V1.4 serial needs the bounce gate; MIDI is firmware-debounced and WinMM
+    // burst delivery would make an arrival-time gate drop real elements). RadioSettings
+    // is a plain main-thread singleton; the PTT handler runs on the HaliKey worker
+    // thread — same store/load pattern as m_cachedMode above. setHoldGateEnabled is a
+    // plain atomic write, safe to call directly from the main thread.
+    const bool initIsV14 = (RadioSettings::instance()->halikeyDeviceType() != 1);
+    m_cachedIsV14.store(initIsV14, std::memory_order_release);
+    m_keyer->setHoldGateEnabled(initIsV14);
+    connect(RadioSettings::instance(), &RadioSettings::halikeyDeviceTypeChanged, this, [this](int type) {
+        const bool isV14 = (type != 1);
+        m_cachedIsV14.store(isV14, std::memory_order_release);
+        m_keyer->setHoldGateEnabled(isV14);
+    });
 
     // =========================================================================
     // Keyer → CAT commands + sidetone audio
