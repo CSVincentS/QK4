@@ -3,15 +3,11 @@
 #include <QAudioFormat>
 #include <QDebug>
 #include <QMediaDevices>
-#include <QTimer>
 #include <QtMath>
 #include <algorithm>
 
 SidetoneGenerator::SidetoneGenerator(QObject *parent) : QObject(parent) {
-    // Repeat timer created here (moves with parent via moveToThread)
     // Audio init deferred to start() which runs on the sidetone thread
-    m_repeatTimer = new QTimer(this);
-    m_repeatTimer->setTimerType(Qt::PreciseTimer);
 }
 
 SidetoneGenerator::~SidetoneGenerator() {
@@ -76,7 +72,6 @@ void SidetoneGenerator::start() {
 }
 
 void SidetoneGenerator::stop() {
-    m_repeatTimer->stop();
     if (m_audioSink) {
         m_audioSink->stop();
         delete m_audioSink;
@@ -97,20 +92,11 @@ void SidetoneGenerator::setKeyerSpeed(int wpm) {
     m_keyerWpm.store(qBound(5, wpm, 60), std::memory_order_relaxed);
 }
 
-void SidetoneGenerator::stopElement() {
-    m_currentElement = ElementNone;
-    m_repeatTimer->stop();
-}
-
 void SidetoneGenerator::playSingleDit() {
-    m_currentElement = ElementNone; // No repeat
-    m_repeatTimer->stop();
     playElement(ditDurationMs());
 }
 
 void SidetoneGenerator::playSingleDah() {
-    m_currentElement = ElementNone; // No repeat
-    m_repeatTimer->stop();
     playElement(dahDurationMs());
 }
 

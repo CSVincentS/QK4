@@ -161,11 +161,9 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
             return;
         isDit ? sg->playSingleDit() : sg->playSingleDah();
     });
-    connect(m_keyer, &IambicKeyer::keyingFinished, m_sidetone, [this, sg = m_sidetone]() {
-        if (kpodPlusActive())
-            return;
-        sg->stopElement();
-    });
+    // No keyingFinished → sidetone wiring: each element is written as a complete
+    // PCM block (tone + space) and always plays to completion — there is nothing
+    // to stop when the keyer goes idle.
 
     // =========================================================================
     // HaliKey paddle → keyer (ZERO-LATENCY DirectConnection)
@@ -254,10 +252,8 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
 
     // Stop keyer when HaliKey disconnects (prevents runaway keying
     // if paddle was held when disconnected — Note Off never arrives)
-    connect(m_halikey, &HalikeyDevice::disconnected, this, [this]() {
-        QMetaObject::invokeMethod(m_sidetone, "stopElement", Qt::QueuedConnection);
-        QMetaObject::invokeMethod(m_keyer, "stop", Qt::QueuedConnection);
-    });
+    connect(m_halikey, &HalikeyDevice::disconnected, this,
+            [this]() { QMetaObject::invokeMethod(m_keyer, "stop", Qt::QueuedConnection); });
 
     // =========================================================================
     // KPOD+ keyer-active gate + EP02 keyer data routing

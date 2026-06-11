@@ -62,14 +62,12 @@ class KpodPlusDevice;
 //   IambicKeyer::characterSpace          | KZ space to K4     | keyer -> I/O thread       | QueuedConnection
 //   IambicKeyer::restartAfterPause       | KZP%04d to K4      | keyer -> I/O thread       | QueuedConnection
 //   IambicKeyer::elementStarted          | sidetone dit/dah   | keyer -> sidetone thread  | AutoConnection (Queued)
-//   IambicKeyer::keyingFinished          | sidetone stop      | keyer -> sidetone thread  | AutoConnection (Queued)
 //   HalikeyDevice::ditStateChanged       | keyer setDitPaddle | HaliKey worker -> main    | DirectConnection
 //   HalikeyDevice::dahStateChanged       | keyer setDahPaddle | HaliKey worker -> main    | DirectConnection
 //   HalikeyDevice::pttStateChanged       | V1.4 demux:        | HaliKey worker -> main    | DirectConnection
 //                                        |  CW -> dit paddle  |                           |
 //                                        |  voice -> ptt      |                           |
-//   HalikeyDevice::disconnected          | stop sidetone +    | main -> main              | AutoConnection
-//                                        | stop keyer         |                           |
+//   HalikeyDevice::disconnected          | stop keyer         | main -> main              | AutoConnection
 //   ConnectionController::radioReady     | keyer setEnabled t | main -> keyer thread      | invokeMethod queued
 //   ConnectionController::connection-    | keyer setEnabled f | main -> keyer thread      | invokeMethod queued
 //                       StateChanged     |                    |                           |
