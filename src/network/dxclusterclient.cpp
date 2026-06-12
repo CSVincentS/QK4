@@ -16,6 +16,9 @@ const QRegularExpression
 const QRegularExpression DxClusterClient::s_loginRegex(R"((call\s*(?:sign)?|login|your\s+call\s*(?:sign)?)\s*[:>])",
                                                        QRegularExpression::CaseInsensitiveOption);
 
+// Full ANSI CSI grammar: ESC [ <parameter bytes 0x30-0x3F> <intermediate bytes 0x20-0x2F> <final byte 0x40-0x7E>
+const QRegularExpression DxClusterClient::s_ansiRegex(R"(\x1B\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E])");
+
 DxClusterClient::DxClusterClient(QObject *parent) : QObject(parent), m_socket(new QTcpSocket(this)) {
     connect(m_socket, &QTcpSocket::connected, this, &DxClusterClient::onSocketConnected);
     connect(m_socket, &QTcpSocket::disconnected, this, &DxClusterClient::onSocketDisconnected);
@@ -44,6 +47,18 @@ bool DxClusterClient::parseSpotLine(const QString &line, DxSpot &spot) {
         spot.mode = modeMatch.captured(1).toUpper();
 
     return true;
+}
+
+QString DxClusterClient::sanitizeLine(const QString &raw) {
+    QString s = raw;
+    s.remove(s_ansiRegex);
+    QString out;
+    out.reserve(s.size());
+    for (const QChar c : s) {
+        if (c == u'\t' || (c.unicode() >= 0x20 && c.unicode() != 0x7F))
+            out.append(c);
+    }
+    return out;
 }
 
 void DxClusterClient::connectToHost(const QString &host, quint16 port, const QString &callsign) {
@@ -100,10 +115,15 @@ void DxClusterClient::onReadyRead() {
     }
     qCDebug(netDxCluster) << "onReadyRead, state:" << m_state << "buffer:" << m_receiveBuffer.left(200);
 
-    // Process complete lines
+    // Process complete lines.
+    // WHY sanitizeLine here: one sanitation point feeds both the console and the spot
+    // parser. Some servers append control bytes to spot lines (n7od.pentux.net:7300 sends
+    // "...1545Z\x07\x07" — DXSpider beep flag); trimmed() doesn't strip BEL and the spot
+    // regex's \s*$ anchor doesn't match it, so unsanitized lines render garbage glyphs in
+    // the console AND silently fail to parse as spots.
     int newlinePos;
     while ((newlinePos = m_receiveBuffer.indexOf('\n')) != -1) {
-        QString line = m_receiveBuffer.left(newlinePos).trimmed();
+        QString line = sanitizeLine(m_receiveBuffer.left(newlinePos)).trimmed();
         m_receiveBuffer.remove(0, newlinePos + 1);
 
         if (!line.isEmpty())
