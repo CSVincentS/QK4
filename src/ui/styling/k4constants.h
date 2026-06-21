@@ -229,9 +229,9 @@ constexpr int SliderValueLabelWidth = 40; // Width for percentage value labels
 // =============================================================================
 // Network-Health Sparkline Popup (NetHealthPopup)
 // =============================================================================
-constexpr int ChartPopupContentWidth = 220; // Card content width (excl. shadow margin)
+constexpr int ChartPopupContentWidth = 242; // Card content width (excl. shadow margin)
 constexpr int ChartRowHeight = 46;          // Height of one metric sparkline row
-constexpr int ChartValueColumnWidth = 78;   // Left column: legend label + current value
+constexpr int ChartValueColumnWidth = 100;  // Left column: legend label + current value + scale gutter
 constexpr int ChartLineWidth = 2;           // Sparkline trace stroke width
 constexpr int ChartPlotMargin = 4;          // Inset between a row's plot area and its edges
 constexpr int ChartLegendDotSize = 6;       // Diameter of the series legend dot

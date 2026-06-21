@@ -249,15 +249,17 @@ void NetHealthPopup::drawSparklineRow(QPainter &painter, const QRect &rowRect, c
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(line);
 
-    // --- Scale labels (drawn last, with an opaque knockout so they stay legible over the trace) ---
-    // Left-placed (conventional Y-axis side) + larger bright-neutral font for readability.
+    // --- Scale labels (drawn last) ---
+    // Right-aligned in the gutter between the value column and the plot (clean card background, off
+    // the trace) so they read clearly. Larger bright-neutral font for readability.
     QFont scaleFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeMedium, QFont::Normal);
     QFontMetrics sfm(scaleFont);
     painter.setFont(scaleFont);
-    const int labelX = plot.left() + tickLen + K4Styles::Dimensions::ChartPlotMargin;
+    const int gutterRight = plot.left() - K4Styles::Dimensions::ChartPlotMargin; // just left of the plot/tick
     auto drawScaleLabel = [&](float value, bool atTop) {
         const QString text = QString::number(value, 'f', decimals) + unit;
         const int tw = sfm.horizontalAdvance(text);
+        const int labelX = gutterRight - tw; // right-aligned into the gutter
         const int lineY = static_cast<int>(yForValue(value));
         // Top label sits just below its line; bottom label just above its line — both stay inside.
         const int baselineY = atTop ? lineY + sfm.ascent() : lineY - K4Styles::Dimensions::SeparatorHeight;
