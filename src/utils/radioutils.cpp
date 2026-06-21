@@ -86,6 +86,14 @@ int slTierToFrameSamples(int sl) {
     }
 }
 
+int jitterTargetBytes(int pktBytes) {
+    return pktBytes > 0 ? pktBytes * JITTER_TARGET_PACKETS : 0;
+}
+
+int jitterHighWaterBytes(int pktBytes) {
+    return pktBytes > 0 ? pktBytes * JITTER_HIGH_WATER_PACKETS : 0;
+}
+
 FixedTuneMode fixedTuneModeFromCat(int fxt, int fxa) {
     if (fxt == 0)
         return FixedTuneMode::Track;

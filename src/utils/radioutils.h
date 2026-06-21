@@ -47,6 +47,25 @@ QString buildEqCommand(const QString &prefix, const QVector<int> &bands);
 /// Returns 720 (SL3 default) for out-of-range values.
 int slTierToFrameSamples(int sl);
 
+// --- RX jitter-buffer self-correction watermarks ---------------------------
+// The AudioEngine RX queue can ratchet up a permanent latency backlog after a
+// stall (e.g. PTT mic init / output-device rebuild). These watermarks let the
+// queue trim itself back down. They are expressed as MULTIPLES OF THE CURRENT
+// PACKET SIZE (one decoded K4 SL-bundle) — never fixed milliseconds — so the
+// buffer scales with the operator's chosen SL tier: SL0's 20ms packets get a
+// small buffer, SL7's 120ms packets get a proportionally larger one. A fixed-ms
+// target would sit below one packet at high SL and drop every packet.
+constexpr int JITTER_TARGET_PACKETS = 2;     // trim-to depth after a stall
+constexpr int JITTER_HIGH_WATER_PACKETS = 5; // trigger; must exceed normal jitter (~1 pkt)
+
+/// SL-scaled trim-to depth in bytes for the RX jitter buffer, given the current
+/// decoded packet size in bytes. Returns 0 for non-positive input.
+int jitterTargetBytes(int pktBytes);
+
+/// SL-scaled high-water mark in bytes: once the RX queue exceeds this, it trims
+/// back down to jitterTargetBytes(). Returns 0 for non-positive input.
+int jitterHighWaterBytes(int pktBytes);
+
 // --- K4 panadapter fixed-tune display mode ---------------------------------
 // The K4 encodes the panadapter tuning mode across two CAT params: #FXT
 // (0=track, 1=fixed) and #FXA (0-4). WARNING: Elecraft uses TWO naming

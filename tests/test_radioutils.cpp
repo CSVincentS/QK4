@@ -85,6 +85,28 @@ private slots:
     void testSlTier_outOfRange_negative() { QCOMPARE(RadioUtils::slTierToFrameSamples(-1), 720); }
     void testSlTier_outOfRange_high() { QCOMPARE(RadioUtils::slTierToFrameSamples(8), 720); }
 
+    // RX jitter-buffer watermarks — MUST scale with packet size (the SL bundle), never a fixed ms.
+    // SL0 packet = 1920 bytes (20ms), SL7 packet = 11520 bytes (120ms) at 12kHz stereo Float32.
+    void testJitterTarget_scalesWithPacket() {
+        QCOMPARE(RadioUtils::jitterTargetBytes(1920), 1920 * RadioUtils::JITTER_TARGET_PACKETS);
+        QCOMPARE(RadioUtils::jitterTargetBytes(11520), 11520 * RadioUtils::JITTER_TARGET_PACKETS);
+    }
+    void testJitterHighWater_scalesWithPacket() {
+        QCOMPARE(RadioUtils::jitterHighWaterBytes(1920), 1920 * RadioUtils::JITTER_HIGH_WATER_PACKETS);
+        QCOMPARE(RadioUtils::jitterHighWaterBytes(11520), 11520 * RadioUtils::JITTER_HIGH_WATER_PACKETS);
+    }
+    // The SL7 target must NOT be a fixed ms — it must exceed one SL7 packet, or high SL would drop
+    // every packet. Guards against a fixed-millisecond regression.
+    void testJitterTarget_highSlExceedsOnePacket() {
+        QVERIFY(RadioUtils::jitterTargetBytes(11520) > 11520);
+        QVERIFY(RadioUtils::jitterHighWaterBytes(11520) > RadioUtils::jitterTargetBytes(11520));
+    }
+    void testJitterWatermarks_nonPositiveSafe() {
+        QCOMPARE(RadioUtils::jitterTargetBytes(0), 0);
+        QCOMPARE(RadioUtils::jitterHighWaterBytes(0), 0);
+        QCOMPARE(RadioUtils::jitterTargetBytes(-5), 0);
+    }
+
     // fixedTuneModeFromCat — verified against hardware + K4 command reference 2026-05-28
     // FXT0 = Track (FXA ignored); FXT1: 0=Fixed1,1=Fixed2,2=Slide1,3=Static,4=Slide2
     void testFixedTune_track_fxt0() {

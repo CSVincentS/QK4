@@ -3,6 +3,7 @@
 #include "audio/opusdecoder.h" // NORMALIZE_16BIT constant
 #include "audio/opusencoder.h"
 #include "network/protocol.h" // buildAudioPacket
+#include "utils/radioutils.h" // RX jitter-buffer watermarks
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QDebug>
@@ -74,10 +75,9 @@ AudioEngine::~AudioEngine() {
 }
 
 bool AudioEngine::start() {
-    bool outputOk = setupAudioOutput();
+    bool outputOk = setupAudioOutput(); // also flushes the queue + re-arms prebuffering
 
     if (outputOk) {
-        flushQueue();
         m_feedTimer->start();
     }
 
@@ -167,6 +167,13 @@ bool AudioEngine::setupAudioOutput() {
     // Volume is always 1.0 — actual volume control is in the K4's AG command
     m_audioSink->setVolume(1.0f);
 
+    // WHY: every sink (re)build must re-arm prebuffering and drop any backlog. setupAudioOutput()
+    // is called from start() AND the mid-stream rebuild paths (onSystemDefaultOutputChanged,
+    // setOutputDevice); without this, a rebuild inherits the queue that piled up while the sink was
+    // down (e.g. on the PTT-edge device churn) and that latency becomes permanent. Single source of
+    // truth here so no caller can forget. (flushQueue resets m_queueBytes + m_prebuffering.)
+    flushQueue();
+
     return true;
 }
 
@@ -213,13 +220,27 @@ void AudioEngine::enqueueAudio(const QByteArray &pcmData) {
 
     QMutexLocker lock(&m_queueMutex);
 
-    // Overflow protection: drop oldest packets if queue exceeds 1s of audio
-    while (m_queueBytes + pcmData.size() > MAX_QUEUE_BYTES && !m_audioQueue.isEmpty()) {
+    // Self-correcting jitter buffer: if a stall (PTT mic init, output-device rebuild, network
+    // burst) ratcheted the queue up past the high-water mark, drop the OLDEST (most-delayed) audio
+    // back to the target depth so latency recovers instead of staying permanently high. Watermarks
+    // scale with the current packet size (one decoded K4 SL-bundle) so the buffer is proportional
+    // to the chosen SL tier — see RadioUtils::jitter*Bytes. One small forward skip; newest audio is
+    // kept playing.
+    const int pktBytes = pcmData.size();
+    if (m_queueBytes + pktBytes > RadioUtils::jitterHighWaterBytes(pktBytes)) {
+        const int target = RadioUtils::jitterTargetBytes(pktBytes);
+        while (m_queueBytes > target && !m_audioQueue.isEmpty()) {
+            m_queueBytes -= m_audioQueue.dequeue().size();
+        }
+    }
+
+    // Absolute backstop: never let the queue exceed 1s of audio regardless of packet size.
+    while (m_queueBytes + pktBytes > MAX_QUEUE_BYTES && !m_audioQueue.isEmpty()) {
         m_queueBytes -= m_audioQueue.dequeue().size();
     }
 
     m_audioQueue.enqueue(pcmData);
-    m_queueBytes += pcmData.size();
+    m_queueBytes += pktBytes;
 }
 
 void AudioEngine::flushQueue() {
