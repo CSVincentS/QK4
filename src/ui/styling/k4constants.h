@@ -24,6 +24,7 @@ namespace Colors {
 constexpr const char *Background = "#1a1a1a";
 constexpr const char *DarkBackground = "#0d0d0d";
 constexpr const char *PopupBackground = "#1e1e1e";
+constexpr const char *SpectrumBackground = "#141414"; // Panadapter GPU clear color (spectrum bg)
 constexpr const char *DisabledBackground = "#444444"; // Disabled indicator backgrounds
 
 // App Accent Color
