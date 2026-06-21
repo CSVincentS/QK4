@@ -107,6 +107,13 @@ QString compactButton();
 QString sidePanelButton();
 
 /**
+ * @brief Active/engaged state for a side-panel icon button (amber-accent highlight).
+ * Swapped in via setStyleSheet while the button's target is open (e.g. the globe icon
+ * while the Server Manager is showing), then swapped back to sidePanelButton().
+ */
+QString sidePanelButtonActive();
+
+/**
  * @brief Light gradient button for TX/PF function buttons.
  * Uses lighter grey gradient with hover border change only (no hover gradient).
  */
