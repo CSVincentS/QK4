@@ -1,12 +1,12 @@
 #include "ui/widgets/nethealthwidget.h"
 #include "ui/styling/k4constants.h"
-#include <QLabel>
+#include "ui/widgets/nethealthpopup.h"
+#include <QEvent>
 #include <QPainter>
-#include <QScreen>
-#include <QVBoxLayout>
 
 NetHealthWidget::NetHealthWidget(NetworkMetrics *metrics, QWidget *parent) : QWidget(parent), m_metrics(metrics) {
     setFixedSize(K4Styles::Dimensions::SmallIconSize, 16);
+    setCursor(Qt::PointingHandCursor); // hint: click to open the metrics popup
     connect(m_metrics, &NetworkMetrics::healthTierChanged, this, &NetHealthWidget::onHealthTierChanged);
 }
 
@@ -73,101 +73,55 @@ void NetHealthWidget::paintEvent(QPaintEvent *) {
     }
 }
 
-void NetHealthWidget::enterEvent(QEnterEvent *event) {
-    QWidget::enterEvent(event);
-    showMetricsPopup();
+void NetHealthWidget::mousePressEvent(QMouseEvent *event) {
+    Q_UNUSED(event)
+    // Click-toggle: click the LED to open/close the live metrics popup (predictable, and avoids
+    // the hover/leave-tracking that orphaned the popup across fullscreen transitions).
+    toggleMetricsPopup();
 }
 
-void NetHealthWidget::leaveEvent(QEvent *event) {
-    QWidget::leaveEvent(event);
-    hideMetricsPopup();
+void NetHealthWidget::toggleMetricsPopup() {
+    if (m_popup)
+        hideMetricsPopup();
+    else
+        showMetricsPopup();
 }
 
 void NetHealthWidget::showMetricsPopup() {
     if (m_popup)
         return;
 
-    m_popup = new QWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint);
-    m_popup->setAttribute(Qt::WA_ShowWithoutActivating);
-    m_popup->setStyleSheet(QString("background-color: %1; border: 1px solid %2;")
-                               .arg(K4Styles::Colors::PopupBackground)
-                               .arg(K4Styles::Colors::PanelBorder));
-
-    auto *layout = new QVBoxLayout(m_popup);
-    layout->setContentsMargins(8, 6, 8, 6);
-    layout->setSpacing(2);
-
-    QString labelStyle = QString("color: %1; font-size: %2px; border: none;")
-                             .arg(K4Styles::Colors::TextGray)
-                             .arg(K4Styles::Dimensions::FontSizeMedium);
-    QString valueStyle = QString("color: %1; font-size: %2px; border: none;")
-                             .arg(K4Styles::Colors::TextWhite)
-                             .arg(K4Styles::Dimensions::FontSizeMedium);
-
-    const bool connected = m_metrics->rttCurrent() >= 0;
-
-    auto *rttLabel = new QLabel(m_popup);
-    if (connected) {
-        rttLabel->setText(QString("<span style='%1'>RTT </span><span style='%2'>%3ms</span>")
-                              .arg(labelStyle, valueStyle)
-                              .arg(m_metrics->rttCurrent()));
-    } else {
-        rttLabel->setText(
-            QString("<span style='%1'>RTT </span><span style='%2'>--</span>").arg(labelStyle, valueStyle));
-    }
-    rttLabel->setTextFormat(Qt::RichText);
-    layout->addWidget(rttLabel);
-
-    auto *jitLabel = new QLabel(m_popup);
-    if (connected) {
-        jitLabel->setText(QString("<span style='%1'>JIT </span><span style='%2'>%3</span>")
-                              .arg(labelStyle, valueStyle)
-                              .arg(m_metrics->rttJitter(), 0, 'f', 1));
-    } else {
-        jitLabel->setText(
-            QString("<span style='%1'>JIT </span><span style='%2'>--</span>").arg(labelStyle, valueStyle));
-    }
-    jitLabel->setTextFormat(Qt::RichText);
-    layout->addWidget(jitLabel);
-
-    auto *bufLabel = new QLabel(m_popup);
-    int bufMs = static_cast<int>(m_metrics->bufferBytes() / 96.0);
-    if (connected) {
-        bufLabel->setText(
-            QString("<span style='%1'>BUF </span><span style='%2'>%3ms</span>").arg(labelStyle, valueStyle).arg(bufMs));
-    } else {
-        bufLabel->setText(
-            QString("<span style='%1'>BUF </span><span style='%2'>--</span>").arg(labelStyle, valueStyle));
-    }
-    bufLabel->setTextFormat(Qt::RichText);
-    layout->addWidget(bufLabel);
-
-    m_popup->adjustSize();
-
-    // Position above the bar, 4px gap — clamped to screen bounds
-    QPoint globalPos = mapToGlobal(QPoint(0, 0));
-    QRect screen = this->screen()->availableGeometry();
-    int popupW = m_popup->width();
-    int popupH = m_popup->height();
-
-    int popupX = globalPos.x() - (popupW - width()) / 2;
-    int popupY = globalPos.y() - popupH - 4;
-
-    // Clamp: if above top edge, show below the widget instead
-    if (popupY < screen.top())
-        popupY = globalPos.y() + height() + 4;
-
-    // Clamp: keep within left/right screen edges
-    popupX = qBound(screen.left(), popupX, screen.right() - popupW);
-
-    m_popup->move(popupX, popupY);
+    // Parent to this widget so the popup can never outlive it; clicking the popup dismisses it.
+    m_popup = new NetHealthPopup(m_metrics, this);
+    connect(m_popup, &NetHealthPopup::dismissed, this, &NetHealthWidget::hideMetricsPopup);
+    m_popup->updatePosition(this); // reposition every open so it tracks the LED's current location
     m_popup->show();
+    // Dismiss the popup if the app window moves/resizes/changes state while it's open.
+    if (window())
+        window()->installEventFilter(this);
 }
 
 void NetHealthWidget::hideMetricsPopup() {
     if (m_popup) {
+        if (window())
+            window()->removeEventFilter(this);
         m_popup->hide();
         m_popup->deleteLater();
         m_popup = nullptr;
     }
+}
+
+bool NetHealthWidget::eventFilter(QObject *watched, QEvent *event) {
+    if (m_popup && watched == window()) {
+        switch (event->type()) {
+        case QEvent::Move:
+        case QEvent::Resize:
+        case QEvent::WindowStateChange: // maximize / minimize / restore / fullscreen
+            hideMetricsPopup();
+            break;
+        default:
+            break;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }

@@ -117,6 +117,12 @@ constexpr const char *ErrorBgDark = "#331111";  // Muted dark-red background for
 // clearly against the panadapter's amber passband fill. Used by FilterIndicatorWidget only.
 constexpr const char *FilterIndicatorGold = "#FFD040";
 
+// Network-health sparkline series colors (NetHealthPopup). RTT reuses VfoACyan, jitter reuses
+// AccentAmber; buffer gets a distinct soft green so all three traces read apart on the dark card.
+constexpr const char *ChartSeriesRtt = VfoACyan;        // RTT trace (cyan)
+constexpr const char *ChartSeriesJitter = AccentAmber;  // jitter trace (amber)
+constexpr const char *ChartSeriesBuffer = MeterIdLight; // buffer trace (soft sage green)
+
 // Band-plan overlay colors. Mode-segment fills (rendered translucent over the spectrum)
 // plus the band-name header row.
 constexpr const char *BandPlanCw = "#CB3B45";     // CW / Morse (crimson red)
@@ -219,6 +225,18 @@ constexpr int SliderBorderRadius = 3;     // Groove border radius
 constexpr int SliderHandleRadius = 8;     // Handle border radius (half of width)
 constexpr int SliderMinHeight = 20;       // Minimum widget height to prevent handle clipping
 constexpr int SliderValueLabelWidth = 40; // Width for percentage value labels
+
+// =============================================================================
+// Network-Health Sparkline Popup (NetHealthPopup)
+// =============================================================================
+constexpr int ChartPopupContentWidth = 220; // Card content width (excl. shadow margin)
+constexpr int ChartRowHeight = 46;          // Height of one metric sparkline row
+constexpr int ChartValueColumnWidth = 78;   // Left column: legend label + current value
+constexpr int ChartLineWidth = 2;           // Sparkline trace stroke width
+constexpr int ChartPlotMargin = 4;          // Inset between a row's plot area and its edges
+constexpr int ChartLegendDotSize = 6;       // Diameter of the series legend dot
+constexpr int ChartPopupGap = 4;            // Gap between the popup card and its anchor widget
+constexpr int ChartScaleTickLen = 5;        // Length of the left-edge scale tick marks
 
 // =============================================================================
 // VFO Indicator Dimensions
