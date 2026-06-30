@@ -1095,27 +1095,45 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 }
 
 void MainWindow::showRadioManager() {
-    RadioManagerDialog dialog(this);
-    connect(&dialog, &RadioManagerDialog::connectRequested, this, &MainWindow::connectToRadio);
-    connect(&dialog, &RadioManagerDialog::disconnectRequested, this, [this]() {
+    // Toggle: the globe icon opens the Server Manager and a second click closes it. The dialog is
+    // shown modeless (not exec()) so the icon stays clickable while it's open.
+    if (m_radioManager) {
+        m_radioManager->reject(); // fires finished() → teardown below
+        return;
+    }
+
+    m_radioManager = new RadioManagerDialog(this);
+    connect(m_radioManager, &RadioManagerDialog::connectRequested, this, &MainWindow::connectToRadio);
+    connect(m_radioManager, &RadioManagerDialog::disconnectRequested, this, [this]() {
         // TcpClient::disconnectFromHost() sends RRN; automatically
         m_connectionController->disconnectFromRadio();
     });
 
     // Send SL live if changed while connected (K4 does not echo SL, so update optimistically)
-    connect(&dialog, &RadioManagerDialog::streamingLatencyChanged, this, [this](int tier) {
+    connect(m_radioManager, &RadioManagerDialog::streamingLatencyChanged, this, [this](int tier) {
         if (m_connectionController->isConnected()) {
             m_connectionController->sendCAT(QString("SL%1;").arg(tier));
             m_radioState->parseCATCommand(QString("SL%1;").arg(tier));
         }
     });
 
+    // Single teardown path for every close (Connect/Disconnect accept(), Cancel/icon reject()):
+    // drop the highlight, delete the dialog, and clear the pointer so the next click reopens.
+    connect(m_radioManager, &QDialog::finished, this, [this](int) {
+        m_sideControlPanel->setServerManagerActive(false);
+        m_radioManager->deleteLater();
+        m_radioManager = nullptr;
+    });
+
     // Set the connected host so dialog can show "Disconnect" for active connection
     if (m_connectionController->isConnected()) {
-        dialog.setConnectedHost(m_connectionController->currentRadio().host);
+        m_radioManager->setConnectedHost(m_connectionController->currentRadio().host);
     }
 
-    dialog.exec();
+    m_sideControlPanel->setServerManagerActive(true);
+    m_radioManager->show();
+    m_radioManager->raise();
+    m_radioManager->activateWindow();
 }
 
 void MainWindow::connectToRadio(const RadioEntry &radio) {

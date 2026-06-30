@@ -49,6 +49,7 @@ class CatServer;
 class OptionsDialog;
 class NotificationWidget;
 class VfoRowWidget;
+class RadioManagerDialog;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -157,6 +158,10 @@ private:
     QLabel *m_voxLabel;
     QLabel *m_qskLabel;
     QLabel *m_txAntennaLabel;
+
+    // Server Manager (RadioManagerDialog) shown modeless + toggled by the side-panel globe icon;
+    // null when closed (see showRadioManager()).
+    RadioManagerDialog *m_radioManager = nullptr;
 
     // Control panels (L-shaped layout)
     SideControlPanel *m_sideControlPanel;

@@ -62,14 +62,12 @@ class KpodPlusDevice;
 //   IambicKeyer::characterSpace          | KZ space to K4     | keyer -> I/O thread       | QueuedConnection
 //   IambicKeyer::restartAfterPause       | KZP%04d to K4      | keyer -> I/O thread       | QueuedConnection
 //   IambicKeyer::elementStarted          | sidetone dit/dah   | keyer -> sidetone thread  | AutoConnection (Queued)
-//   IambicKeyer::keyingFinished          | sidetone stop      | keyer -> sidetone thread  | AutoConnection (Queued)
 //   HalikeyDevice::ditStateChanged       | keyer setDitPaddle | HaliKey worker -> main    | DirectConnection
 //   HalikeyDevice::dahStateChanged       | keyer setDahPaddle | HaliKey worker -> main    | DirectConnection
 //   HalikeyDevice::pttStateChanged       | V1.4 demux:        | HaliKey worker -> main    | DirectConnection
 //                                        |  CW -> dit paddle  |                           |
 //                                        |  voice -> ptt      |                           |
-//   HalikeyDevice::disconnected          | stop sidetone +    | main -> main              | AutoConnection
-//                                        | stop keyer         |                           |
+//   HalikeyDevice::disconnected          | stop keyer         | main -> main              | AutoConnection
 //   ConnectionController::radioReady     | keyer setEnabled t | main -> keyer thread      | invokeMethod queued
 //   ConnectionController::connection-    | keyer setEnabled f | main -> keyer thread      | invokeMethod queued
 //                       StateChanged     |                    |                           |
@@ -106,6 +104,12 @@ class KpodPlusDevice;
 //     acquire ordering. Avoids a data race against parseCATCommand writing
 //     the non-atomic subsystem field.
 //
+//   std::atomic<bool> m_cachedIsV14
+//     Mirror of RadioSettings::halikeyDeviceType() != 1. Stored on the main
+//     thread (ctor + halikeyDeviceTypeChanged, release); read on the HaliKey
+//     worker thread by the PTT DirectConnection handler (acquire). Replaces
+//     a racy worker-thread read of the plain int on the settings singleton.
+//
 //   enum V14PttDest { V14PttNone, V14PttDitPaddle, V14PttPtt };
 //   std::atomic<int> m_v14PttDestination
 //     V1.4 firmware multiplexes paddle-dit and foot-pedal on a single CTS
@@ -125,7 +129,8 @@ class KpodPlusDevice;
 //      worker thread. Anything else adds latency to CW keying.
 //   2. m_cachedMode store happens on the main thread (AutoConnection
 //      from RadioState::modeChanged resolves to Direct); load happens on
-//      the HaliKey worker thread with acquire ordering.
+//      the HaliKey worker thread with acquire ordering. m_cachedIsV14
+//      follows the same rule.
 //   3. m_v14PttDestination's CAS-based cleanup must remain so the
 //      mode-change-during-press path doesn't double-release with the
 //      falling-edge path.
@@ -204,6 +209,10 @@ private:
 
     // See "State moved from HardwareController" above for invariants.
     std::atomic<int> m_cachedMode{0};
+
+    // true = V1.4 serial (deviceType 0), false = MIDI (deviceType 1).
+    // Main-thread release store, HaliKey-worker acquire load — see doc block.
+    std::atomic<bool> m_cachedIsV14{true};
 
     enum V14PttDest { V14PttNone = 0, V14PttDitPaddle = 1, V14PttPtt = 2 };
     std::atomic<int> m_v14PttDestination{V14PttNone};

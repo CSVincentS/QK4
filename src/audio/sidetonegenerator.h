@@ -5,15 +5,16 @@
 #include <QAudioSink>
 #include <QIODevice>
 #include <QByteArray>
+#include <QMediaDevices>
 #include <QtMath>
 #include <atomic>
 
-class QTimer;
-
 /**
  * @brief Local CW sidetone synth. Lives on its own thread (HardwareController's m_sidetoneThread)
- *        so audio output never blocks the keyer or UI. `playSingleDit/Dah` are used when HaliKey
- *        runs the keyer itself (MIDI hardware); otherwise the IambicKeyer drives element timing.
+ *        so audio output never blocks the keyer or UI. IambicKeyer drives `playSingleDit/Dah` per
+ *        element for both HaliKey transports (V1.4 serial and MIDI); when the KPOD+ owns the CW
+ *        path, CwController suppresses this local sidetone entirely. Each element is written as a
+ *        complete PCM block (tone + inter-element space) and always plays to completion.
  *        All public slots are Q_INVOKABLE and expected to be posted via QueuedConnection.
  */
 class SidetoneGenerator : public QObject {
@@ -31,9 +32,7 @@ public:
     Q_INVOKABLE void stop();
     Q_INVOKABLE void setOutputDevice(const QString &deviceId);
 
-    Q_INVOKABLE void stopElement(); // Call when paddle is released
-
-    // Play a single element without repeat (MIDI interface — K4 keyer handles repeat)
+    // Play a single element (one per IambicKeyer::elementStarted)
     Q_INVOKABLE void playSingleDit();
     Q_INVOKABLE void playSingleDah();
 
@@ -44,18 +43,21 @@ private:
     void playElement(int durationMs);
     int ditDurationMs() const;
     int dahDurationMs() const;
-
-    enum Element { ElementNone, ElementDit, ElementDah };
+    // WHY: when the user leaves the speaker on "System Default" (empty device id),
+    // follow the OS default live instead of caching it for the session — same
+    // pattern as AudioEngine. Without this, a default-device change (or hot-unplug)
+    // left the sink on a stale/dead device and the sidetone went silent.
+    void onSystemDefaultOutputChanged();
 
     QAudioSink *m_audioSink = nullptr;
     QIODevice *m_pushDevice = nullptr;
-    QTimer *m_repeatTimer = nullptr;
     QString m_selectedOutputDeviceId;
+    QString m_activeOutputDeviceId;          // id of the device the sink was actually opened on
+    QMediaDevices *m_mediaDevices = nullptr; // OS device/default-change monitor
     std::atomic<int> m_frequency{600};
     std::atomic<float> m_volume{0.3f};
     std::atomic<int> m_keyerWpm{20};
     double m_phase = 0.0;
-    Element m_currentElement = ElementNone;
 
     // Pre-allocated PCM scratch buffer. Worst case is 5 WPM dah (720 ms tone +
     // 240 ms inter-element space) at 48 kHz × 2 bytes = ~92 kB. Sized to

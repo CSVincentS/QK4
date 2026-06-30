@@ -65,6 +65,9 @@ public:
     // Set which receiver is active for filter controls
     void setActiveReceiver(bool isSubRx);
 
+    // Highlight the globe (Connect) icon while the Server Manager dialog is open.
+    void setServerManagerActive(bool active);
+
     // Reset all displayed values (knobs, readings) to idle state on K4
     // disconnect so stale data doesn't linger on-screen.
     void resetToDefaults();

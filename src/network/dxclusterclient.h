@@ -44,6 +44,13 @@ public:
     // Static for testability — parses a single DX spot line
     static bool parseSpotLine(const QString &line, DxSpot &spot);
 
+    // Static for testability — strips ANSI CSI escape sequences and non-printable
+    // C0/DEL control characters (tab preserved) from a received line. Cluster servers
+    // emit BEL with spots (DXSpider beep flag — verified against n7od.pentux.net:7300,
+    // which appends two 0x07 bytes to every spot) and can emit ANSI colors (set/ansi);
+    // both render as garbage in the console and break the \s*$-anchored spot regex.
+    static QString sanitizeLine(const QString &raw);
+
 public slots:
     void connectToHost(const QString &host, quint16 port, const QString &callsign);
     void disconnectFromHost();
@@ -73,6 +80,7 @@ private:
     static const QRegularExpression s_spotRegex;
     static const QRegularExpression s_modeRegex;
     static const QRegularExpression s_loginRegex;
+    static const QRegularExpression s_ansiRegex;
 };
 
 #endif // DXCLUSTERCLIENT_H

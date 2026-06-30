@@ -424,6 +424,36 @@ QString sidePanelButton() {
         .arg(Colors::BorderPressed);
 }
 
+QString sidePanelButtonActive() {
+    // Engaged state: amber-accent border + brighter background so the icon reads as "open".
+    return QString(R"(
+        QPushButton {
+            background: %1;
+            color: %2;
+            border: %3px solid %4;
+            border-radius: %5px;
+            font-size: %6px;
+            font-weight: bold;
+            padding: 2px 4px;
+        }
+        QPushButton:hover {
+            background: %1;
+            border: %3px solid %4;
+        }
+        QPushButton:pressed {
+            background: %7;
+            border: %3px solid %4;
+        }
+    )")
+        .arg(gradientCss(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom))
+        .arg(Colors::TextWhite)
+        .arg(Dimensions::BorderWidth)
+        .arg(Colors::AccentAmber)
+        .arg(Dimensions::BorderRadius)
+        .arg(Dimensions::FontSizeNormal)
+        .arg(gradientCssReversed(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom));
+}
+
 QString sidePanelButtonLight() {
     return QString(R"(
         QPushButton {

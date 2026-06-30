@@ -18,6 +18,15 @@ NetworkMetrics::NetworkMetrics(QObject *parent) : QObject(parent) {
     m_summaryTimer = new QTimer(this);
     m_summaryTimer->setInterval(kSummaryIntervalMs);
     connect(m_summaryTimer, &QTimer::timeout, this, &NetworkMetrics::onSummaryTimer);
+    m_clock.start();
+}
+
+void NetworkMetrics::pushHistory(std::deque<TimedSample> &history, float value) {
+    const qint64 now = m_clock.elapsed();
+    history.push_back({now, value});
+    while (!history.empty() &&
+           (now - history.front().tMs > HISTORY_WINDOW_MS || static_cast<int>(history.size()) > HISTORY_MAX_SAMPLES))
+        history.pop_front();
 }
 
 void NetworkMetrics::onLatencyChanged(int ms) {
@@ -27,6 +36,9 @@ void NetworkMetrics::onLatencyChanged(int ms) {
     if (static_cast<int>(m_rttSamples.size()) > RTT_WINDOW)
         m_rttSamples.pop_front();
     updateRttStats();
+    // Trail RTT and the freshly recomputed jitter for the sparkline popup.
+    pushHistory(m_rttHistory, static_cast<float>(ms));
+    pushHistory(m_jitterHistory, static_cast<float>(m_rttJitter));
 }
 
 void NetworkMetrics::updateRttStats() {
@@ -70,6 +82,8 @@ void NetworkMetrics::onBufferStatus(int queueBytes, int maxBytes, bool prebuffer
     m_bufferBytes = queueBytes;
     m_bufferMaxBytes = maxBytes;
     m_prebuffering = prebuffering;
+    // 96 bytes = 1 ms of decoded audio (12 kHz stereo Float32); trail buffer depth in ms.
+    pushHistory(m_bufferHistory, static_cast<float>(queueBytes) / 96.0f);
 }
 
 void NetworkMetrics::onConnectionStateChanged(bool connected) {
@@ -78,6 +92,9 @@ void NetworkMetrics::onConnectionStateChanged(bool connected) {
         m_summaryTimer->start();
         // Reset state for new connection
         m_rttSamples.clear();
+        m_rttHistory.clear();
+        m_jitterHistory.clear();
+        m_bufferHistory.clear();
         m_rttCurrent = -1;
         m_rttAvg = 0.0;
         m_rttJitter = 0.0;

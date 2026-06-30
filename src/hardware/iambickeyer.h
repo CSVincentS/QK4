@@ -39,6 +39,15 @@ public:
     void setDitPaddle(bool pressed);
     void setDahPaddle(bool pressed);
 
+    // Enable/disable the kMinHoldNs release gate. Plain atomic write — callable from
+    // any thread, like the paddle setters above (NOT a queued slot: the flag is read
+    // on the HaliKey worker thread inside setDit/DahPaddle, so a queued hop to the
+    // keyer thread would add delay without adding safety). V1.4 serial: enabled
+    // (contact-bounce signatures ≤4 ms, see docs/halikey-cw-trace.md). MIDI: disabled
+    // — events are firmware-debounced, and WinMM delivers press+release bursts
+    // back-to-back, so an arrival-time hold gate would drop real elements.
+    void setHoldGateEnabled(bool enabled);
+
     // Emergency stop (disconnect, etc.)
     Q_INVOKABLE void stop();
 
@@ -71,10 +80,17 @@ private:
     int m_ditMs = 60;        // 1200 / WPM
     QElapsedTimer m_idleSince;
 
-    // Free-running monotonic clock used to measure paddle-press hold durations. Started in the
-    // constructor; never reset. Read concurrently from the HaliKey worker thread (in setDit/DahPaddle)
-    // — QElapsedTimer's methods are reentrant per Qt docs.
+    // Free-running monotonic clock used to measure paddle-press hold durations and as the
+    // timebase for the element deadline grid. Started in the constructor; never reset. Read
+    // concurrently from the HaliKey worker thread (in setDit/DahPaddle) — QElapsedTimer's
+    // methods are reentrant per Qt docs.
     QElapsedTimer m_pressClock;
+
+    // Absolute next-element deadline (ns on m_pressClock's timebase). Keyer-thread-only:
+    // written/read exclusively in enterElement(). Arming each element against this grid
+    // keeps per-element timer overshoot from accumulating into tempo drift; the Idle→element
+    // transition re-anchors it, so goIdle()/stop() need no reset.
+    qint64 m_nextDeadlineNs = 0;
 
     // Physical paddle state — written from HaliKey thread via DirectConnection,
     // read from keyer thread's timer. Atomics eliminate cross-thread queue delay
@@ -98,8 +114,12 @@ private:
     // Minimum-hold threshold for a press to count as "real" and keep its latch on release.
     // Anything shorter is treated as paddle bounce or accidental graze (the bounce signatures
     // captured in docs/halikey-cw-trace.md were all ≤ 4ms hold; comfortably below any deliberate
-    // tap at practical WPM rates).
+    // tap at practical WPM rates). V1.4-serial-only: the gate measures ARRIVAL-time spacing,
+    // which equals contact timing for the locally-polled serial worker but not for MIDI, where
+    // WinMM burst delivery can compress a real tap below the threshold. CwController disables
+    // it for the MIDI transport via setHoldGateEnabled(false).
     static constexpr qint64 kMinHoldNs = 8'000'000; // 8 ms
+    std::atomic<bool> m_holdGateEnabled{true};
 };
 
 #endif // IAMBICKEYER_H

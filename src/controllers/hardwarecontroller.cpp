@@ -138,7 +138,10 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     m_sidetoneThread = new QThread(this);
     m_sidetoneThread->setObjectName("Sidetone");
     m_sidetoneGenerator->moveToThread(m_sidetoneThread);
-    m_sidetoneThread->start();
+    // WHY HighPriority: sidetone shares the real-time CW perception path with the keyer
+    // thread (also HighPriority); at default priority the OS could preempt the per-element
+    // synthesis + sink write under load, adding audible onset jitter.
+    m_sidetoneThread->start(QThread::HighPriority);
     QMetaObject::invokeMethod(m_sidetoneGenerator, "start", Qt::QueuedConnection);
 
     // Set sidetone to same output device as AudioEngine

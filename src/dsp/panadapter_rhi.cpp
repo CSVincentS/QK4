@@ -912,9 +912,9 @@ void PanadapterRhiWidget::createPipelines() {
 }
 
 void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
-    // Always clear to black even if not initialized (prevents red/garbage showing)
+    // Always clear to the spectrum background even if not initialized (prevents red/garbage)
     if (!m_rhiInitialized) {
-        cb->beginPass(renderTarget(), Qt::black, {1.0f, 0}, nullptr);
+        cb->beginPass(renderTarget(), QColor(K4Styles::Colors::SpectrumBackground), {1.0f, 0}, nullptr);
         cb->endPass();
         return;
     }
@@ -923,7 +923,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
     if (!m_pipelinesCreated) {
         createPipelines();
         if (!m_pipelinesCreated) {
-            cb->beginPass(renderTarget(), Qt::black, {1.0f, 0}, nullptr);
+            cb->beginPass(renderTarget(), QColor(K4Styles::Colors::SpectrumBackground), {1.0f, 0}, nullptr);
             cb->endPass();
             return;
         }
@@ -934,6 +934,15 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
     const float h = outputSize.height();
     const float spectrumHeight = h * m_spectrumRatio;
     const float waterfallHeight = h - spectrumHeight;
+
+    // WHY: when the band-plan strip is shown it occupies the top kTotalH logical px of the
+    // spectrum. Stop the per-VFO overlays (passband fills, center/TX markers, RTTY dashes) at
+    // its lower edge so they read as bounded by the banner instead of bleeding under the
+    // translucent strip and looking clipped. kTotalH is logical; scale to the physical render
+    // surface. Banner off -> overlayTop is 0 and the overlays span the full spectrum as before.
+    const bool bandPlanActive = m_bandPlanVisible && !m_bandPlanSegments.isEmpty();
+    const float overlayTop =
+        bandPlanActive ? static_cast<float>(BandPlanOverlay::kTotalH) * static_cast<float>(devicePixelRatioF()) : 0.0f;
 
     QRhiResourceUpdateBatch *rub = m_rhi->nextResourceUpdateBatch();
 
@@ -1037,8 +1046,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 
     cb->resourceUpdate(rub);
 
-    // Begin render pass
-    cb->beginPass(renderTarget(), QColor::fromRgbF(0.08f, 0.08f, 0.08f, 1.0f), {1.0f, 0}, nullptr);
+    // Begin render pass (clear color = the spectrum background; see K4Styles::Colors)
+    cb->beginPass(renderTarget(), QColor(K4Styles::Colors::SpectrumBackground), {1.0f, 0}, nullptr);
 
     // Draw waterfall (bottom portion)
     if (m_waterfallPipeline) {
@@ -1056,21 +1065,24 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 
         QVector<float> gridVerts;
 
-        // Horizontal lines (dB scale) - 8 divisions in spectrum area
-        for (int i = 1; i < 8; ++i) {
-            float y = spectrumHeight * i / 8.0f;
-            gridVerts << 0.0f << y << w << y;
-        }
+        // WHY: Fixed-pixel grid cells. The grid is a visual reference (graph-paper), decoupled from
+        // both the frequency labels (which snap to round dial values) and the dB/S-meter scale.
+        // Cells keep a constant VISIBLE size: spacing is a logical px constant scaled by the device
+        // pixel ratio, so the number of cells changes with window size / spectrum-waterfall ratio
+        // while each cell stays the same size. The trailing partial cell at the top/right is normal.
+        const float dpr = static_cast<float>(devicePixelRatioF());
+        const float cellW = PanadapterConstants::GridCellWidthPx * dpr;
+        const float cellH = PanadapterConstants::GridCellHeightPx * dpr;
 
-        // WHY: Vertical grid lines are decoupled from frequency labels — the grid is a
-        // visual reference for amplitude/position, not a frequency readout. Labels still
-        // snap to round dial values via calculateGridInterval(); the grid stays evenly
-        // spaced so cell density is consistent across all spans and modes.
-        constexpr int kVerticalGridCells = 16;
-        for (int i = 1; i < kVerticalGridCells; ++i) {
-            float x = w * static_cast<float>(i) / static_cast<float>(kVerticalGridCells);
-            gridVerts << x << 0.0f << x << spectrumHeight;
-        }
+        // Horizontal lines every cellH up the spectrum area
+        if (cellH > 0.0f)
+            for (float y = cellH; y < spectrumHeight; y += cellH)
+                gridVerts << 0.0f << y << w << y;
+
+        // Vertical lines every cellW across the width
+        if (cellW > 0.0f)
+            for (float x = cellW; x < w; x += cellW)
+                gridVerts << x << 0.0f << x << spectrumHeight;
 
         QRhiResourceUpdateBatch *gridRub = m_rhi->nextResourceUpdateBatch();
         gridRub->updateDynamicBuffer(m_overlayVbo.get(), 0, gridVerts.size() * sizeof(float), gridVerts.constData());
@@ -1162,8 +1174,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             secX2 = qBound(0.0f, secX2, w);
 
             if (secX2 > secX1) {
-                QVector<float> secQuadVerts = {
-                    secX1, 0, secX2, 0, secX2, spectrumHeight, secX1, 0, secX2, spectrumHeight, secX1, spectrumHeight};
+                QVector<float> secQuadVerts = {secX1, overlayTop, secX2, overlayTop,     secX2, spectrumHeight,
+                                               secX1, overlayTop, secX2, spectrumHeight, secX1, spectrumHeight};
 
                 QRhiResourceUpdateBatch *secPbRub = m_rhi->nextResourceUpdateBatch();
                 secPbRub->updateDynamicBuffer(m_secondaryPassbandVbo.get(), 0, secQuadVerts.size() * sizeof(float),
@@ -1204,13 +1216,13 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             if (secMarkerX >= 0 && secMarkerX <= w) {
                 float markerWidth = PanadapterConstants::MarkerLineWidth;
                 QVector<float> secMarkerVerts = {secMarkerX,
-                                                 0.0f,
+                                                 overlayTop,
                                                  secMarkerX + markerWidth,
-                                                 0.0f,
+                                                 overlayTop,
                                                  secMarkerX + markerWidth,
                                                  spectrumHeight,
                                                  secMarkerX,
-                                                 0.0f,
+                                                 overlayTop,
                                                  secMarkerX + markerWidth,
                                                  spectrumHeight,
                                                  secMarkerX,
@@ -1258,7 +1270,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                         return;
 
                     QVector<float> verts;
-                    for (float y = 0.0f; y < spectrumHeight; y += stride) {
+                    for (float y = overlayTop; y < spectrumHeight; y += stride) {
                         float yEnd = qMin(y + dashLen, spectrumHeight);
                         verts << toneX << y << toneX + lineWidth << y << toneX + lineWidth << yEnd << toneX << y
                               << toneX + lineWidth << yEnd << toneX << yEnd;
@@ -1359,8 +1371,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             if (x2 > x1) {
                 // Draw passband quad - use dedicated VBO, uniform buffer, and SRB
                 // Use spectrumHeight not h - passband should only appear in spectrum area, not waterfall
-                QVector<float> quadVerts = {
-                    x1, 0, x2, 0, x2, spectrumHeight, x1, 0, x2, spectrumHeight, x1, spectrumHeight};
+                QVector<float> quadVerts = {x1, overlayTop, x2, overlayTop,     x2, spectrumHeight,
+                                            x1, overlayTop, x2, spectrumHeight, x1, spectrumHeight};
 
                 QRhiResourceUpdateBatch *pbRub = m_rhi->nextResourceUpdateBatch();
                 pbRub->updateDynamicBuffer(m_passbandVbo.get(), 0, quadVerts.size() * sizeof(float),
@@ -1403,7 +1415,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                         return;
 
                     QVector<float> verts;
-                    for (float y = 0.0f; y < spectrumHeight; y += stride) {
+                    for (float y = overlayTop; y < spectrumHeight; y += stride) {
                         float yEnd = qMin(y + dashLen, spectrumHeight);
                         verts << toneX << y << toneX + lineWidth << y << toneX + lineWidth << yEnd << toneX << y
                               << toneX + lineWidth << yEnd << toneX << yEnd;
@@ -1456,13 +1468,13 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 // Draw as filled rectangle instead of line for robust Metal rendering
                 float markerWidth = PanadapterConstants::MarkerLineWidth;
                 QVector<float> markerVerts = {markerX,
-                                              0.0f,
+                                              overlayTop,
                                               markerX + markerWidth,
-                                              0.0f,
+                                              overlayTop,
                                               markerX + markerWidth,
                                               spectrumHeight,
                                               markerX,
-                                              0.0f,
+                                              overlayTop,
                                               markerX + markerWidth,
                                               spectrumHeight,
                                               markerX,
@@ -1509,8 +1521,9 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 float txX = freqToNormalized(txDisplayFreq) * w;
                 if (txX >= 0 && txX <= w) {
                     float txWidth = PanadapterConstants::MarkerLineWidth;
-                    QVector<float> txVerts = {txX, 0.0f, txX + txWidth, 0.0f,           txX + txWidth, spectrumHeight,
-                                              txX, 0.0f, txX + txWidth, spectrumHeight, txX,           spectrumHeight};
+                    QVector<float> txVerts = {txX,           overlayTop,     txX + txWidth, overlayTop,
+                                              txX + txWidth, spectrumHeight, txX,           overlayTop,
+                                              txX + txWidth, spectrumHeight, txX,           spectrumHeight};
 
                     QRhiResourceUpdateBatch *txRub = m_rhi->nextResourceUpdateBatch();
                     txRub->updateDynamicBuffer(m_txMarkerVbo.get(), 0, txVerts.size() * sizeof(float),
@@ -1566,7 +1579,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                     float gapLen = PanadapterConstants::DashGapPx;
                     float stride = dashLen + gapLen;
                     QVector<float> notchVerts;
-                    for (float y = 0.0f; y < spectrumHeight; y += stride) {
+                    for (float y = overlayTop; y < spectrumHeight; y += stride) {
                         float yEnd = qMin(y + dashLen, spectrumHeight);
                         // Two triangles per dash segment
                         notchVerts << notchX << y << notchX + notchWidth << y << notchX + notchWidth << yEnd << notchX

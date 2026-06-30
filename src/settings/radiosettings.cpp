@@ -218,7 +218,7 @@ void RadioSettings::setQth(const QString &qth) {
 }
 
 bool RadioSettings::bandPlanOverlayEnabled() const {
-    return m_settings.value("station/bandPlanOverlay", true).toBool();
+    return m_settings.value("station/bandPlanOverlay", false).toBool();
 }
 
 void RadioSettings::setBandPlanOverlayEnabled(bool enabled) {

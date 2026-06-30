@@ -813,7 +813,7 @@ bool SpectrumController::eventFilter(QObject *watched, QEvent *event) {
         if (m_spotOverlayA) {
             int specHeight = static_cast<int>(h * m_panadapterA->spectrumRatio());
             m_spotOverlayA->setGeometry(0, 0, w, specHeight);
-            m_spotOverlayA->raise();
+            m_spotOverlayA->lower(); // keep below the (mouse-transparent) band-plan strip — see updateSpotOverlays()
         }
     }
 
@@ -837,7 +837,7 @@ bool SpectrumController::eventFilter(QObject *watched, QEvent *event) {
         if (m_spotOverlayB) {
             int specHeight = static_cast<int>(h * m_panadapterB->spectrumRatio());
             m_spotOverlayB->setGeometry(0, 0, w, specHeight);
-            m_spotOverlayB->raise();
+            m_spotOverlayB->lower(); // keep below the (mouse-transparent) band-plan strip — see updateSpotOverlays()
         }
     }
 
@@ -1032,11 +1032,13 @@ void SpectrumController::updateSpotOverlays() {
             // Otherwise stale labels from a prior layout remain on screen after spots are cleared.
             m_spotOverlayA->setSpots({});
         }
-        // WHY: re-assert top of stack on every update so clicks reach the overlay's mousePressEvent
-        // instead of falling through to the panadapter's click-tune. The initial raise() in the
-        // resize handler isn't always enough — sibling widgets parented to the panadapter can
-        // shift z-order, causing label clicks to hit the panadapter underneath.
-        m_spotOverlayA->raise();
+        // WHY: keep the spot overlay at the BOTTOM of the panadapter's child stack so the band-plan
+        // strip (and the dBm/freq scale overlays) stay permanently above it. Those overlays are all
+        // WA_TransparentForMouseEvents, so the spot overlay — the only non-transparent layer in the
+        // spectrum area — still receives label clicks even from underneath, and a child always
+        // composes above its parent's RHI surface. Using raise() here instead made the overlay fight
+        // the band strip's per-frame raise(), so callsigns behind the strip flickered in front of it.
+        m_spotOverlayA->lower();
     }
 
     // Update panadapter B overlay
@@ -1052,6 +1054,6 @@ void SpectrumController::updateSpotOverlays() {
         } else {
             m_spotOverlayB->setSpots({});
         }
-        m_spotOverlayB->raise();
+        m_spotOverlayB->lower();
     }
 }

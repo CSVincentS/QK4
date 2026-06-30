@@ -14,6 +14,8 @@ private slots:
     void parseQrpSuffix();
     void parseMissingMode();
     void parseAlignedSpot();
+    void parseBellTerminatedSpot();
+    void sanitizeStripsAnsiAndControls();
     void rejectLoginPrompt();
     void rejectBanner();
     void rejectBlankLine();
@@ -100,6 +102,41 @@ void TestDxCluster::parseAlignedSpot() {
     QCOMPARE(spot.spottedCall, "HB9CVQ");
     QCOMPARE(spot.spotterCall, "SP5GQ-#");
     QCOMPARE(spot.mode, "CW");
+}
+
+void TestDxCluster::parseBellTerminatedSpot() {
+    // Captured verbatim from n7od.pentux.net:7300 (DXSpider V1.57, 2026-06-12): the node's
+    // beep flag appends two BEL bytes after the time field. Raw line must FAIL to parse
+    // (this is why sanitizeLine exists — \s*$ doesn't match BEL), sanitized line must parse.
+    const QString raw =
+        QStringLiteral("DX de 9A8DX:     21290.0  9A9RR        USB                            1545Z\x07\x07");
+
+    DxSpot spot;
+    QVERIFY(!DxClusterClient::parseSpotLine(raw, spot));
+
+    bool ok = DxClusterClient::parseSpotLine(DxClusterClient::sanitizeLine(raw), spot);
+    QVERIFY(ok);
+    QCOMPARE(spot.spotterCall, "9A8DX");
+    QCOMPARE(spot.frequencyHz, 21290000LL);
+    QCOMPARE(spot.spottedCall, "9A9RR");
+    QCOMPARE(spot.mode, "USB");
+    QCOMPARE(spot.timeUtc, "1545Z");
+}
+
+void TestDxCluster::sanitizeStripsAnsiAndControls() {
+    // ANSI-colored spot line (set/ansi-style nodes) sanitizes to a parseable line.
+    const QString ansi =
+        QStringLiteral("\x1B[0;33mDX de W1AW:     14074.00  JA1ABC         FT8   -12 dB                  1903Z\x1B[0m");
+    DxSpot spot;
+    QVERIFY(DxClusterClient::parseSpotLine(DxClusterClient::sanitizeLine(ansi), spot));
+    QCOMPARE(spot.spottedCall, "JA1ABC");
+
+    // Clean text passes through unchanged; tab is preserved; other C0 controls and DEL drop.
+    QCOMPARE(DxClusterClient::sanitizeLine("DX de K3GMQ-#:  14031.00  K0RX"), "DX de K3GMQ-#:  14031.00  K0RX");
+    QCOMPARE(DxClusterClient::sanitizeLine(QStringLiteral("a\tb")), QStringLiteral("a\tb"));
+    QCOMPARE(DxClusterClient::sanitizeLine(QStringLiteral("a\x07\x08\x1B\x7F"
+                                                          "b")),
+             QStringLiteral("ab"));
 }
 
 void TestDxCluster::rejectLoginPrompt() {

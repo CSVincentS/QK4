@@ -683,6 +683,10 @@ void SideControlPanel::resetToDefaults() {
     setCurrent(0);
 }
 
+void SideControlPanel::setServerManagerActive(bool active) {
+    m_connectBtn->setStyleSheet(active ? K4Styles::sidePanelButtonActive() : K4Styles::sidePanelButton());
+}
+
 QPushButton *SideControlPanel::createIconButton(const QString &text) {
     auto *btn = new QPushButton(text, this);
     btn->setFixedSize(K4Styles::Dimensions::CompactButtonSize, K4Styles::Dimensions::CompactButtonSize);

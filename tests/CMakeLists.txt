@@ -130,6 +130,14 @@ target_include_directories(test_menumodel PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_menumodel Qt6::Core Qt6::Test)
 add_test(NAME MenuModelTests COMMAND test_menumodel)
 
+# NetworkMetrics sparkline history + jitter tests
+add_executable(test_networkmetrics test_networkmetrics.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/networkmetrics.cpp
+)
+target_include_directories(test_networkmetrics PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_networkmetrics Qt6::Core Qt6::Test)
+add_test(NAME NetworkMetricsTests COMMAND test_networkmetrics)
+
 # Protocol packet parsing tests
 add_executable(test_protocol test_protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
