@@ -417,7 +417,7 @@ jobs:
           mkdir QK4-windows
           copy build\QK4.exe QK4-windows\
 
-          windeployqt --release --no-translations QK4-windows\QK4.exe
+          windeployqt --release --no-translations --no-compiler-runtime QK4-windows\QK4.exe
 
           # Bundle the MSVC runtime DLLs app-locally so users never install a
           # redistributable by hand. (windeployqt --compiler-runtime ships the
