@@ -7,6 +7,12 @@ name: Issue Triage
 # Also manually dispatchable for a single issue (workflow_dispatch with
 # issue_number) to backfill issues opened before this workflow existed.
 #
+# The trigger must stay `types: [opened]` — adding `edited` or an
+# issue_comment trigger would let a single account re-trigger unlimited
+# Claude sessions by repeatedly editing/commenting on one issue.
+# Kill switch: set the repo Actions variable TRIAGE_ENABLED to 'false'
+# to pause the bot without a commit.
+#
 # Auth: requires the CLAUDE_CODE_OAUTH_TOKEN repo secret
 # (generate locally with `claude setup-token`, then
 #  `gh secret set CLAUDE_CODE_OAUTH_TOKEN`).
@@ -30,12 +36,39 @@ concurrency:
 
 jobs:
   triage:
+    if: vars.TRIAGE_ENABLED != 'false'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
+      # Skip the (quota-consuming) agent when a single author or the repo
+      # as a whole is opening issues faster than plausible good faith.
+      # Manual dispatches bypass the gate; gate errors fail open.
+      - name: Burst-rate gate
+        id: gate
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          SINCE=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          author_count=$(gh api -X GET search/issues \
+            -f q="repo:${{ github.repository }} is:issue author:$AUTHOR created:>=$SINCE" \
+            --jq .total_count || echo 0)
+          repo_count=$(gh api -X GET search/issues \
+            -f q="repo:${{ github.repository }} is:issue created:>=$SINCE" \
+            --jq .total_count || echo 0)
+          echo "Last 24h: $author_count issue(s) by $AUTHOR, $repo_count repo-wide"
+          if [ "${author_count:-0}" -gt 3 ] || [ "${repo_count:-0}" -gt 15 ]; then
+            gh issue edit "$ISSUE" --add-label triage-skipped || true
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Burst threshold exceeded - skipping automated triage."
+          fi
+
       - name: Run triage agent
+        if: steps.gate.outputs.skip != 'true'
         uses: anthropics/claude-code-action@f87768c6d25f92ae6efa7175e223ef77d4cbf97f
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -89,3 +122,4 @@ jobs:
             Never modify code, files, branches, or PRs. Labels and one comment only.
           claude_args: |
             --allowedTools "Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(gh label list:*),Read,Grep,Glob"
+            --max-turns 40
