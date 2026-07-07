@@ -1,0 +1,13 @@
+# Weekly update PRs for the GitHub Actions used in .github/workflows/.
+# Nothing merges automatically — every bump arrives as a PR for review.
+#
+# Convention: actions are pinned to full commit SHAs with NO trailing
+# version comment. Update PRs bump the SHA but would leave a comment
+# stale and misleading; the new version is visible in the PR title.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

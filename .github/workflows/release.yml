@@ -5,14 +5,26 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
+# One release at a time, never cancelled mid-notarization.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 4
+  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-bincache
 
 jobs:
   build-macos:
-    runs-on: macos-14
+    # Pinned runner label (not macos-latest) so the Xcode/signing toolchain
+    # only changes when we choose to move it.
+    runs-on: macos-15
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Extract version from tag
         id: version
@@ -24,7 +36,7 @@ jobs:
           echo "Extracted version: $VERSION"
 
       - name: Cache Homebrew downloads
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
             ~/Library/Caches/Homebrew/downloads
@@ -36,7 +48,7 @@ jobs:
         run: brew install qt opus hidapi openssl@3 dbus brotli libusb
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696
 
       - name: Configure CMake
         run: |
@@ -334,15 +346,16 @@ jobs:
           rm -rf dmg-staging ~/private_keys
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: QK4-macos
           path: QK4-${{ steps.version.outputs.version }}-macos.dmg
 
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Extract version from tag
         id: version
@@ -354,41 +367,44 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Cache vcpkg packages
-        uses: actions/cache@v4
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: |
-            C:\vcpkg\installed
-            C:\vcpkg\packages
-          key: vcpkg-win-${{ hashFiles('.github/workflows/release.yml') }}
+          path: vcpkg-bincache
+          # Keyed on the manifest so a dependency or baseline bump rebuilds
+          # instead of restoring stale binaries.
+          key: vcpkg-win-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             vcpkg-win-
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
         with:
-          version: '6.7.*'
+          # 6.11 pending: its restructured download repository isn't supported
+          # by the installer tooling yet; bump when a release handles it.
+          version: '6.10.*'
           host: 'windows'
           target: 'desktop'
-          arch: 'win64_msvc2019_64'
+          arch: 'win64_msvc2022_64'
           modules: 'qtmultimedia qtshadertools qtserialport'
           cache: true
 
       - name: Setup vcpkg
+        # Fetch first so the builtin-baseline commit in vcpkg.json is always
+        # present even when the runner image's vcpkg checkout is older.
         run: |
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
           cd C:\vcpkg
+          git fetch origin
           .\bootstrap-vcpkg.bat
 
-      - name: Install dependencies
-        run: vcpkg install opus:x64-windows hidapi:x64-windows openssl:x64-windows libusb:x64-windows
-
       - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x64
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696
 
       - name: Configure CMake
         run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DQK4_VERSION_FULL="${{ steps.version.outputs.version }}"
@@ -401,29 +417,40 @@ jobs:
           mkdir QK4-windows
           copy build\QK4.exe QK4-windows\
 
-          # Use windeployqt to bundle Qt DLLs
-          windeployqt --release --no-translations QK4-windows\QK4.exe
+          windeployqt --release --no-translations --no-compiler-runtime QK4-windows\QK4.exe
 
-          # Copy vcpkg DLLs (opus, hidapi, openssl)
-          copy C:\vcpkg\installed\x64-windows\bin\opus.dll QK4-windows\
-          copy C:\vcpkg\installed\x64-windows\bin\hidapi.dll QK4-windows\
-          copy C:\vcpkg\installed\x64-windows\bin\libssl-3-x64.dll QK4-windows\
-          copy C:\vcpkg\installed\x64-windows\bin\libcrypto-3-x64.dll QK4-windows\
-          copy C:\vcpkg\installed\x64-windows\bin\libusb-1.0.dll QK4-windows\
+          # Bundle the MSVC runtime DLLs app-locally so users never install a
+          # redistributable by hand. (windeployqt --compiler-runtime ships the
+          # vc_redist installer instead, which defeats the purpose.)
+          $crtDir = Get-ChildItem "$env:VCToolsRedistDir\x64" -Directory -Filter "Microsoft.VC1*.CRT" | Select-Object -First 1
+          Copy-Item "$($crtDir.FullName)\*.dll" QK4-windows\
+
+          copy build\vcpkg_installed\x64-windows\bin\opus.dll QK4-windows\
+          copy build\vcpkg_installed\x64-windows\bin\hidapi.dll QK4-windows\
+          copy build\vcpkg_installed\x64-windows\bin\libssl-3-x64.dll QK4-windows\
+          copy build\vcpkg_installed\x64-windows\bin\libcrypto-3-x64.dll QK4-windows\
+          copy build\vcpkg_installed\x64-windows\bin\libusb-1.0.dll QK4-windows\
+
+          $runtime = Get-ChildItem QK4-windows -Filter "vcruntime140*.dll"
+          if (-not $runtime) {
+            Write-Host "VC++ runtime DLLs missing from bundle"
+            exit 1
+          }
 
           $ZIP_NAME = "QK4-${{ steps.version.outputs.version }}-windows.zip"
           Compress-Archive -Path QK4-windows -DestinationPath $ZIP_NAME
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: QK4-windows
           path: QK4-${{ steps.version.outputs.version }}-windows.zip
 
   build-raspberry-pi:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Extract version from tag
         id: version
@@ -433,7 +460,7 @@ jobs:
           echo "Extracted version: $VERSION"
 
       - name: Cache Pi build dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
             /tmp/pi-apt-cache
@@ -456,7 +483,7 @@ jobs:
           sudo chown -R $(id -u):$(id -g) /tmp/pi-apt-cache /tmp/pi-ccache
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: QK4-raspberry-pi
           path: QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
@@ -464,10 +491,11 @@ jobs:
   release:
     needs: [build-macos, build-windows, build-raspberry-pi]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           fetch-depth: 0
 
@@ -478,65 +506,76 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Install git-cliff
+        # Pinned so release-notes formatting can't change between releases
+        # without a deliberate bump.
         run: |
-          GC_URL=$(gh release view --repo orhun/git-cliff --json assets --jq '.assets[] | select(.name | test("x86_64-unknown-linux-gnu.tar.gz$")) | .url')
-          curl -sSL "$GC_URL" | tar xz
+          GC_VERSION=2.13.1
+          curl -sSL "https://github.com/orhun/git-cliff/releases/download/v${GC_VERSION}/git-cliff-${GC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
           sudo mv git-cliff-*/git-cliff /usr/local/bin/
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: QK4-macos
 
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: QK4-windows
 
       - name: Download Raspberry Pi artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: QK4-raspberry-pi
 
       - name: Generate release notes
         run: git-cliff --latest --strip header -o release_notes.md
 
+      - name: Generate checksums
+        run: |
+          sha256sum \
+            "QK4-${{ steps.version.outputs.version }}-macos.dmg" \
+            "QK4-${{ steps.version.outputs.version }}-windows.zip" \
+            "QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz" \
+            > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b
         with:
           files: |
             QK4-${{ steps.version.outputs.version }}-macos.dmg
             QK4-${{ steps.version.outputs.version }}-windows.zip
             QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
+            SHA256SUMS.txt
           body_path: release_notes.md
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
 
   publish:
     needs: [release]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           ref: gh-pages
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: QK4-macos
           path: artifacts/macos
 
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: QK4-windows
           path: artifacts/windows
 
       - name: Download Raspberry Pi artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: QK4-raspberry-pi
           path: artifacts/raspberry-pi
