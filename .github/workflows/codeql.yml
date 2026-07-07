@@ -38,13 +38,23 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
-      - name: Install Qt 6 and dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
-            qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
-            qt6-shadertools-dev \
+          sudo apt-get install -y libgl1-mesa-dev \
             libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
+
+      - name: Install Qt
+        # The distro Qt is too old to build the full app (the GPU panadapter
+        # needs Qt 6.7+), and analyzing only the test targets would leave the
+        # app sources unscanned.
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
+        with:
+          version: '6.10.*'
+          host: 'linux'
+          target: 'desktop'
+          modules: 'qtmultimedia qtshadertools qtserialport'
+          cache: true
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a
