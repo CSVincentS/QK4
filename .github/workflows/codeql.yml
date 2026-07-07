@@ -1,0 +1,63 @@
+name: CodeQL
+
+# Static security/bug analysis of the C++ sources. Findings appear under
+# Security -> Code scanning; nothing blocks merges. C++ analysis requires a
+# full build, so doc-only changes are skipped and a weekly scheduled run
+# guarantees coverage regardless of push activity.
+
+on:
+  push:
+    branches: [main, development]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, development]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze C++
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Install Qt 6 and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
+            qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
+            qt6-shadertools-dev \
+            libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a
+        with:
+          languages: c-cpp
+          build-mode: manual
+
+      - name: Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a
+        with:
+          category: '/language:c-cpp'
