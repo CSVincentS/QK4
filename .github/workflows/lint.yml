@@ -6,25 +6,37 @@ on:
   pull_request:
     branches: [main, development]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   clang-format:
     name: Check Code Formatting
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Install clang-format
-        run: sudo apt-get install -y clang-format
+        # Pinned major so the formatting baseline can't shift when the runner
+        # image's default clang-format changes. Bumping this requires a
+        # repo-wide reformat commit first.
+        run: sudo apt-get install -y clang-format-18
 
       - name: Check formatting
         run: |
-          find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
+          find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format-18 --dry-run --Werror
 
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Install Qt 6 and dependencies
         run: |
@@ -56,10 +68,12 @@ jobs:
     # and UB that unit tests would otherwise miss. Post-refactor
     # (Phase 5.4) decision: keep it. Cost is one Ubuntu job + ~2 min;
     # it catches a bug class regular tests miss.
+    # Scheduled deep runs (including TSan) live in sanitizers.yml.
     name: Sanitizer Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
       - name: Install Qt 6 and dependencies
         run: |

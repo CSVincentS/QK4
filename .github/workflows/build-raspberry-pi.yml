@@ -5,14 +5,27 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-raspberry-pi-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Derive development version
+        id: version
+        run: |
+          echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Cache Pi build dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
             /tmp/pi-apt-cache
@@ -30,12 +43,13 @@ jobs:
             -e CCACHE_DIR=/ccache \
             -w /workspace \
             debian:trixie \
-            bash /workspace/.github/scripts/build-pi.sh
+            bash /workspace/.github/scripts/build-pi.sh "${{ steps.version.outputs.version }}"
           # Fix ownership so actions/cache can tar the files (Docker writes as root)
           sudo chown -R $(id -u):$(id -g) /tmp/pi-apt-cache /tmp/pi-ccache
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: QK4-raspberry-pi
-          path: QK4-raspberry-pi-arm64.tar.gz
+          path: QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
+          retention-days: 7
