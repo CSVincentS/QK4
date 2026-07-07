@@ -417,9 +417,13 @@ jobs:
           mkdir QK4-windows
           copy build\QK4.exe QK4-windows\
 
-          # Bundle Qt DLLs plus the MSVC runtime so users never install a
-          # redistributable by hand.
-          windeployqt --release --no-translations --compiler-runtime QK4-windows\QK4.exe
+          windeployqt --release --no-translations QK4-windows\QK4.exe
+
+          # Bundle the MSVC runtime DLLs app-locally so users never install a
+          # redistributable by hand. (windeployqt --compiler-runtime ships the
+          # vc_redist installer instead, which defeats the purpose.)
+          $crtDir = Get-ChildItem "$env:VCToolsRedistDir\x64" -Directory -Filter "Microsoft.VC1*.CRT" | Select-Object -First 1
+          Copy-Item "$($crtDir.FullName)\*.dll" QK4-windows\
 
           copy build\vcpkg_installed\x64-windows\bin\opus.dll QK4-windows\
           copy build\vcpkg_installed\x64-windows\bin\hidapi.dll QK4-windows\
