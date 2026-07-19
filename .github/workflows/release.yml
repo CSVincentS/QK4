@@ -488,8 +488,30 @@ jobs:
           name: QK4-raspberry-pi
           path: QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
 
+  build-flatpak:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/io.github.mikeg_dal.QK4.json
+          bundle: QK4-${{ steps.version.outputs.version }}-flatpak-x86_64.flatpak
+          upload-artifact: false
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QK4-flatpak
+          path: QK4-${{ steps.version.outputs.version }}-flatpak-x86_64.flatpak
+
   release:
-    needs: [build-macos, build-windows, build-raspberry-pi]
+    needs: [build-macos, build-windows, build-raspberry-pi, build-flatpak ]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -528,6 +550,11 @@ jobs:
         with:
           name: QK4-raspberry-pi
 
+      - name: Download Flatpak artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: QK4-flatpak
+
       - name: Generate release notes
         run: git-cliff --latest --strip header -o release_notes.md
 
@@ -547,6 +574,7 @@ jobs:
             QK4-${{ steps.version.outputs.version }}-macos.dmg
             QK4-${{ steps.version.outputs.version }}-windows.zip
             QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
+            QK4-${{ steps.version.outputs.version }}-flatpak-x86_64.flatpak
             SHA256SUMS.txt
           body_path: release_notes.md
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
@@ -580,6 +608,12 @@ jobs:
           name: QK4-raspberry-pi
           path: artifacts/raspberry-pi
 
+      - name: Download Flatpak artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: QK4-flatpak
+          path: artifacts/flatpak
+
       - name: Update downloads and releases.json
         run: |
           TAG="${GITHUB_REF_NAME}"
@@ -588,6 +622,7 @@ jobs:
           MAC_DMG="QK4-${VERSION}-macos.dmg"
           WIN_ZIP="QK4-${VERSION}-windows.zip"
           PI_TGZ="QK4-${VERSION}-raspberry-pi-arm64.tar.gz"
+          LIN_FP="QK4-${VERSION}-flatpak-x86_64.flatpak"
 
           # Remove old downloads, add new
           rm -rf downloads/
@@ -595,16 +630,19 @@ jobs:
           cp artifacts/macos/$MAC_DMG "downloads/$TAG/"
           cp artifacts/windows/$WIN_ZIP "downloads/$TAG/"
           cp artifacts/raspberry-pi/$PI_TGZ "downloads/$TAG/"
+          cp artifacts/flatpak/$LIN_FP "downloads/$TAG/"
 
           # Compute human-readable sizes
           SZ_MAC=$(du -h "downloads/$TAG/$MAC_DMG" | cut -f1 | xargs)
           SZ_WIN=$(du -h "downloads/$TAG/$WIN_ZIP" | cut -f1 | xargs)
           SZ_PI=$(du -h "downloads/$TAG/$PI_TGZ" | cut -f1 | xargs)
+          SZ_LIN=$(du -h "downloads/$TAG/$LIN_FP" | cut -f1 | xargs)
 
           # Compute SHA256 hashes
           HASH_MAC=$(sha256sum "downloads/$TAG/$MAC_DMG" | cut -d' ' -f1)
           HASH_WIN=$(sha256sum "downloads/$TAG/$WIN_ZIP" | cut -d' ' -f1)
           HASH_PI=$(sha256sum "downloads/$TAG/$PI_TGZ" | cut -d' ' -f1)
+          HASH_LIN=$(sha256sum "downloads/$TAG/$LIN_FP" | cut -d' ' -f1)
 
           # Detect prerelease
           if echo "$TAG" | grep -qE 'alpha|beta'; then
@@ -638,6 +676,12 @@ jobs:
                 "url": "./downloads/$TAG/$PI_TGZ",
                 "size": "$SZ_PI",
                 "sha256": "$HASH_PI"
+              }
+              "flatpak": {
+                "name": "$LIN_FP",
+                "url": "./downloads/$TAG/$LIN_FP",
+                "size": "$SZ_LIN",
+                "sha256": "$HASH_LIN"
               }
             }
           }
